@@ -4,22 +4,34 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/jessevdk/go-flags"
 	_ "github.com/mattn/go-sqlite3"
 	"io/ioutil"
 	"log"
+	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 )
 
+var options struct {
+	Port     int    `long:"port" description:"Server port" default:"8080"`
+	Tilesets string `long:"tilesets" description:"path to tilesets" default:"./tilesets"`
+}
+
 var connections map[string]*sql.DB
 var pngQueries map[string]*sql.Stmt
 
 func main() {
+	_, err := flags.ParseArgs(&options, os.Args)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	connections = make(map[string]*sql.DB)
 	pngQueries = make(map[string]*sql.Stmt)
-	tilesets, _ := filepath.Glob("tilesets/*.mbtiles")
+	tilesets, _ := filepath.Glob(path.Join(options.Tilesets, "*.mbtiles"))
 	fmt.Println(tilesets)
 
 	for i, filename := range tilesets {
@@ -76,5 +88,5 @@ func main() {
 		c.Data(200, "image/png", tile_data)
 	})
 
-	router.Run(":8080")
+	router.Run(fmt.Sprintf(":%v", options.Port))
 }
