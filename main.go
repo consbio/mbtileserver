@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	"database/sql"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -9,18 +10,21 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var options struct {
-	Port      int    `long:"port" description:"Server port" default:"8080"`
-	Tilesets  string `long:"tilesets" description:"path to tilesets" default:"./tilesets"`
-	CachePort int    `long:"cacheport" description:"GroupCache port" default:"8000"`
-	CacheSize int64  `long:"cachesize" description:"Size of Cache (MB)" default:"10"`
+	Port                uint16 `long:"port" description:"Server port" default:"8080"`
+	Tilesets            string `long:"tilesets" description:"path to tilesets" default:"./tilesets"`
+	CachePort           uint16 `long:"cacheport" description:"GroupCache port" default:"8000"`
+	CacheSize           int64  `long:"cachesize" description:"Size of Cache (MB)" default:"10"`
+	ClientCacheDuration uint   `long:"clientcache_age" description:"Client cache duration (seconds)" default:"3600"`
 }
 
 var (
@@ -29,6 +33,7 @@ var (
 	connections map[string]*sql.DB
 	pngQueries  map[string]*sql.Stmt
 	blankPNG    []byte
+	cacheSince  = time.Now().Format(http.TimeFormat)
 )
 
 func main() {
@@ -67,8 +72,6 @@ func main() {
 	pool = groupcache.NewHTTPPool(fmt.Sprintf("http://127.0.0.1:%v", options.CachePort))
 	cache = groupcache.NewGroup("TileCache", options.CacheSize*1048576, groupcache.GetterFunc(
 		func(ctx groupcache.Context, key string, dest groupcache.Sink) error {
-			// log.Println("Requested", key)
-
 			pathParams := strings.Split(key, "/")
 			service := pathParams[1]
 			yParams := strings.Split(pathParams[4], ".")
@@ -98,31 +101,59 @@ func main() {
 	router := gin.Default()
 
 	router.GET("/*key", func(c *gin.Context) {
-		var data []byte
-		pathParams := strings.Split(c.Params.ByName("key"), "/")
-		// fmt.Println("path segments", pathParams, len(pathParams))
+		var (
+			data        []byte
+			blank       []byte
+			contentType string
+		)
+		key := c.Params.ByName("key")
+		extension := path.Ext(key)
 
-		// fmt.Println(cache.CacheStats(1))
+		pathParams := strings.Split(key, "/")
 
 		if len(pathParams) != 5 {
-			c.Abort(400)
+			log.Println("Invalid url", key)
+			c.String(400, fmt.Sprintf("Invalid url: %s", key))
 			return
 		}
-		//TODO: validate x, y, z, and extension
+		//TODO: validate x, y, z
+		switch extension {
+		default:
+			{
+				log.Println("Invalid extension", extension)
+				c.String(400, fmt.Sprintf("Invalid extension: %s", extension))
+				return
+			}
+		case ".png":
+			{
+				blank = blankPNG
+				contentType = "image/png"
+			}
+		}
 
-		key := c.Params.ByName("key")
 		err := cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 		if err != nil {
 			log.Println("Error fetching key", key)
-			c.Abort(500)
+			c.String(500, fmt.Sprintf("Cache get failed for key: %s", key))
 			return
 		}
-		if len(data) <= 1 {
-			data = blankPNG
+		etag := fmt.Sprintf("%x", md5.Sum(data))
+
+		if c.Request.Header.Get("If-None-Match") == etag {
+			c.Abort(304)
+			return
 		}
 
-		//TODO: make based on data
-		c.Data(200, "image/png", data)
+		if len(data) <= 1 {
+			data = blank
+		}
+
+		c.Writer.Header().Add("Cache-Control", fmt.Sprintf("max-age=%v", options.ClientCacheDuration))
+		c.Writer.Header().Add("Last-Modified", cacheSince)
+		c.Writer.Header().Add("ETag", etag)
+		c.Data(200, contentType, data)
+
+		//TODO: gzip response
 	})
 
 	router.Run(fmt.Sprintf(":%v", options.Port))
