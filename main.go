@@ -20,20 +20,20 @@ import (
 )
 
 var options struct {
-	Port                uint16 `long:"port" description:"Server port" default:"8080"`
-	Tilesets            string `long:"tilesets" description:"path to tilesets" default:"./tilesets"`
-	CachePort           uint16 `long:"cacheport" description:"GroupCache port" default:"8000"`
-	CacheSize           int64  `long:"cachesize" description:"Size of Cache (MB)" default:"10"`
-	ClientCacheDuration uint   `long:"clientcache_age" description:"Client cache duration (seconds)" default:"3600"`
+	Port      uint16 `long:"port" description:"Server port" default:"8080"`
+	Tilesets  string `long:"tilesets" description:"path to tilesets" default:"./tilesets"`
+	CachePort uint16 `long:"cacheport" description:"GroupCache port" default:"8000"`
+	CacheSize int64  `long:"cachesize" description:"Size of Cache (MB)" default:"10"`
+	MaxAge    uint   `long:"max_age" description:"Response max-age duration (seconds)" default:"3600"`
 }
 
 var (
-	pool        *groupcache.HTTPPool
-	cache       *groupcache.Group
-	connections map[string]*sql.DB
-	pngQueries  map[string]*sql.Stmt
-	blankPNG    []byte
-	cacheSince  = time.Now().Format(http.TimeFormat)
+	pool         *groupcache.HTTPPool
+	cache        *groupcache.Group
+	connections  map[string]*sql.DB
+	imageQueries map[string]*sql.Stmt
+	blankPNG     []byte
+	cacheSince   = time.Now().Format(http.TimeFormat)
 )
 
 func main() {
@@ -44,7 +44,7 @@ func main() {
 	blankPNG, _ = ioutil.ReadFile("blank.png")
 
 	connections = make(map[string]*sql.DB)
-	pngQueries = make(map[string]*sql.Stmt)
+	imageQueries = make(map[string]*sql.Stmt)
 	tilesets, _ := filepath.Glob(path.Join(options.Tilesets, "*.mbtiles"))
 	fmt.Println(tilesets)
 
@@ -66,7 +66,7 @@ func main() {
 			log.Fatal(err)
 		}
 		defer stmt.Close()
-		pngQueries[service] = stmt
+		imageQueries[service] = stmt
 	}
 
 	pool = groupcache.NewHTTPPool(fmt.Sprintf("http://127.0.0.1:%v", options.CachePort))
@@ -83,8 +83,8 @@ func main() {
 			y = (1 << z) - 1 - y
 
 			var stmt *sql.Stmt
-			if yParams[1] == "png" {
-				stmt = pngQueries[service]
+			if yParams[1] == "png" || yParams[1] == "jpg" {
+				stmt = imageQueries[service]
 			}
 
 			var tile_data []byte
@@ -100,23 +100,18 @@ func main() {
 
 	router := gin.Default()
 
-	router.GET("/*key", func(c *gin.Context) {
+	router.GET("/:service/:z/:x/:filename", func(c *gin.Context) {
 		var (
 			data        []byte
 			blank       []byte
 			contentType string
 		)
-		key := c.Params.ByName("key")
-		extension := path.Ext(key)
+		fmt.Println("URL", c.Request.URL)
 
-		pathParams := strings.Split(key, "/")
+		filename := c.Params.ByName("filename")
 
-		if len(pathParams) != 5 {
-			log.Println("Invalid url", key)
-			c.String(400, fmt.Sprintf("Invalid url: %s", key))
-			return
-		}
 		//TODO: validate x, y, z
+		extension := path.Ext(filename)
 		switch extension {
 		default:
 			{
@@ -129,7 +124,14 @@ func main() {
 				blank = blankPNG
 				contentType = "image/png"
 			}
+		case ".jpg":
+			{
+				blank = blankPNG // TODO: replace w/ JPG?
+				contentType = "image/jpeg"
+			}
 		}
+
+		key := c.Request.URL.String()
 
 		err := cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 		if err != nil {
@@ -148,7 +150,7 @@ func main() {
 			data = blank
 		}
 
-		c.Writer.Header().Add("Cache-Control", fmt.Sprintf("max-age=%v", options.ClientCacheDuration))
+		c.Writer.Header().Add("Cache-Control", fmt.Sprintf("max-age=%v", options.MaxAge))
 		c.Writer.Header().Add("Last-Modified", cacheSince)
 		c.Writer.Header().Add("ETag", etag)
 		c.Data(200, contentType, data)
