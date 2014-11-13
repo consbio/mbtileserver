@@ -3,11 +3,14 @@ package main
 import (
 	"crypto/md5"
 	"database/sql"
+	"encoding/json"
+	"flag"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"github.com/golang/groupcache"
 	"github.com/jessevdk/go-flags"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/zenazn/goji"
+	"github.com/zenazn/goji/web"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -32,6 +35,7 @@ var (
 	cache        *groupcache.Group
 	connections  map[string]*sql.DB
 	imageQueries map[string]*sql.Stmt
+	contentTypes map[string]string
 	blankPNG     []byte
 	cacheSince   = time.Now().Format(http.TimeFormat)
 )
@@ -45,14 +49,14 @@ func main() {
 
 	connections = make(map[string]*sql.DB)
 	imageQueries = make(map[string]*sql.Stmt)
+	contentTypes = make(map[string]string)
 	tilesets, _ := filepath.Glob(path.Join(options.Tilesets, "*.mbtiles"))
-	fmt.Println(tilesets)
 
-	for i, filename := range tilesets {
+	for _, filename := range tilesets {
 		_, service := filepath.Split(filename)
 		service = strings.Split(service, ".")[0]
 
-		fmt.Println(i, filename, service)
+		fmt.Println("Service: ", service)
 
 		db, err := sql.Open("sqlite3", filename)
 		if err != nil {
@@ -67,6 +71,14 @@ func main() {
 		}
 		defer stmt.Close()
 		imageQueries[service] = stmt
+
+		//query a sample tile to determine if png or jpg, since metadata from tilemill doesn't give this to us
+		var tileData []byte
+		err = db.QueryRow("select tile_data from images limit 1").Scan(&tileData)
+		if err != nil {
+			log.Fatal(err)
+		}
+		contentTypes[service] = http.DetectContentType(tileData)
 	}
 
 	pool = groupcache.NewHTTPPool(fmt.Sprintf("http://127.0.0.1:%v", options.CachePort))
@@ -83,80 +95,84 @@ func main() {
 			y = (1 << z) - 1 - y
 
 			var stmt *sql.Stmt
-			if yParams[1] == "png" || yParams[1] == "jpg" {
-				stmt = imageQueries[service]
-			}
+			stmt = imageQueries[service]
 
-			var tile_data []byte
-			err := stmt.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tile_data)
+			var tileData []byte
+			err := stmt.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
 			if err != nil {
 				if err != sql.ErrNoRows {
 					log.Fatal(err)
 				}
 			}
-			dest.SetBytes(tile_data)
+			dest.SetBytes(tileData)
 			return nil
 		}))
 
-	router := gin.Default()
+	goji.Get("/services", ListServices)
+	goji.Get("/:service/:z/:x/:filename", GetTile)
+	flag.Set("bind", fmt.Sprintf(":%v", options.Port))
+	goji.Serve()
+}
 
-	router.GET("/:service/:z/:x/:filename", func(c *gin.Context) {
-		var (
-			data        []byte
-			blank       []byte
-			contentType string
-		)
-		fmt.Println("URL", c.Request.URL)
+type ServiceInfo struct {
+	URI       string `json:"uri"`
+	ImageType string `json:"imageType"`
+}
 
-		filename := c.Params.ByName("filename")
-
-		//TODO: validate x, y, z
-		extension := path.Ext(filename)
-		switch extension {
-		default:
-			{
-				log.Println("Invalid extension", extension)
-				c.String(400, fmt.Sprintf("Invalid extension: %s", extension))
-				return
-			}
-		case ".png":
-			{
-				blank = blankPNG
-				contentType = "image/png"
-			}
-		case ".jpg":
-			{
-				blank = blankPNG // TODO: replace w/ JPG?
-				contentType = "image/jpeg"
-			}
+func ListServices(c web.C, w http.ResponseWriter, r *http.Request) {
+	services := make([]ServiceInfo, len(imageQueries))
+	i := 0
+	for service, _ := range imageQueries {
+		services[i] = ServiceInfo{
+			URI:       fmt.Sprintf("/%s", service),
+			ImageType: strings.Split(contentTypes[service], "/")[1],
 		}
+		i++
+	}
+	json, _ := json.Marshal(services)
+	w.Write(json)
+}
 
-		key := c.Request.URL.String()
+func GetTile(c web.C, w http.ResponseWriter, r *http.Request) {
+	var (
+		data        []byte
+		contentType string
+	)
+	//TODO: validate x, y, z
 
-		err := cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
-		if err != nil {
-			log.Println("Error fetching key", key)
-			c.String(500, fmt.Sprintf("Cache get failed for key: %s", key))
-			return
-		}
-		etag := fmt.Sprintf("%x", md5.Sum(data))
+	service := c.URLParams["service"]
+	if _, exists := imageQueries[service]; !exists {
+		http.Error(w, fmt.Sprintf("Service not found: %s", service), 404)
+		return
+	}
 
-		if c.Request.Header.Get("If-None-Match") == etag {
-			c.Abort(304)
-			return
-		}
+	key := r.URL.String()
 
-		if len(data) <= 1 {
-			data = blank
-		}
+	err := cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
+	if err != nil {
+		log.Println("Error fetching key", key)
+		http.Error(w, fmt.Sprintf("Cache get failed for key: %s", key), 500)
+		return
+	}
+	etag := fmt.Sprintf("%x", md5.Sum(data))
 
-		c.Writer.Header().Add("Cache-Control", fmt.Sprintf("max-age=%v", options.MaxAge))
-		c.Writer.Header().Add("Last-Modified", cacheSince)
-		c.Writer.Header().Add("ETag", etag)
-		c.Data(200, contentType, data)
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(304)
+		return
+	}
 
-		//TODO: gzip response
-	})
+	if len(data) <= 1 {
+		data = blankPNG
+		contentType = "image/png"
+	} else {
+		contentType = contentTypes[service]
+	}
 
-	router.Run(fmt.Sprintf(":%v", options.Port))
+	w.Header().Add("Cache-Control", fmt.Sprintf("max-age=%v", options.MaxAge))
+	w.Header().Add("Last-Modified", cacheSince)
+	w.Header().Add("Content-Type", contentType)
+	w.Header().Add("ETag", etag)
+	w.Write(data)
+
+	//TODO: gzip response
 }
