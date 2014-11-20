@@ -31,8 +31,9 @@ var options struct {
 }
 
 var (
-	pool         *groupcache.HTTPPool
-	cache        *groupcache.Group
+	pool  *groupcache.HTTPPool
+	cache *groupcache.Group
+	//TODO: consolidate these into a single map of structs!
 	connections  map[string]*sql.DB
 	imageQueries map[string]*sql.Stmt
 	contentTypes map[string]string
@@ -85,12 +86,11 @@ func main() {
 	cache = groupcache.NewGroup("TileCache", options.CacheSize*1048576, groupcache.GetterFunc(
 		func(ctx groupcache.Context, key string, dest groupcache.Sink) error {
 			pathParams := strings.Split(key, "/")
-			service := pathParams[1]
-			yParams := strings.Split(pathParams[4], ".")
-			z, _ := strconv.ParseUint(pathParams[2], 0, 64)
-			x, _ := strconv.ParseUint(pathParams[3], 0, 64)
+			service := pathParams[0]
+			yParams := strings.Split(pathParams[3], ".")
+			z, _ := strconv.ParseUint(pathParams[1], 0, 64)
+			x, _ := strconv.ParseUint(pathParams[2], 0, 64)
 			y, _ := strconv.ParseUint(yParams[0], 0, 64)
-
 			//flip y to match TMS spec
 			y = (1 << z) - 1 - y
 
@@ -108,8 +108,14 @@ func main() {
 			return nil
 		}))
 
-	goji.Get("/services", ListServices)
-	goji.Get("/:service/:z/:x/:filename", GetTile)
+	//TODO: add gzip
+	//TODO: add 301s for all non-slash terminated routes
+	goji.Get("/services/", ListServices)
+	goji.Get("/services", http.RedirectHandler("/services/", http.StatusMovedPermanently))
+	goji.Get("/services/:service", GetService)
+	goji.Get("/services/:service/tiles/:z/:x/:filename", GetTile)
+	//TODO:  goji.Get("/:service/grids/:z/:x/:filename", GetGrid) //return UTF8 grid
+
 	flag.Set("bind", fmt.Sprintf(":%v", options.Port))
 	goji.Serve()
 }
@@ -133,6 +139,16 @@ func ListServices(c web.C, w http.ResponseWriter, r *http.Request) {
 	w.Write(json)
 }
 
+func GetService(c web.C, w http.ResponseWriter, r *http.Request) {
+	fmt.Println(c.URLParams)
+	service := c.URLParams["service"]
+	if _, exists := imageQueries[service]; !exists {
+		http.Error(w, fmt.Sprintf("Service not found: %s", service), http.StatusNotFound)
+		return
+	}
+	w.Write([]byte("TODO: Service info"))
+}
+
 func GetTile(c web.C, w http.ResponseWriter, r *http.Request) {
 	var (
 		data        []byte
@@ -142,22 +158,24 @@ func GetTile(c web.C, w http.ResponseWriter, r *http.Request) {
 
 	service := c.URLParams["service"]
 	if _, exists := imageQueries[service]; !exists {
-		http.Error(w, fmt.Sprintf("Service not found: %s", service), 404)
+		http.Error(w, fmt.Sprintf("Service not found: %s", service), http.StatusNotFound)
 		return
 	}
 
-	key := r.URL.String()
+	// key := strings.TrimPrefix(r.URL.String(), "/services/")
+	key := strings.Join([]string{c.URLParams["service"], c.URLParams["z"], c.URLParams["x"], c.URLParams["filename"]}, "/")
+	fmt.Println("URL key: ", key)
 
 	err := cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
 		log.Println("Error fetching key", key)
-		http.Error(w, fmt.Sprintf("Cache get failed for key: %s", key), 500)
+		http.Error(w, fmt.Sprintf("Cache get failed for key: %s", key), http.StatusInternalServerError)
 		return
 	}
 	etag := fmt.Sprintf("%x", md5.Sum(data))
 
 	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(304)
+		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 
@@ -173,6 +191,4 @@ func GetTile(c web.C, w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", contentType)
 	w.Header().Add("ETag", etag)
 	w.Write(data)
-
-	//TODO: gzip response
 }
