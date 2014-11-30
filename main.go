@@ -4,10 +4,11 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"encoding/json"
-	"flag"
+	// "flag"
 	"fmt"
 	"github.com/golang/groupcache"
 	"github.com/jessevdk/go-flags"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/zenazn/goji"
 	"github.com/zenazn/goji/web"
@@ -23,22 +24,32 @@ import (
 )
 
 var options struct {
-	Port      uint16 `long:"port" description:"Server port" default:"8080"`
+	Hostname  string `long:"hostname" description:"externally accessible hostname" default:"localhost"`
+	Bind      string `long:"bind" description:"Server port" default:":8000"`
 	Tilesets  string `long:"tilesets" description:"path to tilesets" default:"./tilesets"`
-	CachePort uint16 `long:"cacheport" description:"GroupCache port" default:"8000"`
+	CachePort uint16 `long:"cacheport" description:"GroupCache port" default:"8001"`
 	CacheSize int64  `long:"cachesize" description:"Size of Cache (MB)" default:"10"`
 	MaxAge    uint   `long:"max_age" description:"Response max-age duration (seconds)" default:"3600"`
 }
 
+type DBClient struct {
+	connection  *sqlx.DB
+	imageStmt   *sql.Stmt
+	infoStmt    *sqlx.Stmt
+	contentType string
+}
+
+type KeyValuePair struct {
+	Name  string
+	Value string
+}
+
 var (
-	pool  *groupcache.HTTPPool
-	cache *groupcache.Group
-	//TODO: consolidate these into a single map of structs!
-	connections  map[string]*sql.DB
-	imageQueries map[string]*sql.Stmt
-	contentTypes map[string]string
-	blankPNG     []byte
-	cacheSince   = time.Now().Format(http.TimeFormat)
+	pool       *groupcache.HTTPPool
+	cache      *groupcache.Group
+	dbClients  map[string]DBClient
+	blankPNG   []byte
+	cacheSince = time.Now().Format(http.TimeFormat)
 )
 
 func main() {
@@ -46,32 +57,33 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("Flags:", options)
 	blankPNG, _ = ioutil.ReadFile("blank.png")
 
-	connections = make(map[string]*sql.DB)
-	imageQueries = make(map[string]*sql.Stmt)
-	contentTypes = make(map[string]string)
+	dbClients = make(map[string]DBClient)
 	tilesets, _ := filepath.Glob(path.Join(options.Tilesets, "*.mbtiles"))
 
 	for _, filename := range tilesets {
 		_, service := filepath.Split(filename)
 		service = strings.Split(service, ".")[0]
 
-		fmt.Println("Service: ", service)
-
-		db, err := sql.Open("sqlite3", filename)
+		db, err := sqlx.Open("sqlite3", filename)
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer db.Close()
-		connections[service] = db
+
+		infoStmt, err := db.Preparex("select * from metadata where value is not ''")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer infoStmt.Close()
 
 		stmt, err := db.Prepare("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?")
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer stmt.Close()
-		imageQueries[service] = stmt
 
 		//query a sample tile to determine if png or jpg, since metadata from tilemill doesn't give this to us
 		var tileData []byte
@@ -79,7 +91,13 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		contentTypes[service] = http.DetectContentType(tileData)
+
+		dbClients[service] = DBClient{
+			connection:  db,
+			infoStmt:    infoStmt,
+			imageStmt:   stmt,
+			contentType: http.DetectContentType(tileData),
+		}
 	}
 
 	pool = groupcache.NewHTTPPool(fmt.Sprintf("http://127.0.0.1:%v", options.CachePort))
@@ -94,11 +112,8 @@ func main() {
 			//flip y to match TMS spec
 			y = (1 << z) - 1 - y
 
-			var stmt *sql.Stmt
-			stmt = imageQueries[service]
-
 			var tileData []byte
-			err := stmt.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
+			err := dbClients[service].imageStmt.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
 			if err != nil {
 				if err != sql.ErrNoRows {
 					log.Fatal(err)
@@ -109,14 +124,11 @@ func main() {
 		}))
 
 	//TODO: add gzip
-	//TODO: add 301s for all non-slash terminated routes
-	goji.Get("/services/", ListServices)
-	goji.Get("/services", http.RedirectHandler("/services/", http.StatusMovedPermanently))
+	goji.Get("/services", ListServices)
 	goji.Get("/services/:service", GetService)
 	goji.Get("/services/:service/tiles/:z/:x/:filename", GetTile)
 	//TODO:  goji.Get("/:service/grids/:z/:x/:filename", GetGrid) //return UTF8 grid
 
-	flag.Set("bind", fmt.Sprintf(":%v", options.Port))
 	goji.Serve()
 }
 
@@ -126,27 +138,72 @@ type ServiceInfo struct {
 }
 
 func ListServices(c web.C, w http.ResponseWriter, r *http.Request) {
-	services := make([]ServiceInfo, len(imageQueries))
+	services := make([]ServiceInfo, len(dbClients))
 	i := 0
-	for service, _ := range imageQueries {
+	for service, _ := range dbClients {
 		services[i] = ServiceInfo{
-			URI:       fmt.Sprintf("/%s", service),
-			ImageType: strings.Split(contentTypes[service], "/")[1],
+			URI:       fmt.Sprintf("/services/%s", service),
+			ImageType: strings.Split(dbClients[service].contentType, "/")[1],
 		}
 		i++
 	}
+	w.Header().Add("Content-Type", "application/json")
 	json, _ := json.Marshal(services)
 	w.Write(json)
 }
 
 func GetService(c web.C, w http.ResponseWriter, r *http.Request) {
-	fmt.Println(c.URLParams)
+	//https://github.com/mapbox/tilejson-spec/tree/master/2.1.0
+	//FIXME: https://a.tiles.mapbox.com/v4/bcward.salcc.json?access_token=pk.eyJ1IjoiYmN3YXJkIiwiYSI6InJ5NzUxQzAifQ.CVyzbyOpnStfYUQ_6r8AgQ
 	service := c.URLParams["service"]
-	if _, exists := imageQueries[service]; !exists {
+	if _, exists := dbClients[service]; !exists {
 		http.Error(w, fmt.Sprintf("Service not found: %s", service), http.StatusNotFound)
 		return
 	}
-	w.Write([]byte("TODO: Service info"))
+	results := make(map[string]string)
+	rows, err := dbClients[service].infoStmt.Queryx()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Metadata query failed for: %s", service), http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var record KeyValuePair
+		rows.StructScan(&record)
+		results[record.Name] = record.Value
+	}
+	rootURL := fmt.Sprintf("http://%s", options.Hostname)
+	if options.Bind != ":80" {
+		rootURL = fmt.Sprintf("%s%s", rootURL, options.Bind)
+	}
+	out := map[string]interface{}{
+		"tilejson": "2.1.0",
+		"id":       service,
+		"scheme":   "tms",
+		"format":   strings.Split(dbClients[service].contentType, "/")[1],
+		"tiles":    []string{fmt.Sprintf("%s/services/%s/tiles/{z}/{x}/{y}", rootURL, service)},
+	}
+
+	for k := range results {
+		out[k] = results[k]
+	}
+	var value string
+	var ok bool
+	multiFloatFields := []string{"bounds", "center"}
+	intFields := []string{"maxzoom", "minzoom"}
+	for _, field := range multiFloatFields {
+		if value, ok = results[field]; ok {
+			out[field] = stringToFloats(value)
+		}
+	}
+	for _, field := range intFields {
+		if value, ok = results[field]; ok {
+			out[field], _ = strconv.Atoi(results[field])
+		}
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	json, _ := json.Marshal(out)
+	w.Write(json)
 }
 
 func GetTile(c web.C, w http.ResponseWriter, r *http.Request) {
@@ -157,12 +214,11 @@ func GetTile(c web.C, w http.ResponseWriter, r *http.Request) {
 	//TODO: validate x, y, z
 
 	service := c.URLParams["service"]
-	if _, exists := imageQueries[service]; !exists {
+	if _, exists := dbClients[service]; !exists {
 		http.Error(w, fmt.Sprintf("Service not found: %s", service), http.StatusNotFound)
 		return
 	}
 
-	// key := strings.TrimPrefix(r.URL.String(), "/services/")
 	key := strings.Join([]string{c.URLParams["service"], c.URLParams["z"], c.URLParams["x"], c.URLParams["filename"]}, "/")
 	fmt.Println("URL key: ", key)
 
@@ -183,7 +239,7 @@ func GetTile(c web.C, w http.ResponseWriter, r *http.Request) {
 		data = blankPNG
 		contentType = "image/png"
 	} else {
-		contentType = contentTypes[service]
+		contentType = dbClients[service].contentType
 	}
 
 	w.Header().Add("Cache-Control", fmt.Sprintf("max-age=%v", options.MaxAge))
@@ -191,4 +247,14 @@ func GetTile(c web.C, w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", contentType)
 	w.Header().Add("ETag", etag)
 	w.Write(data)
+}
+
+func stringToFloats(str string) []float32 {
+	split := strings.Split(str, ",")
+	var out = make([]float32, len(split))
+	for i, v := range split {
+		value, _ := strconv.ParseFloat(v, 32)
+		out[i] = float32(value)
+	}
+	return out
 }
