@@ -8,10 +8,15 @@ Basic Go server for mbtiles.
 Provide a very simple Go-based server for map tiles stored in *.mbtiles files.
 
 ## Dependencies ##
-* [github.com/jessevdk/go-flags](http://github.com/jessevdk/go-flags)
-* [github.com/mattn/go-sqlite3](http://github.com/mattn/go-sqlite3)
-* [github.com/zenazn/goji](http://github.com/zenazn/goji)
-* [github.com/golang/groupcache](http://github.com/golang/groupcache)
+* [github.com/jessevdk/go-flags](https://github.com/jessevdk/go-flags)
+* [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
+* [github.com/jmoiron/sqlx](https://github.com/jmoiron/sqlx)
+* [github.com/zenazn/goji](https://github.com/zenazn/goji)
+* [github.com/golang/groupcache](https://github.com/golang/groupcache)
+
+
+On Windows, it is necessary to install `gcc`.  MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
+
 
 ## Work in progress ##
 This project is very much a work in progress.  Stay tuned!

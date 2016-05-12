@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"encoding/json"
-	// "flag"
 	"fmt"
 	"github.com/golang/groupcache"
 	"github.com/jessevdk/go-flags"
@@ -154,7 +153,7 @@ func ListServices(c web.C, w http.ResponseWriter, r *http.Request) {
 
 func GetService(c web.C, w http.ResponseWriter, r *http.Request) {
 	//https://github.com/mapbox/tilejson-spec/tree/master/2.1.0
-	//FIXME: https://a.tiles.mapbox.com/v4/bcward.salcc.json?access_token=pk.eyJ1IjoiYmN3YXJkIiwiYSI6InJ5NzUxQzAifQ.CVyzbyOpnStfYUQ_6r8AgQ
+	//FIXME: https://a.tiles.mapbox.com/v4/bcward.salcc.json?access_token=<removed>
 	service := c.URLParams["service"]
 	if _, exists := dbClients[service]; !exists {
 		http.Error(w, fmt.Sprintf("Service not found: %s", service), http.StatusNotFound)
