@@ -9,6 +9,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/rs/cors"
 	"github.com/zenazn/goji"
 	"github.com/zenazn/goji/web"
 	"io/ioutil"
@@ -122,6 +123,11 @@ func main() {
 			return nil
 		}))
 
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+	})
+	goji.Use(c.Handler)
+
 	//TODO: add gzip
 	goji.Get("/services", ListServices)
 	goji.Get("/services/:service", GetService)
@@ -152,8 +158,6 @@ func ListServices(c web.C, w http.ResponseWriter, r *http.Request) {
 }
 
 func GetService(c web.C, w http.ResponseWriter, r *http.Request) {
-	//https://github.com/mapbox/tilejson-spec/tree/master/2.1.0
-	//FIXME: https://a.tiles.mapbox.com/v4/bcward.salcc.json?access_token=<removed>
 	service := c.URLParams["service"]
 	if _, exists := dbClients[service]; !exists {
 		http.Error(w, fmt.Sprintf("Service not found: %s", service), http.StatusNotFound)
@@ -174,12 +178,15 @@ func GetService(c web.C, w http.ResponseWriter, r *http.Request) {
 	if options.Bind != ":80" {
 		rootURL = fmt.Sprintf("%s%s", rootURL, options.Bind)
 	}
+
+	imgFormat := strings.Split(dbClients[service].contentType, "/")[1]
+
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
 		"id":       service,
-		"scheme":   "tms",
-		"format":   strings.Split(dbClients[service].contentType, "/")[1],
-		"tiles":    []string{fmt.Sprintf("%s/services/%s/tiles/{z}/{x}/{y}", rootURL, service)},
+		"scheme":   "xyz",
+		"format":   imgFormat,
+		"tiles":    []string{fmt.Sprintf("%s/services/%s/tiles/{z}/{x}/{y}.%s", rootURL, service, strings.Replace(imgFormat, "jpeg", "jpg", 1))},
 	}
 
 	for k := range results {
