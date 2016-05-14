@@ -13,6 +13,7 @@ Provide a very simple Go-based server for map tiles stored in *.mbtiles files.
 * [github.com/jmoiron/sqlx](https://github.com/jmoiron/sqlx)
 * [github.com/zenazn/goji](https://github.com/zenazn/goji)
 * [github.com/golang/groupcache](https://github.com/golang/groupcache)
+* [github.com/rs/cors](https://github.com/rs/cors)
 
 
 On Windows, it is necessary to install `gcc`.  MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.

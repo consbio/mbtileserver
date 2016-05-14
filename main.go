@@ -12,6 +12,7 @@ import (
 	"github.com/rs/cors"
 	"github.com/zenazn/goji"
 	"github.com/zenazn/goji/web"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -44,12 +45,18 @@ type KeyValuePair struct {
 	Value string
 }
 
+type TemplateParams struct {
+	Url string
+	Id  string
+}
+
 var (
-	pool       *groupcache.HTTPPool
-	cache      *groupcache.Group
-	dbClients  map[string]DBClient
-	blankPNG   []byte
-	cacheSince = time.Now().Format(http.TimeFormat)
+	pool        *groupcache.HTTPPool
+	cache       *groupcache.Group
+	dbClients   map[string]DBClient
+	blankPNG    []byte
+	cacheSince  = time.Now().Format(http.TimeFormat)
+	mapTemplate *template.Template
 )
 
 func main() {
@@ -123,6 +130,8 @@ func main() {
 			return nil
 		}))
 
+	mapTemplate = template.Must(template.ParseFiles("map.html"))
+
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
 	})
@@ -130,6 +139,7 @@ func main() {
 
 	//TODO: add gzip
 	goji.Get("/services", ListServices)
+	goji.Get("/services/:service.html", GetServiceHTML)
 	goji.Get("/services/:service", GetService)
 	goji.Get("/services/:service/tiles/:z/:x/:filename", GetTile)
 	//TODO:  goji.Get("/:service/grids/:z/:x/:filename", GetGrid) //return UTF8 grid
@@ -178,6 +188,7 @@ func GetService(c web.C, w http.ResponseWriter, r *http.Request) {
 	if options.Bind != ":80" {
 		rootURL = fmt.Sprintf("%s%s", rootURL, options.Bind)
 	}
+	svcRoot := fmt.Sprintf("%s/services/%s", rootURL, service)
 
 	imgFormat := strings.Split(dbClients[service].contentType, "/")[1]
 
@@ -186,7 +197,8 @@ func GetService(c web.C, w http.ResponseWriter, r *http.Request) {
 		"id":       service,
 		"scheme":   "xyz",
 		"format":   imgFormat,
-		"tiles":    []string{fmt.Sprintf("%s/services/%s/tiles/{z}/{x}/{y}.%s", rootURL, service, strings.Replace(imgFormat, "jpeg", "jpg", 1))},
+		"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s", svcRoot, strings.Replace(imgFormat, "jpeg", "jpg", 1))},
+		"preview":  fmt.Sprintf("%s.html", svcRoot),
 	}
 
 	for k := range results {
@@ -210,6 +222,40 @@ func GetService(c web.C, w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	json, _ := json.Marshal(out)
 	w.Write(json)
+}
+
+func GetServiceHTML(c web.C, w http.ResponseWriter, r *http.Request) {
+	log.Println("Getting service HTML...")
+	service := c.URLParams["service"]
+	if _, exists := dbClients[service]; !exists {
+		http.Error(w, fmt.Sprintf("Service not found: %s", service), http.StatusNotFound)
+		return
+	}
+	results := make(map[string]string)
+	rows, err := dbClients[service].infoStmt.Queryx()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Metadata query failed for: %s", service), http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var record KeyValuePair
+		rows.StructScan(&record)
+		results[record.Name] = record.Value
+	}
+	rootURL := fmt.Sprintf("http://%s", options.Hostname)
+	if options.Bind != ":80" {
+		rootURL = fmt.Sprintf("%s%s", rootURL, options.Bind)
+	}
+
+	p := TemplateParams{
+		Url: fmt.Sprintf("%s/services/%s", rootURL, service),
+		Id:  service,
+	}
+	err = mapTemplate.ExecuteTemplate(w, "map.html", p)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Could not find map for: %s", service), http.StatusInternalServerError)
+		return
+	}
 }
 
 func GetTile(c web.C, w http.ResponseWriter, r *http.Request) {
