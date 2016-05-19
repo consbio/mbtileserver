@@ -1,18 +1,20 @@
 package main
 
 import (
-	"crypto/md5"
+	"bytes"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"github.com/golang/groupcache"
-	"github.com/jessevdk/go-flags"
 	"github.com/jmoiron/sqlx"
+	"github.com/labstack/echo"
+	"github.com/labstack/echo/engine"
+	// "github.com/labstack/echo/engine/fasthttp"
+	"github.com/labstack/echo/engine/standard"
+	"github.com/labstack/echo/middleware"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/rs/cors"
-	"github.com/zenazn/goji"
-	"github.com/zenazn/goji/web"
+	"github.com/spf13/cobra"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -24,20 +26,17 @@ import (
 	"time"
 )
 
-var options struct {
-	Hostname  string `long:"hostname" description:"externally accessible hostname" default:"localhost"`
-	Bind      string `long:"bind" description:"Server port" default:":8000"`
-	Tilesets  string `long:"tilesets" description:"path to tilesets" default:"./tilesets"`
-	CachePort uint16 `long:"cacheport" description:"GroupCache port" default:"8001"`
-	CacheSize int64  `long:"cachesize" description:"Size of Cache (MB)" default:"10"`
-	MaxAge    uint   `long:"max_age" description:"Response max-age duration (seconds)" default:"3600"`
-}
-
 type DBClient struct {
 	connection  *sqlx.DB
 	imageStmt   *sql.Stmt
 	infoStmt    *sqlx.Stmt
 	contentType string
+	imgFormat   string
+}
+
+type ServiceInfo struct {
+	ImageType string `json:"imageType"`
+	URL       string `json:"url"`
 }
 
 type KeyValuePair struct {
@@ -45,30 +44,73 @@ type KeyValuePair struct {
 	Value string
 }
 
+type Template struct {
+	templates *template.Template
+}
+
+func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+	return t.templates.ExecuteTemplate(w, name, data)
+}
+
 type TemplateParams struct {
-	Url string
-	Id  string
+	URL string
+	ID  string
 }
 
 var (
-	pool        *groupcache.HTTPPool
-	cache       *groupcache.Group
-	dbClients   map[string]DBClient
-	blankPNG    []byte
-	cacheSince  = time.Now().Format(http.TimeFormat)
-	mapTemplate *template.Template
+	blankPNG       []byte
+	cache          *groupcache.Group
+	cacheTimestamp = time.Now()
+	dbClients      map[string]DBClient
 )
 
-func main() {
-	_, err := flags.ParseArgs(&options, os.Args)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("Flags:", options)
-	blankPNG, _ = ioutil.ReadFile("blank.png")
+var RootCmd = &cobra.Command{
+	Use:   "mbtileserver",
+	Short: "Serve tiles from mbtiles files",
+	Run: func(cmd *cobra.Command, args []string) {
+		serve()
+	},
+}
 
+var (
+	port        int
+	tilePath    string
+	cacheSize   int64
+	certificate string
+	privateKey  string
+)
+
+func init() {
+	flags := RootCmd.Flags()
+	flags.IntVarP(&port, "port", "p", 8000, "Server port.")
+	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.")
+	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
+	flags.StringVarP(&privateKey, "key", "k", "", "flag usage")
+	flags.Int64Var(&cacheSize, "cachesize", 250, "Size of cache in MB.")
+}
+
+func main() {
+	if err := RootCmd.Execute(); err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func serve() {
+	certExists := len(certificate) > 0
+	keyExists := len(privateKey) > 0
+
+	if (certExists || keyExists) && !(certExists && keyExists) {
+		log.Fatal("ERROR: Both certificate and private key are required to use SSL")
+	}
+
+	blankPNG, _ = ioutil.ReadFile("blank.png") // Cache the blank PNG in memory (it is tiny)
+
+	// Must manage these in main, based on how we are deferring closing of connections to DB
+	// TODO: clean that up
 	dbClients = make(map[string]DBClient)
-	tilesets, _ := filepath.Glob(path.Join(options.Tilesets, "*.mbtiles"))
+	tilesets, _ := filepath.Glob(path.Join(tilePath, "*.mbtiles"))
+
+	log.Printf("Found %v mbtiles files in %s\n", len(tilesets), tilePath)
 
 	for _, filename := range tilesets {
 		_, service := filepath.Split(filename)
@@ -98,107 +140,156 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		contentType := http.DetectContentType(tileData)
+		imgFormat := strings.Replace(strings.Split(contentType, "/")[1], "jpeg", "jpg", 1)
 
 		dbClients[service] = DBClient{
 			connection:  db,
 			infoStmt:    infoStmt,
 			imageStmt:   stmt,
-			contentType: http.DetectContentType(tileData),
+			contentType: contentType,
+			imgFormat:   imgFormat,
 		}
 	}
 
-	pool = groupcache.NewHTTPPool(fmt.Sprintf("http://127.0.0.1:%v", options.CachePort))
-	cache = groupcache.NewGroup("TileCache", options.CacheSize*1048576, groupcache.GetterFunc(
-		func(ctx groupcache.Context, key string, dest groupcache.Sink) error {
-			pathParams := strings.Split(key, "/")
-			service := pathParams[0]
-			yParams := strings.Split(pathParams[3], ".")
-			z, _ := strconv.ParseUint(pathParams[1], 0, 64)
-			x, _ := strconv.ParseUint(pathParams[2], 0, 64)
-			y, _ := strconv.ParseUint(yParams[0], 0, 64)
-			//flip y to match TMS spec
-			y = (1 << z) - 1 - y
+	log.Printf("Cache size: %v MB\n", cacheSize)
 
-			var tileData []byte
-			err := dbClients[service].imageStmt.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
-			if err != nil {
-				if err != sql.ErrNoRows {
-					log.Fatal(err)
-				}
-			}
-			dest.SetBytes(tileData)
-			return nil
-		}))
+	cache = groupcache.NewGroup("TileCache", cacheSize*1048576, groupcache.GetterFunc(cacheGetter))
 
-	mapTemplate = template.Must(template.ParseFiles("map.html"))
+	e := echo.New()
+	e.Pre(middleware.RemoveTrailingSlash())
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
+	e.Use(middleware.CORS())
 
-	c := cors.New(cors.Options{
-		AllowedOrigins: []string{"*"},
-	})
-	goji.Use(c.Handler)
+	t := &Template{
+		templates: template.Must(template.ParseGlob("templates/*.html")),
+	}
+	e.SetRenderer(t)
 
-	//TODO: add gzip
-	goji.Get("/services", ListServices)
-	goji.Get("/services/:service.html", GetServiceHTML)
-	goji.Get("/services/:service", GetService)
-	goji.Get("/services/:service/tiles/:z/:x/:filename", GetTile)
-	//TODO:  goji.Get("/:service/grids/:z/:x/:filename", GetGrid) //return UTF8 grid
+	gzip := middleware.Gzip()
 
-	goji.Serve()
+	e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
+
+	services := e.Group("/services/") // has to be separate from endpoint for ListServices
+	services.GET(":service", GetService, NotModifiedMiddleware, gzip)
+	services.GET(":service/map", GetServiceHTML, NotModifiedMiddleware, gzip)
+	services.Get(":service/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
+	// TODO: add UTF8 grid and vector tiles
+
+	e.Get("/admin/cache", CacheInfo, gzip)
+
+	config := engine.Config{
+		Address: fmt.Sprintf(":%v", port),
+	}
+
+	if certExists {
+		if _, err := os.Stat(certificate); os.IsNotExist(err) {
+			log.Fatalf("ERROR: Could not find certificate file: %s\n", certificate)
+		}
+		if _, err := os.Stat(privateKey); os.IsNotExist(err) {
+			log.Fatalf("ERROR: Could not find private key file: %s\n", privateKey)
+		}
+
+		config.TLSCertfile = certificate
+		config.TLSKeyfile = privateKey
+		log.Printf("Starting HTTPS server on port %v\n", port)
+
+		log.Println("Use Ctrl-C to exit the server")
+		e.Run(standard.WithConfig(config))
+
+	} else {
+		// TODO: use fasthttp engine, but beware issues with path (differs from standard)
+
+		log.Printf("Starting HTTP server on port %v\n", port)
+		log.Println("Use Ctrl-C to exit the server")
+		e.Run(standard.WithConfig(config))
+	}
+
 }
 
-type ServiceInfo struct {
-	URI       string `json:"uri"`
-	ImageType string `json:"imageType"`
+func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
+	pathParams := strings.Split(key, "/")
+	service := pathParams[0]
+	yParams := strings.Split(pathParams[3], ".")
+	z, _ := strconv.ParseUint(pathParams[1], 0, 64)
+	x, _ := strconv.ParseUint(pathParams[2], 0, 64)
+	y, _ := strconv.ParseUint(yParams[0], 0, 64)
+	//flip y to match the spec
+	y = (1 << z) - 1 - y
+
+	var tileData []byte
+	err := dbClients[service].imageStmt.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			log.Fatal(err)
+		}
+	}
+	dest.SetBytes(tileData)
+	return nil
 }
 
-func ListServices(c web.C, w http.ResponseWriter, r *http.Request) {
+// Verifies that service exists and return 404 otherwise
+func getServiceOr404(c echo.Context) (string, error) {
+	service := c.Param("service")
+	if _, exists := dbClients[service]; !exists {
+		log.Printf("Service not found: %s\n", service)
+		return "", echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("Service not found: %s", service))
+	}
+	return service, nil
+}
+
+func getRootURL(c echo.Context) string {
+	// TODO: this won't be correct if we received this via proxy
+	return fmt.Sprintf("%s://%s", c.Request().Scheme(), c.Request().Host())
+}
+
+func ListServices(c echo.Context) error {
+	// TODO: need to paginate the responses
+	rootURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
 	services := make([]ServiceInfo, len(dbClients))
 	i := 0
 	for service, _ := range dbClients {
 		services[i] = ServiceInfo{
-			URI:       fmt.Sprintf("/services/%s", service),
-			ImageType: strings.Split(dbClients[service].contentType, "/")[1],
+			ImageType: dbClients[service].imgFormat,
+			URL:       fmt.Sprintf("%s/%s", rootURL, service),
 		}
 		i++
 	}
-	w.Header().Add("Content-Type", "application/json")
-	json, _ := json.Marshal(services)
-	w.Write(json)
+	return c.JSON(http.StatusOK, services)
 }
 
-func GetService(c web.C, w http.ResponseWriter, r *http.Request) {
-	service := c.URLParams["service"]
-	if _, exists := dbClients[service]; !exists {
-		http.Error(w, fmt.Sprintf("Service not found: %s", service), http.StatusNotFound)
-		return
+func GetService(c echo.Context) error {
+	service, err := getServiceOr404(c)
+	if err != nil {
+		return err
 	}
+
 	results := make(map[string]string)
 	rows, err := dbClients[service].infoStmt.Queryx()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Metadata query failed for: %s", service), http.StatusInternalServerError)
-		return
+		//TODO: log
+		log.Println(fmt.Sprintf("Metadata query failed for: %s", service))
+		log.Println(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Metadata query failed for: %s", service))
 	}
 	for rows.Next() {
 		var record KeyValuePair
 		rows.StructScan(&record)
 		results[record.Name] = record.Value
 	}
-	rootURL := fmt.Sprintf("http://%s", options.Hostname)
-	if options.Bind != ":80" {
-		rootURL = fmt.Sprintf("%s%s", rootURL, options.Bind)
-	}
-	svcRoot := fmt.Sprintf("%s/services/%s", rootURL, service)
 
-	imgFormat := strings.Split(dbClients[service].contentType, "/")[1]
+	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
+
+	imgFormat := dbClients[service].imgFormat
 
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
 		"id":       service,
 		"scheme":   "xyz",
 		"format":   imgFormat,
-		"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s", svcRoot, strings.Replace(imgFormat, "jpeg", "jpg", 1))},
-		"preview":  fmt.Sprintf("%s.html", svcRoot),
+		"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s", svcURL, imgFormat)},
+		"map":      fmt.Sprintf("%s/map", svcURL),
 	}
 
 	for k := range results {
@@ -219,86 +310,70 @@ func GetService(c web.C, w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Add("Content-Type", "application/json")
-	json, _ := json.Marshal(out)
-	w.Write(json)
+	return c.JSON(http.StatusOK, out)
 }
 
-func GetServiceHTML(c web.C, w http.ResponseWriter, r *http.Request) {
-	log.Println("Getting service HTML...")
-	service := c.URLParams["service"]
-	if _, exists := dbClients[service]; !exists {
-		http.Error(w, fmt.Sprintf("Service not found: %s", service), http.StatusNotFound)
-		return
-	}
-	results := make(map[string]string)
-	rows, err := dbClients[service].infoStmt.Queryx()
+func GetServiceHTML(c echo.Context) error {
+	service, err := getServiceOr404(c)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Metadata query failed for: %s", service), http.StatusInternalServerError)
-		return
-	}
-	for rows.Next() {
-		var record KeyValuePair
-		rows.StructScan(&record)
-		results[record.Name] = record.Value
-	}
-	rootURL := fmt.Sprintf("http://%s", options.Hostname)
-	if options.Bind != ":80" {
-		rootURL = fmt.Sprintf("%s%s", rootURL, options.Bind)
+		return err
 	}
 
 	p := TemplateParams{
-		Url: fmt.Sprintf("%s/services/%s", rootURL, service),
-		Id:  service,
+		URL: fmt.Sprintf("%s%s", getRootURL(c), strings.TrimSuffix(c.Request().URL().Path(), "/map")),
+		ID:  service,
 	}
-	err = mapTemplate.ExecuteTemplate(w, "map.html", p)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Could not find map for: %s", service), http.StatusInternalServerError)
-		return
-	}
+
+	return c.Render(http.StatusOK, "map", p)
 }
 
-func GetTile(c web.C, w http.ResponseWriter, r *http.Request) {
+func GetTile(c echo.Context) error {
 	var (
 		data        []byte
 		contentType string
+		// extension   string
 	)
 	//TODO: validate x, y, z
 
-	service := c.URLParams["service"]
-	if _, exists := dbClients[service]; !exists {
-		http.Error(w, fmt.Sprintf("Service not found: %s", service), http.StatusNotFound)
-		return
+	service, err := getServiceOr404(c)
+	if err != nil {
+		return err
 	}
 
-	key := strings.Join([]string{c.URLParams["service"], c.URLParams["z"], c.URLParams["x"], c.URLParams["filename"]}, "/")
-	fmt.Println("URL key: ", key)
+	key := strings.Join([]string{service, c.Param("z"), c.Param("x"), c.Param("filename")}, "/")
 
-	err := cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
+	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
 		log.Println("Error fetching key", key)
-		http.Error(w, fmt.Sprintf("Cache get failed for key: %s", key), http.StatusInternalServerError)
-		return
+		// TODO: log
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Cache get failed for key: %s", key))
 	}
-	etag := fmt.Sprintf("%x", md5.Sum(data))
 
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
+	svcClient := dbClients[service]
 
 	if len(data) <= 1 {
 		data = blankPNG
 		contentType = "image/png"
 	} else {
-		contentType = dbClients[service].contentType
+		contentType = svcClient.contentType
 	}
 
-	w.Header().Add("Cache-Control", fmt.Sprintf("max-age=%v", options.MaxAge))
-	w.Header().Add("Last-Modified", cacheSince)
-	w.Header().Add("Content-Type", contentType)
-	w.Header().Add("ETag", etag)
-	w.Write(data)
+	res := c.Response()
+	res.Header().Add("Content-Type", contentType)
+	res.WriteHeader(http.StatusOK)
+	_, err = io.Copy(res, bytes.NewReader(data))
+	return err
+}
+
+func CacheInfo(c echo.Context) error {
+	hotStats := cache.CacheStats(groupcache.HotCache)
+	mainStats := cache.CacheStats(groupcache.MainCache)
+
+	out := map[string]interface{}{
+		"hot":  hotStats,
+		"main": mainStats,
+	}
+	return c.JSON(http.StatusOK, out)
 }
 
 func stringToFloats(str string) []float32 {
@@ -309,4 +384,17 @@ func stringToFloats(str string) []float32 {
 		out[i] = float32(value)
 	}
 	return out
+}
+
+func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if t, err := time.Parse(http.TimeFormat, c.Request().Header().Get(echo.HeaderIfModifiedSince)); err == nil && cacheTimestamp.Before(t.Add(1*time.Second)) {
+			c.Response().Header().Del(echo.HeaderContentType)
+			c.Response().Header().Del(echo.HeaderContentLength)
+			return c.NoContent(http.StatusNotModified)
+		}
+
+		c.Response().Header().Set(echo.HeaderLastModified, cacheTimestamp.UTC().Format(http.TimeFormat))
+		return next(c)
+	}
 }
