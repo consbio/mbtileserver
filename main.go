@@ -191,8 +191,8 @@ func serve() {
 			log.Fatalf("ERROR: Could not find private key file: %s\n", privateKey)
 		}
 
-		config.TLSCertfile = certificate
-		config.TLSKeyfile = privateKey
+		config.TLSCertFile = certificate
+		config.TLSKeyFile = privateKey
 		log.Printf("Starting HTTPS server on port %v\n", port)
 
 		log.Println("Use Ctrl-C to exit the server")
