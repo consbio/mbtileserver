@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/engine"
 	// "github.com/labstack/echo/engine/fasthttp"
+	"encoding/json"
 	"github.com/labstack/echo/engine/standard"
 	"github.com/labstack/echo/middleware"
 	_ "github.com/mattn/go-sqlite3"
@@ -27,9 +28,10 @@ import (
 )
 
 type DBClient struct {
-	connection  *sqlx.DB
-	imageStmt   *sql.Stmt
-	infoStmt    *sqlx.Stmt
+	connection *sqlx.DB
+	imageStmt  *sql.Stmt
+	metadata   map[string]interface{}
+	// infoStmt    *sqlx.Stmt
 	contentType string
 	imgFormat   string
 }
@@ -118,38 +120,42 @@ func serve() {
 
 		db, err := sqlx.Open("sqlite3", filename)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("ERROR: could not open mbtiles file: %s\n", filename)
+			continue
 		}
 		defer db.Close()
 
-		infoStmt, err := db.Preparex("select * from metadata where value is not ''")
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer infoStmt.Close()
-
+		// prepare query to fetch tile data
 		stmt, err := db.Prepare("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?")
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("ERROR: could not create prepared tile query for file: %s\n", filename)
+			continue
 		}
 		defer stmt.Close()
 
-		//query a sample tile to determine if png or jpg, since metadata from tilemill doesn't give this to us
-		var tileData []byte
-		err = db.QueryRow("select tile_data from images limit 1").Scan(&tileData)
+		metadata, err := getMetadata(db)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("ERROR: metadata query failed for file: %s\n", filename)
+			continue
 		}
-		contentType := http.DetectContentType(tileData)
-		imgFormat := strings.Replace(strings.Split(contentType, "/")[1], "jpeg", "jpg", 1)
+
+		var contentType string
+		switch metadata["format"] {
+		case "jpg":
+			contentType = "image/jpeg"
+		case "png":
+			contentType = "image/png"
+		case "pbf":
+			contentType = "application/x-protobuf"
+		}
 
 		dbClients[service] = DBClient{
 			connection:  db,
-			infoStmt:    infoStmt,
 			imageStmt:   stmt,
 			contentType: contentType,
-			imgFormat:   imgFormat,
+			metadata:    metadata,
 		}
+
 	}
 
 	log.Printf("Cache size: %v MB\n", cacheSize)
@@ -208,6 +214,53 @@ func serve() {
 
 }
 
+func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
+	metadata := make(map[string]interface{})
+
+	// prepare query to fetch metadata
+	query, err := db.Preparex("select * from metadata where value is not ''")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer query.Close()
+
+	rows, err := query.Queryx()
+	if err != nil {
+		return nil, err
+	}
+
+	var record KeyValuePair
+	for rows.Next() {
+		rows.StructScan(&record)
+
+		switch record.Name {
+		case "maxzoom", "minzoom":
+			metadata[record.Name], _ = strconv.Atoi(record.Value)
+		case "bounds", "center":
+			metadata[record.Name] = stringToFloats(record.Value)
+		case "json":
+			json.Unmarshal([]byte(record.Value), &metadata)
+		default:
+			metadata[record.Name] = record.Value
+		}
+	}
+
+	// if spec is 1.1, format is required
+	if _, ok := metadata["format"]; !ok {
+		//query a sample tile to determine if png or jpg, since metadata from tilemill doesn't give this to us
+		var tileData []byte
+		err = db.QueryRow("select tile_data from images limit 1").Scan(&tileData)
+		if err != nil {
+			log.Fatal(err)
+		}
+		contentType := http.DetectContentType(tileData)
+		metadata["format"] = strings.Replace(strings.Split(contentType, "/")[1], "jpeg", "jpg", 1)
+		// TODO: probably can read first few bytes and determine using a switch
+	}
+
+	return metadata, nil
+}
+
 func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
 	pathParams := strings.Split(key, "/")
 	service := pathParams[0]
@@ -251,7 +304,7 @@ func ListServices(c echo.Context) error {
 	i := 0
 	for service, _ := range dbClients {
 		services[i] = ServiceInfo{
-			ImageType: dbClients[service].imgFormat,
+			ImageType: dbClients[service].metadata["format"].(string),
 			URL:       fmt.Sprintf("%s/%s", rootURL, service),
 		}
 		i++
@@ -265,23 +318,10 @@ func GetService(c echo.Context) error {
 		return err
 	}
 
-	results := make(map[string]string)
-	rows, err := dbClients[service].infoStmt.Queryx()
-	if err != nil {
-		//TODO: log
-		log.Println(fmt.Sprintf("Metadata query failed for: %s", service))
-		log.Println(err)
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Metadata query failed for: %s", service))
-	}
-	for rows.Next() {
-		var record KeyValuePair
-		rows.StructScan(&record)
-		results[record.Name] = record.Value
-	}
-
 	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
 
-	imgFormat := dbClients[service].imgFormat
+	metadata := dbClients[service].metadata
+	imgFormat := metadata["format"]
 
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
@@ -292,22 +332,8 @@ func GetService(c echo.Context) error {
 		"map":      fmt.Sprintf("%s/map", svcURL),
 	}
 
-	for k := range results {
-		out[k] = results[k]
-	}
-	var value string
-	var ok bool
-	multiFloatFields := []string{"bounds", "center"}
-	intFields := []string{"maxzoom", "minzoom"}
-	for _, field := range multiFloatFields {
-		if value, ok = results[field]; ok {
-			out[field] = stringToFloats(value)
-		}
-	}
-	for _, field := range intFields {
-		if value, ok = results[field]; ok {
-			out[field], _ = strconv.Atoi(results[field])
-		}
+	for k := range metadata {
+		out[k] = metadata[k]
 	}
 
 	return c.JSON(http.StatusOK, out)
