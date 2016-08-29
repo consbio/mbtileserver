@@ -175,6 +175,10 @@ func serve() {
 
 	gzip := middleware.Gzip()
 
+	// Setup routing
+	e.File("/favicon.ico", "favicon.ico")
+	e.File("/favicon.png", "favicon.png")
+
 	e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
 
 	services := e.Group("/services/") // has to be separate from endpoint for ListServices
@@ -189,6 +193,7 @@ func serve() {
 		Address: fmt.Sprintf(":%v", port),
 	}
 
+	// Start the server
 	if certExists {
 		if _, err := os.Stat(certificate); os.IsNotExist(err) {
 			log.Fatalf("ERROR: Could not find certificate file: %s\n", certificate)
@@ -240,6 +245,7 @@ func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
 			metadata[record.Name] = stringToFloats(record.Value)
 		case "json":
 			json.Unmarshal([]byte(record.Value), &metadata)
+			//TODO: may be missing required props for each layer: source, source_layer
 		default:
 			metadata[record.Name] = record.Value
 		}
@@ -312,6 +318,8 @@ func ListServices(c echo.Context) error {
 	return c.JSON(http.StatusOK, services)
 }
 
+//TODO: separate out tileJSON render into a separate function
+//then it can be directly injected into template HTML instead of URL, and bypass one request
 func GetService(c echo.Context) error {
 	service, err := getServiceOr404(c)
 	if err != nil {
