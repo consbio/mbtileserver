@@ -28,12 +28,11 @@ import (
 )
 
 type DBClient struct {
-	connection *sqlx.DB
-	imageStmt  *sql.Stmt
-	metadata   map[string]interface{}
-	// infoStmt    *sqlx.Stmt
+	connection  *sqlx.DB
+	tileQuery   *sql.Stmt
+	metadata    map[string]interface{}
 	contentType string
-	imgFormat   string
+	isGzipped   bool
 }
 
 type ServiceInfo struct {
@@ -126,12 +125,12 @@ func serve() {
 		defer db.Close()
 
 		// prepare query to fetch tile data
-		stmt, err := db.Prepare("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?")
+		tileQuery, err := db.Prepare("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?")
 		if err != nil {
 			log.Printf("ERROR: could not create prepared tile query for file: %s\n", filename)
 			continue
 		}
-		defer stmt.Close()
+		defer tileQuery.Close()
 
 		metadata, err := getMetadata(db)
 		if err != nil {
@@ -140,6 +139,7 @@ func serve() {
 		}
 
 		var contentType string
+		var isGzipped = false
 		switch metadata["format"] {
 		case "jpg":
 			contentType = "image/jpeg"
@@ -147,13 +147,22 @@ func serve() {
 			contentType = "image/png"
 		case "pbf":
 			contentType = "application/x-protobuf"
+			ct, err := getTileContentType(db)
+			if err != nil {
+				log.Printf("ERROR: tile data query failed for file: %s\n", filename)
+				continue
+			}
+			if ct == "application/x-gzip" {
+				isGzipped = true
+			}
 		}
 
 		dbClients[service] = DBClient{
 			connection:  db,
-			imageStmt:   stmt,
+			tileQuery:   tileQuery,
 			contentType: contentType,
 			metadata:    metadata,
+			isGzipped:   isGzipped,
 		}
 
 	}
@@ -254,17 +263,23 @@ func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
 	// if spec is 1.1, format is required
 	if _, ok := metadata["format"]; !ok {
 		//query a sample tile to determine if png or jpg, since metadata from tilemill doesn't give this to us
-		var tileData []byte
-		err = db.QueryRow("select tile_data from images limit 1").Scan(&tileData)
+		contentType, err := getTileContentType(db)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
-		contentType := http.DetectContentType(tileData)
 		metadata["format"] = strings.Replace(strings.Split(contentType, "/")[1], "jpeg", "jpg", 1)
-		// TODO: probably can read first few bytes and determine using a switch
 	}
 
 	return metadata, nil
+}
+
+func getTileContentType(db *sqlx.DB) (string, error) {
+	var tileData []byte
+	var err = db.QueryRow("select tile_data from tiles limit 1").Scan(&tileData)
+	if err != nil {
+		return "", err
+	}
+	return http.DetectContentType(tileData), nil
 }
 
 func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
@@ -278,7 +293,7 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 	y = (1 << z) - 1 - y
 
 	var tileData []byte
-	err := dbClients[service].imageStmt.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
+	err := dbClients[service].tileQuery.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			log.Fatal(err)
@@ -358,6 +373,10 @@ func GetServiceHTML(c echo.Context) error {
 		ID:  service,
 	}
 
+	if dbClients[service].metadata["format"] == "pbf" {
+		return c.Render(http.StatusOK, "map_gl", p)
+	}
+
 	return c.Render(http.StatusOK, "map", p)
 }
 
@@ -386,6 +405,16 @@ func GetTile(c echo.Context) error {
 	svcClient := dbClients[service]
 
 	if len(data) <= 1 {
+
+		if svcClient.metadata["format"] == "pbf" {
+			// If pbf, return 404, consistent w/ mapbox
+			// TODO: return empty tile
+			// res.Header().Add("Content-Type", "application/json")
+			return c.JSON(http.StatusNotFound, struct {
+				Message string `json:"message"`
+			}{"Tile does not exist"})
+		}
+
 		data = blankPNG
 		contentType = "image/png"
 	} else {
@@ -394,6 +423,11 @@ func GetTile(c echo.Context) error {
 
 	res := c.Response()
 	res.Header().Add("Content-Type", contentType)
+
+	if svcClient.isGzipped {
+		res.Header().Add("Content-Encoding", "gzip")
+	}
+
 	res.WriteHeader(http.StatusOK)
 	_, err = io.Copy(res, bytes.NewReader(data))
 	return err
