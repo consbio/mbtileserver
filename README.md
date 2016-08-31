@@ -18,6 +18,12 @@ Provide a very simple Go-based server for map tiles stored in *.mbtiles files.
 On Windows, it is necessary to install `gcc`.  MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
 
 
+## Specifications ##
+* expects mbtiles files to follow version 1.0 of the [mbtiles specification](https://github.com/mapbox/mbtiles-spec).  Version 1.1 is preferred.
+* implements [TileJSON 2.1.0](https://github.com/mapbox/tilejson-spec)
+
+
+
 ## Work in progress ##
 This project is very much a work in progress.  Stay tuned!
 

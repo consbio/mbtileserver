@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/engine"
 	// "github.com/labstack/echo/engine/fasthttp"
+	"encoding/json"
 	"github.com/labstack/echo/engine/standard"
 	"github.com/labstack/echo/middleware"
 	_ "github.com/mattn/go-sqlite3"
@@ -28,10 +29,10 @@ import (
 
 type DBClient struct {
 	connection  *sqlx.DB
-	imageStmt   *sql.Stmt
-	infoStmt    *sqlx.Stmt
+	tileQuery   *sql.Stmt
+	metadata    map[string]interface{}
 	contentType string
-	imgFormat   string
+	isGzipped   bool
 }
 
 type ServiceInfo struct {
@@ -118,38 +119,52 @@ func serve() {
 
 		db, err := sqlx.Open("sqlite3", filename)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("ERROR: could not open mbtiles file: %s\n", filename)
+			continue
 		}
 		defer db.Close()
 
-		infoStmt, err := db.Preparex("select * from metadata where value is not ''")
+		// prepare query to fetch tile data
+		tileQuery, err := db.Prepare("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?")
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("ERROR: could not create prepared tile query for file: %s\n", filename)
+			continue
 		}
-		defer infoStmt.Close()
+		defer tileQuery.Close()
 
-		stmt, err := db.Prepare("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?")
+		metadata, err := getMetadata(db)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("ERROR: metadata query failed for file: %s\n", filename)
+			continue
 		}
-		defer stmt.Close()
 
-		//query a sample tile to determine if png or jpg, since metadata from tilemill doesn't give this to us
-		var tileData []byte
-		err = db.QueryRow("select tile_data from images limit 1").Scan(&tileData)
-		if err != nil {
-			log.Fatal(err)
+		var contentType string
+		var isGzipped = false
+		switch metadata["format"] {
+		case "jpg":
+			contentType = "image/jpeg"
+		case "png":
+			contentType = "image/png"
+		case "pbf":
+			contentType = "application/x-protobuf"
+			ct, err := getTileContentType(db)
+			if err != nil {
+				log.Printf("ERROR: tile data query failed for file: %s\n", filename)
+				continue
+			}
+			if ct == "application/x-gzip" {
+				isGzipped = true
+			}
 		}
-		contentType := http.DetectContentType(tileData)
-		imgFormat := strings.Replace(strings.Split(contentType, "/")[1], "jpeg", "jpg", 1)
 
 		dbClients[service] = DBClient{
 			connection:  db,
-			infoStmt:    infoStmt,
-			imageStmt:   stmt,
+			tileQuery:   tileQuery,
 			contentType: contentType,
-			imgFormat:   imgFormat,
+			metadata:    metadata,
+			isGzipped:   isGzipped,
 		}
+
 	}
 
 	log.Printf("Cache size: %v MB\n", cacheSize)
@@ -169,6 +184,10 @@ func serve() {
 
 	gzip := middleware.Gzip()
 
+	// Setup routing
+	e.File("/favicon.ico", "favicon.ico")
+	e.File("/favicon.png", "favicon.png")
+
 	e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
 
 	services := e.Group("/services/") // has to be separate from endpoint for ListServices
@@ -183,6 +202,7 @@ func serve() {
 		Address: fmt.Sprintf(":%v", port),
 	}
 
+	// Start the server
 	if certExists {
 		if _, err := os.Stat(certificate); os.IsNotExist(err) {
 			log.Fatalf("ERROR: Could not find certificate file: %s\n", certificate)
@@ -208,6 +228,60 @@ func serve() {
 
 }
 
+func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
+	metadata := make(map[string]interface{})
+
+	// prepare query to fetch metadata
+	query, err := db.Preparex("select * from metadata where value is not ''")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer query.Close()
+
+	rows, err := query.Queryx()
+	if err != nil {
+		return nil, err
+	}
+
+	var record KeyValuePair
+	for rows.Next() {
+		rows.StructScan(&record)
+
+		switch record.Name {
+		case "maxzoom", "minzoom":
+			metadata[record.Name], _ = strconv.Atoi(record.Value)
+		case "bounds", "center":
+			metadata[record.Name] = stringToFloats(record.Value)
+		case "json":
+			json.Unmarshal([]byte(record.Value), &metadata)
+			//TODO: may be missing required props for each layer: source, source_layer
+		default:
+			metadata[record.Name] = record.Value
+		}
+	}
+
+	// if spec is 1.1, format is required
+	if _, ok := metadata["format"]; !ok {
+		//query a sample tile to determine if png or jpg, since metadata from tilemill doesn't give this to us
+		contentType, err := getTileContentType(db)
+		if err != nil {
+			return nil, err
+		}
+		metadata["format"] = strings.Replace(strings.Split(contentType, "/")[1], "jpeg", "jpg", 1)
+	}
+
+	return metadata, nil
+}
+
+func getTileContentType(db *sqlx.DB) (string, error) {
+	var tileData []byte
+	var err = db.QueryRow("select tile_data from tiles limit 1").Scan(&tileData)
+	if err != nil {
+		return "", err
+	}
+	return http.DetectContentType(tileData), nil
+}
+
 func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
 	pathParams := strings.Split(key, "/")
 	service := pathParams[0]
@@ -219,7 +293,7 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 	y = (1 << z) - 1 - y
 
 	var tileData []byte
-	err := dbClients[service].imageStmt.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
+	err := dbClients[service].tileQuery.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			log.Fatal(err)
@@ -251,7 +325,7 @@ func ListServices(c echo.Context) error {
 	i := 0
 	for service, _ := range dbClients {
 		services[i] = ServiceInfo{
-			ImageType: dbClients[service].imgFormat,
+			ImageType: dbClients[service].metadata["format"].(string),
 			URL:       fmt.Sprintf("%s/%s", rootURL, service),
 		}
 		i++
@@ -259,29 +333,18 @@ func ListServices(c echo.Context) error {
 	return c.JSON(http.StatusOK, services)
 }
 
+//TODO: separate out tileJSON render into a separate function
+//then it can be directly injected into template HTML instead of URL, and bypass one request
 func GetService(c echo.Context) error {
 	service, err := getServiceOr404(c)
 	if err != nil {
 		return err
 	}
 
-	results := make(map[string]string)
-	rows, err := dbClients[service].infoStmt.Queryx()
-	if err != nil {
-		//TODO: log
-		log.Println(fmt.Sprintf("Metadata query failed for: %s", service))
-		log.Println(err)
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Metadata query failed for: %s", service))
-	}
-	for rows.Next() {
-		var record KeyValuePair
-		rows.StructScan(&record)
-		results[record.Name] = record.Value
-	}
-
 	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
 
-	imgFormat := dbClients[service].imgFormat
+	metadata := dbClients[service].metadata
+	imgFormat := metadata["format"]
 
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
@@ -292,22 +355,8 @@ func GetService(c echo.Context) error {
 		"map":      fmt.Sprintf("%s/map", svcURL),
 	}
 
-	for k := range results {
-		out[k] = results[k]
-	}
-	var value string
-	var ok bool
-	multiFloatFields := []string{"bounds", "center"}
-	intFields := []string{"maxzoom", "minzoom"}
-	for _, field := range multiFloatFields {
-		if value, ok = results[field]; ok {
-			out[field] = stringToFloats(value)
-		}
-	}
-	for _, field := range intFields {
-		if value, ok = results[field]; ok {
-			out[field], _ = strconv.Atoi(results[field])
-		}
+	for k := range metadata {
+		out[k] = metadata[k]
 	}
 
 	return c.JSON(http.StatusOK, out)
@@ -322,6 +371,10 @@ func GetServiceHTML(c echo.Context) error {
 	p := TemplateParams{
 		URL: fmt.Sprintf("%s%s", getRootURL(c), strings.TrimSuffix(c.Request().URL().Path(), "/map")),
 		ID:  service,
+	}
+
+	if dbClients[service].metadata["format"] == "pbf" {
+		return c.Render(http.StatusOK, "map_gl", p)
 	}
 
 	return c.Render(http.StatusOK, "map", p)
@@ -352,6 +405,16 @@ func GetTile(c echo.Context) error {
 	svcClient := dbClients[service]
 
 	if len(data) <= 1 {
+
+		if svcClient.metadata["format"] == "pbf" {
+			// If pbf, return 404, consistent w/ mapbox
+			// TODO: return empty tile
+			// res.Header().Add("Content-Type", "application/json")
+			return c.JSON(http.StatusNotFound, struct {
+				Message string `json:"message"`
+			}{"Tile does not exist"})
+		}
+
 		data = blankPNG
 		contentType = "image/png"
 	} else {
@@ -360,6 +423,11 @@ func GetTile(c echo.Context) error {
 
 	res := c.Response()
 	res.Header().Add("Content-Type", contentType)
+
+	if svcClient.isGzipped {
+		res.Header().Add("Content-Encoding", "gzip")
+	}
+
 	res.WriteHeader(http.StatusOK)
 	_, err = io.Copy(res, bytes.NewReader(data))
 	return err
