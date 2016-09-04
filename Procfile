@@ -1,0 +1,1 @@
+web: mbtileserver -p 80
