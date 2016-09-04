@@ -27,12 +27,17 @@ import (
 	"time"
 )
 
-type DBClient struct {
-	connection  *sqlx.DB
-	tileQuery   *sql.Stmt
-	metadata    map[string]interface{}
-	contentType string
-	isGzipped   bool
+var ContentTypes = map[string]string{
+	"png": "image/png",
+	"jpg": "image/jpeg",
+	"pbf": "application/x-protobuf", // Content-Encoding header must be gzip
+}
+
+type Mbtiles struct {
+	connection *sqlx.DB
+	tileQuery  *sql.Stmt
+	metadata   map[string]interface{}
+	format     string
 }
 
 type ServiceInfo struct {
@@ -62,7 +67,7 @@ var (
 	blankPNG       []byte
 	cache          *groupcache.Group
 	cacheTimestamp = time.Now()
-	dbClients      map[string]DBClient
+	tilesets       map[string]Mbtiles
 )
 
 var RootCmd = &cobra.Command{
@@ -108,14 +113,14 @@ func serve() {
 
 	// Must manage these in main, based on how we are deferring closing of connections to DB
 	// TODO: clean that up
-	dbClients = make(map[string]DBClient)
-	tilesets, _ := filepath.Glob(path.Join(tilePath, "*.mbtiles"))
+	tilesets = make(map[string]Mbtiles)
+	filenames, _ := filepath.Glob(path.Join(tilePath, "*.mbtiles"))
 
-	log.Printf("Found %v mbtiles files in %s\n", len(tilesets), tilePath)
+	log.Printf("Found %v mbtiles files in %s\n", len(filenames), tilePath)
 
-	for _, filename := range tilesets {
-		_, service := filepath.Split(filename)
-		service = strings.Split(service, ".")[0]
+	for _, filename := range filenames {
+		_, id := filepath.Split(filename)
+		id = strings.Split(id, ".")[0]
 
 		db, err := sqlx.Open("sqlite3", filename)
 		if err != nil {
@@ -138,33 +143,12 @@ func serve() {
 			continue
 		}
 
-		var contentType string
-		var isGzipped = false
-		switch metadata["format"] {
-		case "jpg":
-			contentType = "image/jpeg"
-		case "png":
-			contentType = "image/png"
-		case "pbf":
-			contentType = "application/x-protobuf"
-			ct, err := getTileContentType(db)
-			if err != nil {
-				log.Printf("ERROR: tile data query failed for file: %s\n", filename)
-				continue
-			}
-			if ct == "application/x-gzip" {
-				isGzipped = true
-			}
+		tilesets[id] = Mbtiles{
+			connection: db,
+			tileQuery:  tileQuery,
+			format:     metadata["format"].(string),
+			metadata:   metadata,
 		}
-
-		dbClients[service] = DBClient{
-			connection:  db,
-			tileQuery:   tileQuery,
-			contentType: contentType,
-			metadata:    metadata,
-			isGzipped:   isGzipped,
-		}
-
 	}
 
 	log.Printf("Cache size: %v MB\n", cacheSize)
@@ -191,10 +175,10 @@ func serve() {
 	e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
 
 	services := e.Group("/services/") // has to be separate from endpoint for ListServices
-	services.GET(":service", GetService, NotModifiedMiddleware, gzip)
-	services.GET(":service/map", GetServiceHTML, NotModifiedMiddleware, gzip)
-	services.Get(":service/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
-	// TODO: add UTF8 grid and vector tiles
+	services.GET(":id", GetService, NotModifiedMiddleware, gzip)
+	services.GET(":id/map", GetServiceHTML, NotModifiedMiddleware, gzip)
+	services.Get(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
+	// TODO: add UTF8 grid
 
 	e.Get("/admin/cache", CacheInfo, gzip)
 
@@ -260,7 +244,6 @@ func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
 		}
 	}
 
-	// if spec is 1.1, format is required
 	if _, ok := metadata["format"]; !ok {
 		//query a sample tile to determine if png or jpg, since metadata from tilemill doesn't give this to us
 		contentType, err := getTileContentType(db)
@@ -284,7 +267,7 @@ func getTileContentType(db *sqlx.DB) (string, error) {
 
 func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
 	pathParams := strings.Split(key, "/")
-	service := pathParams[0]
+	id := pathParams[0]
 	yParams := strings.Split(pathParams[3], ".")
 	z, _ := strconv.ParseUint(pathParams[1], 0, 64)
 	x, _ := strconv.ParseUint(pathParams[2], 0, 64)
@@ -293,7 +276,7 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 	y = (1 << z) - 1 - y
 
 	var tileData []byte
-	err := dbClients[service].tileQuery.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
+	err := tilesets[id].tileQuery.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			log.Fatal(err)
@@ -305,12 +288,12 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 
 // Verifies that service exists and return 404 otherwise
 func getServiceOr404(c echo.Context) (string, error) {
-	service := c.Param("service")
-	if _, exists := dbClients[service]; !exists {
-		log.Printf("Service not found: %s\n", service)
-		return "", echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("Service not found: %s", service))
+	id := c.Param("id")
+	if _, exists := tilesets[id]; !exists {
+		log.Printf("Service not found: %s\n", id)
+		return "", echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("Service not found: %s", id))
 	}
-	return service, nil
+	return id, nil
 }
 
 func getRootURL(c echo.Context) string {
@@ -321,12 +304,12 @@ func getRootURL(c echo.Context) string {
 func ListServices(c echo.Context) error {
 	// TODO: need to paginate the responses
 	rootURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
-	services := make([]ServiceInfo, len(dbClients))
+	services := make([]ServiceInfo, len(tilesets))
 	i := 0
-	for service, _ := range dbClients {
+	for id, tileset := range tilesets {
 		services[i] = ServiceInfo{
-			ImageType: dbClients[service].metadata["format"].(string),
-			URL:       fmt.Sprintf("%s/%s", rootURL, service),
+			ImageType: tileset.format, //fmt.Sprintf("%s", tileset.format),
+			URL:       fmt.Sprintf("%s/%s", rootURL, id),
 		}
 		i++
 	}
@@ -336,44 +319,44 @@ func ListServices(c echo.Context) error {
 //TODO: separate out tileJSON render into a separate function
 //then it can be directly injected into template HTML instead of URL, and bypass one request
 func GetService(c echo.Context) error {
-	service, err := getServiceOr404(c)
+	id, err := getServiceOr404(c)
 	if err != nil {
 		return err
 	}
 
 	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
 
-	metadata := dbClients[service].metadata
-	imgFormat := metadata["format"]
+	tileset := tilesets[id]
+	imgFormat := tilesets[id].format
 
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
-		"id":       service,
+		"id":       id,
 		"scheme":   "xyz",
 		"format":   imgFormat,
 		"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s", svcURL, imgFormat)},
 		"map":      fmt.Sprintf("%s/map", svcURL),
 	}
 
-	for k := range metadata {
-		out[k] = metadata[k]
+	for k, v := range tileset.metadata {
+		out[k] = v
 	}
 
 	return c.JSON(http.StatusOK, out)
 }
 
 func GetServiceHTML(c echo.Context) error {
-	service, err := getServiceOr404(c)
+	id, err := getServiceOr404(c)
 	if err != nil {
 		return err
 	}
 
 	p := TemplateParams{
 		URL: fmt.Sprintf("%s%s", getRootURL(c), strings.TrimSuffix(c.Request().URL().Path(), "/map")),
-		ID:  service,
+		ID:  id,
 	}
 
-	if dbClients[service].metadata["format"] == "pbf" {
+	if tilesets[id].format == "pbf" {
 		return c.Render(http.StatusOK, "map_gl", p)
 	}
 
@@ -388,12 +371,12 @@ func GetTile(c echo.Context) error {
 	)
 	//TODO: validate x, y, z
 
-	service, err := getServiceOr404(c)
+	id, err := getServiceOr404(c)
 	if err != nil {
 		return err
 	}
 
-	key := strings.Join([]string{service, c.Param("z"), c.Param("x"), c.Param("filename")}, "/")
+	key := strings.Join([]string{id, c.Param("z"), c.Param("x"), c.Param("filename")}, "/")
 
 	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
@@ -402,14 +385,11 @@ func GetTile(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Cache get failed for key: %s", key))
 	}
 
-	svcClient := dbClients[service]
+	tileset := tilesets[id]
 
 	if len(data) <= 1 {
-
-		if svcClient.metadata["format"] == "pbf" {
-			// If pbf, return 404, consistent w/ mapbox
-			// TODO: return empty tile
-			// res.Header().Add("Content-Type", "application/json")
+		if tileset.format == "pbf" {
+			// If pbf, return 404 w/ json, consistent w/ mapbox
 			return c.JSON(http.StatusNotFound, struct {
 				Message string `json:"message"`
 			}{"Tile does not exist"})
@@ -418,13 +398,14 @@ func GetTile(c echo.Context) error {
 		data = blankPNG
 		contentType = "image/png"
 	} else {
-		contentType = svcClient.contentType
+		//contentType = svcClient.contentType
+		contentType = ContentTypes[tileset.format]
 	}
 
 	res := c.Response()
 	res.Header().Add("Content-Type", contentType)
 
-	if svcClient.isGzipped {
+	if tileset.format == "pbf" {
 		res.Header().Add("Content-Encoding", "gzip")
 	}
 
