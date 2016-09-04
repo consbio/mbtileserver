@@ -171,5 +171,8 @@
 			"revisionTime": "2016-07-15T05:43:45Z"
 		}
 	],
-	"rootPath": "github.com/consbio/mbtileserver"
+	"rootPath": "github.com/consbio/mbtileserver",
+	"heroku": {
+		"goVersion": "go1.6"
+ 	}
 }
