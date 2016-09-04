@@ -1,1 +1,1 @@
-web: mbtileserver -p 80
+web: mbtileserver -p $PORT
