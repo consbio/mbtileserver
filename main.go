@@ -172,6 +172,9 @@ func serve() {
 	e.File("/favicon.ico", "favicon.ico")
 	e.File("/favicon.png", "favicon.png")
 
+	// TODO: can use more caching here
+	e.Group("/static/", gzip, middleware.Static("templates/static/dist/"))
+
 	e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
 
 	services := e.Group("/services/") // has to be separate from endpoint for ListServices

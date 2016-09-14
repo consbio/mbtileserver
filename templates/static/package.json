@@ -1,0 +1,38 @@
+{
+  "name": "mbtileserver",
+  "version": "0.2.0",
+  "description": "Go powered mbtiles tile map server",
+  "main": "index.js",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/consbio/mbtileserver.git"
+  },
+  "keywords": [
+    "map",
+    "tiles",
+    "mbtiles"
+  ],
+  "author": "Brendan C. Ward",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/consbio/mbtileserver/issues"
+  },
+  "homepage": "https://github.com/consbio/mbtileserver",
+  "devDependencies": {
+    "gulp": "^3.9.1",
+    "gulp-clean-css": "^2.0.12",
+    "gulp-concat": "^2.6.0",
+    "gulp-strip-comments": "^2.4.3"
+  },
+  "dependencies": {
+    "d3-collection": "^1.0.1",
+    "d3-dispatch": "^1.0.1",
+    "d3-request": "^1.0.2",
+    "leaflet": "^1.0.0-rc.3",
+    "leaflet-base64-legend": "git://github.com/consbio/Leaflet.Base64Legend.git",
+    "leaflet-basemaps": "^0.1.1",
+    "leaflet-range": "^0.1.0",
+    "leaflet-zoombox": "git://github.com/consbio/Leaflet.ZoomBox.git"
+  }
+}
