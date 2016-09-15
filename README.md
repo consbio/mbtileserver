@@ -24,14 +24,14 @@ We have been able to host a bunch of tilesets on an
 virtual machine without any issues.
 
 
-## Goals ##
+## Goals
 * Provide a web tile API for map tiles stored in mbtiles format
 * Be fast
 * Run on small resource cloud hosted machines (limited memory & CPU)
 * Be easy to install and operate
 
 
-## Installation ##
+## Installation
 Currently, this project is not `go get`-able because static assets and 
 templates are not downloaded via `go get`.  We're working toward this.
 
@@ -48,7 +48,7 @@ On Windows, it is necessary to install `gcc` in order to compile `mattn/go-sqlit
 MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
 
 
-## Usage ##
+## Usage
 From within the repository root:
 ```
 $ ./mbtileserver --help
@@ -71,12 +71,12 @@ directory and starting the server.  Woo hoo!
 When you want to remove, modify, or add new tilesets, simply restart the server process.
 
 
-## Specifications ##
+## Specifications
 * expects mbtiles files to follow version 1.0 of the [mbtiles specification](https://github.com/mapbox/mbtiles-spec).  Version 1.1 is preferred.
 * implements [TileJSON 2.1.0](https://github.com/mapbox/tilejson-spec)
 
 
-## Creating Tiles ##
+## Creating Tiles
 You can create mbtiles files using a variety of tools.  We have created
 tiles for use with mbtileserver using:
 * [TileMill](https://www.mapbox.com/tilemill/)  (image tiles)
@@ -86,7 +86,7 @@ tiles for use with mbtileserver using:
 We are working on some new tools to create UTF8 Grids for use here.
 
 
-## Examples ## 
+## Examples 
 
 TileJSON API for each tileset:
 `http://localhost/services/states_outline`
@@ -141,7 +141,7 @@ TileJSON) and a transparency slider.  Vector tiles are previewed using
 Mapbox GL.
 
 
-## Roadmap ##
+## Roadmap
 See the issues tagged to the [0.5 version](https://github.com/consbio/mbtileserver/milestone/1)
 for our near term features and improvements.
 
@@ -153,7 +153,7 @@ In short, we are planning to:
 * get things production ready
 
 
-## Development ##
+## Development
 Development of the templates and static assets likely requires using
 `node` and `npm`.  Install these tools in the normal way.
 

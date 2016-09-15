@@ -1,1 +1,1 @@
-web: mbtileserver -p $PORT
+web: mbtileserver -p $PORT -d ./testdata
