@@ -141,6 +141,14 @@ TileJSON) and a transparency slider.  Vector tiles are previewed using
 Mapbox GL.
 
 
+## Live Examples
+These are hosted on a free dyno by Heroku (thanks Heroku!), so there might be a small delay when you first access these.
+
+* [List of services](http://frozen-island-41032.herokuapp.com/services)
+* [TileJSON](http://frozen-island-41032.herokuapp.com/services/geography-class-png) for a PNG based tileset generated using TileMill.
+* [Map Preview ](http://frozen-island-41032.herokuapp.com/services/geography-class-png/map) for a map preview of the above.
+
+
 ## Roadmap
 See the issues tagged to the [0.5 version](https://github.com/consbio/mbtileserver/milestone/1)
 for our near term features and improvements.
