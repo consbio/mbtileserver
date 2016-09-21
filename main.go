@@ -185,9 +185,9 @@ func serve() {
 
 	arcgis := e.Group("/arcgis/rest/")
 	// arcgis.GET("services", GetArcGISServices, NotModifiedMiddleware, gzip)
-	arcgis.GET("services/:id", GetArcGISService, NotModifiedMiddleware, gzip)
-	arcgis.GET("services/:id/layers", GetArcGISServiceLayers, NotModifiedMiddleware, gzip)
-	arcgis.GET("services/:id/legend", GetArcGISServiceLegend, NotModifiedMiddleware, gzip)
+	arcgis.GET("services/:id/MapServer", GetArcGISService, NotModifiedMiddleware, gzip)
+	arcgis.GET("services/:id/MapServer/layers", GetArcGISServiceLayers, NotModifiedMiddleware, gzip)
+	arcgis.GET("services/:id/MapServer/legend", GetArcGISServiceLegend, NotModifiedMiddleware, gzip)
 
 	e.Get("/admin/cache", CacheInfo, gzip)
 

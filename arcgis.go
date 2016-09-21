@@ -60,6 +60,7 @@ type ArcGISLayer struct {
 }
 
 var WebMercatorSR = ArcGISSpatialReference{Wkid: 3857}
+var GeographicSR = ArcGISSpatialReference{Wkid: 4326}
 
 func GetArcGISService(c echo.Context) error {
 	id, err := getServiceOr404(c)
@@ -95,7 +96,7 @@ func GetArcGISService(c echo.Context) error {
 		Ymin:             bounds[1],
 		Xmax:             bounds[2],
 		Ymax:             bounds[3],
-		SpatialReference: WebMercatorSR,
+		SpatialReference: GeographicSR,
 	}
 
 	tileInfo := map[string]interface{}{
