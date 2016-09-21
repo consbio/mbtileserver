@@ -183,6 +183,12 @@ func serve() {
 	services.Get(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
 	// TODO: add UTF8 grid
 
+	arcgis := e.Group("/arcgis/rest/")
+	// arcgis.GET("services", GetArcGISServices, NotModifiedMiddleware, gzip)
+	arcgis.GET("services/:id", GetArcGISService, NotModifiedMiddleware, gzip)
+	arcgis.GET("services/:id/layers", GetArcGISServiceLayers, NotModifiedMiddleware, gzip)
+	arcgis.GET("services/:id/legend", GetArcGISServiceLegend, NotModifiedMiddleware, gzip)
+
 	e.Get("/admin/cache", CacheInfo, gzip)
 
 	config := engine.Config{
@@ -330,7 +336,7 @@ func GetService(c echo.Context) error {
 	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
 
 	tileset := tilesets[id]
-	imgFormat := tilesets[id].format
+	imgFormat := tileset.format
 
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
@@ -449,4 +455,11 @@ func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Response().Header().Set(echo.HeaderLastModified, cacheTimestamp.UTC().Format(http.TimeFormat))
 		return next(c)
 	}
+}
+
+func toString(s interface{}) string {
+	if s != nil {
+		return s.(string)
+	}
+	return ""
 }
