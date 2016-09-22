@@ -56,12 +56,13 @@ type ArcGISLayer struct {
 	HasAttachments    bool              `json:"hasAttachments"`
 	HtmlPopupType     string            `json:"htmlPopupType"`
 	DrawingInfo       interface{}       `json:"drawingInfo"`
-	DisplayField      string            `json:"displayField"`
+	DisplayField      interface{}       `json:"displayField"`
 	Fields            []interface{}     `json:"fields"`
-	TypeIdField       string            `json:"typeIdField"`
-	Types             string            `json:"types"`
+	TypeIdField       interface{}       `json:"typeIdField"`
+	Types             interface{}       `json:"types"`
 	Relationships     []interface{}     `json:"relationships"`
 	Capabilities      string            `json:"capabilities"`
+	CurrentVersion    float32           `json:"currentVersion"`
 }
 
 var WebMercatorSR = ArcGISSpatialReference{Wkid: 3857}
@@ -186,20 +187,28 @@ func GetArcGISServiceLayers(c echo.Context) error {
 		Ymin:             bounds[1],
 		Xmax:             bounds[2],
 		Ymax:             bounds[3],
-		SpatialReference: WebMercatorSR,
+		SpatialReference: GeographicSR,
 	}
 
 	// for now, just create a placeholder root layer
-	var layers [1]ArcGISLayer
+	emptyArray := []interface{}{}
+	emptyLayerArray := []ArcGISLayerStub{}
 
+	var layers [1]ArcGISLayer
 	layers[0] = ArcGISLayer{
-		Id:            0,
-		ParentLayer:   nil,
-		Name:          toString(metadata["name"]),
-		Description:   toString(metadata["description"]),
-		Extent:        extent,
-		CopyrightText: toString(metadata["attribution"]),
-		HtmlPopupType: "esriServerHTMLPopupTypeAsHTMLText",
+		Id:                0,
+		DefaultVisibility: true,
+		ParentLayer:       nil,
+		Name:              toString(metadata["name"]),
+		Description:       toString(metadata["description"]),
+		Extent:            extent,
+		CopyrightText:     toString(metadata["attribution"]),
+		HtmlPopupType:     "esriServerHTMLPopupTypeAsHTMLText",
+		Fields:            emptyArray,
+		Relationships:     emptyArray,
+		SubLayers:         emptyLayerArray,
+		CurrentVersion:    10.4,
+		Capabilities:      "Map",
 	}
 
 	out := map[string]interface{}{
