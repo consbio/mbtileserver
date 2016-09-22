@@ -1,7 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
+	"github.com/golang/groupcache"
 	"github.com/labstack/echo"
+	"io"
+	"log"
 	"math"
 	"net/http"
 	"strings"
@@ -61,6 +66,14 @@ type ArcGISLayer struct {
 
 var WebMercatorSR = ArcGISSpatialReference{Wkid: 3857}
 var GeographicSR = ArcGISSpatialReference{Wkid: 4326}
+
+func jsonOrJsonP(c echo.Context, out map[string]interface{}) error {
+	callback := c.QueryParam("callback")
+	if callback != "" {
+		return c.JSONP(http.StatusOK, callback, out)
+	}
+	return c.JSON(http.StatusOK, out)
+}
 
 func GetArcGISService(c echo.Context) error {
 	id, err := getServiceOr404(c)
@@ -155,7 +168,7 @@ func GetArcGISService(c echo.Context) error {
 		"resampling":          false,
 	}
 
-	return c.JSON(http.StatusOK, out)
+	return jsonOrJsonP(c, out)
 }
 
 func GetArcGISServiceLayers(c echo.Context) error {
@@ -193,7 +206,7 @@ func GetArcGISServiceLayers(c echo.Context) error {
 		"layers": layers,
 	}
 
-	return c.JSON(http.StatusOK, out)
+	return jsonOrJsonP(c, out)
 }
 
 func GetArcGISServiceLegend(c echo.Context) error {
@@ -222,5 +235,54 @@ func GetArcGISServiceLegend(c echo.Context) error {
 		"layers": layers,
 	}
 
-	return c.JSON(http.StatusOK, out)
+	return jsonOrJsonP(c, out)
+}
+
+func GetArcGISTile(c echo.Context) error {
+	var (
+		data        []byte
+		contentType string
+	)
+	//TODO: validate x, y, z
+
+	id, err := getServiceOr404(c)
+	if err != nil {
+		return err
+	}
+
+	key := strings.Join([]string{id, c.Param("z"), c.Param("x"), c.Param("y")}, "/")
+
+	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
+	if err != nil {
+		log.Println("Error fetching key", key)
+		// TODO: log
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Cache get failed for key: %s", key))
+	}
+
+	tileset := tilesets[id]
+
+	if len(data) <= 1 {
+		if tileset.format == "pbf" {
+			// If pbf, return 404 w/ json, consistent w/ mapbox
+			return c.JSON(http.StatusNotFound, struct {
+				Message string `json:"message"`
+			}{"Tile does not exist"})
+		}
+
+		data = blankPNG
+		contentType = "image/png"
+	} else {
+		contentType = ContentTypes[tileset.format]
+	}
+
+	res := c.Response()
+	res.Header().Add("Content-Type", contentType)
+
+	if tileset.format == "pbf" {
+		res.Header().Add("Content-Encoding", "gzip")
+	}
+
+	res.WriteHeader(http.StatusOK)
+	_, err = io.Copy(res, bytes.NewReader(data))
+	return err
 }

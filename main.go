@@ -188,6 +188,7 @@ func serve() {
 	arcgis.GET("services/:id/MapServer", GetArcGISService, NotModifiedMiddleware, gzip)
 	arcgis.GET("services/:id/MapServer/layers", GetArcGISServiceLayers, NotModifiedMiddleware, gzip)
 	arcgis.GET("services/:id/MapServer/legend", GetArcGISServiceLegend, NotModifiedMiddleware, gzip)
+	arcgis.Get("services/:id/MapServer/tile/:z/:y/:x", GetArcGISTile, NotModifiedMiddleware)
 
 	e.Get("/admin/cache", CacheInfo, gzip)
 
@@ -277,10 +278,9 @@ func getTileContentType(db *sqlx.DB) (string, error) {
 func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
 	pathParams := strings.Split(key, "/")
 	id := pathParams[0]
-	yParams := strings.Split(pathParams[3], ".")
 	z, _ := strconv.ParseUint(pathParams[1], 0, 64)
 	x, _ := strconv.ParseUint(pathParams[2], 0, 64)
-	y, _ := strconv.ParseUint(yParams[0], 0, 64)
+	y, _ := strconv.ParseUint(pathParams[3], 0, 64)
 	//flip y to match the spec
 	y = (1 << z) - 1 - y
 
@@ -376,7 +376,6 @@ func GetTile(c echo.Context) error {
 	var (
 		data        []byte
 		contentType string
-		// extension   string
 	)
 	//TODO: validate x, y, z
 
@@ -385,7 +384,8 @@ func GetTile(c echo.Context) error {
 		return err
 	}
 
-	key := strings.Join([]string{id, c.Param("z"), c.Param("x"), c.Param("filename")}, "/")
+	yParams := strings.Split(c.Param("filename"), ".")
+	key := strings.Join([]string{id, c.Param("z"), c.Param("x"), yParams[0]}, "/")
 
 	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
@@ -407,7 +407,6 @@ func GetTile(c echo.Context) error {
 		data = blankPNG
 		contentType = "image/png"
 	} else {
-		//contentType = svcClient.contentType
 		contentType = ContentTypes[tileset.format]
 	}
 
