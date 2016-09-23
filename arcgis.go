@@ -23,10 +23,10 @@ type ArcGISSpatialReference struct {
 }
 
 type ArcGISExtent struct {
-	Xmin             float32                `json:"xmin"`
-	Ymin             float32                `json:"ymin"`
-	Xmax             float32                `json:"xmax"`
-	Ymax             float32                `json:"ymax"`
+	Xmin             float64                `json:"xmin"`
+	Ymin             float64                `json:"ymin"`
+	Xmax             float64                `json:"xmax"`
+	Ymax             float64                `json:"ymax"`
 	SpatialReference ArcGISSpatialReference `json:"spatialReference"`
 }
 
@@ -105,13 +105,7 @@ func GetArcGISService(c echo.Context) error {
 	}
 
 	bounds := metadata["bounds"].([]float32) // TODO: make sure this is always present
-	extent := ArcGISExtent{
-		Xmin:             bounds[0],
-		Ymin:             bounds[1],
-		Xmax:             bounds[2],
-		Ymax:             bounds[3],
-		SpatialReference: GeographicSR,
-	}
+	extent := geoBoundsToWMExtent(bounds)
 
 	tileInfo := map[string]interface{}{
 		"rows": 256,
@@ -182,13 +176,7 @@ func GetArcGISServiceLayers(c echo.Context) error {
 	metadata := tileset.metadata
 
 	bounds := metadata["bounds"].([]float32) // TODO: make sure this is always present
-	extent := ArcGISExtent{
-		Xmin:             bounds[0],
-		Ymin:             bounds[1],
-		Xmax:             bounds[2],
-		Ymax:             bounds[3],
-		SpatialReference: GeographicSR,
-	}
+	extent := geoBoundsToWMExtent(bounds)
 
 	// for now, just create a placeholder root layer
 	emptyArray := []interface{}{}
@@ -294,4 +282,16 @@ func GetArcGISTile(c echo.Context) error {
 	res.WriteHeader(http.StatusOK)
 	_, err = io.Copy(res, bytes.NewReader(data))
 	return err
+}
+
+func geoBoundsToWMExtent(bounds []float32) ArcGISExtent {
+	xmin, ymin := geoToMercator(float64(bounds[0]), float64(bounds[1]))
+	xmax, ymax := geoToMercator(float64(bounds[2]), float64(bounds[3]))
+	return ArcGISExtent{
+		Xmin:             xmin,
+		Ymin:             ymin,
+		Xmax:             xmax,
+		Ymax:             ymax,
+		SpatialReference: WebMercatorSR,
+	}
 }
