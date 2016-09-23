@@ -18,6 +18,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path"
@@ -183,6 +184,13 @@ func serve() {
 	services.Get(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
 	// TODO: add UTF8 grid
 
+	arcgis := e.Group("/arcgis/rest/")
+	// arcgis.GET("services", GetArcGISServices, NotModifiedMiddleware, gzip)
+	arcgis.GET("services/:id/MapServer", GetArcGISService, NotModifiedMiddleware, gzip)
+	arcgis.GET("services/:id/MapServer/layers", GetArcGISServiceLayers, NotModifiedMiddleware, gzip)
+	arcgis.GET("services/:id/MapServer/legend", GetArcGISServiceLegend, NotModifiedMiddleware, gzip)
+	arcgis.Get("services/:id/MapServer/tile/:z/:y/:x", GetArcGISTile, NotModifiedMiddleware)
+
 	e.Get("/admin/cache", CacheInfo, gzip)
 
 	config := engine.Config{
@@ -271,10 +279,9 @@ func getTileContentType(db *sqlx.DB) (string, error) {
 func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
 	pathParams := strings.Split(key, "/")
 	id := pathParams[0]
-	yParams := strings.Split(pathParams[3], ".")
 	z, _ := strconv.ParseUint(pathParams[1], 0, 64)
 	x, _ := strconv.ParseUint(pathParams[2], 0, 64)
-	y, _ := strconv.ParseUint(yParams[0], 0, 64)
+	y, _ := strconv.ParseUint(pathParams[3], 0, 64)
 	//flip y to match the spec
 	y = (1 << z) - 1 - y
 
@@ -330,7 +337,7 @@ func GetService(c echo.Context) error {
 	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
 
 	tileset := tilesets[id]
-	imgFormat := tilesets[id].format
+	imgFormat := tileset.format
 
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
@@ -370,7 +377,6 @@ func GetTile(c echo.Context) error {
 	var (
 		data        []byte
 		contentType string
-		// extension   string
 	)
 	//TODO: validate x, y, z
 
@@ -379,7 +385,8 @@ func GetTile(c echo.Context) error {
 		return err
 	}
 
-	key := strings.Join([]string{id, c.Param("z"), c.Param("x"), c.Param("filename")}, "/")
+	yParams := strings.Split(c.Param("filename"), ".")
+	key := strings.Join([]string{id, c.Param("z"), c.Param("x"), yParams[0]}, "/")
 
 	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
@@ -401,7 +408,6 @@ func GetTile(c echo.Context) error {
 		data = blankPNG
 		contentType = "image/png"
 	} else {
-		//contentType = svcClient.contentType
 		contentType = ContentTypes[tileset.format]
 	}
 
@@ -449,4 +455,26 @@ func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Response().Header().Set(echo.HeaderLastModified, cacheTimestamp.UTC().Format(http.TimeFormat))
 		return next(c)
 	}
+}
+
+func toString(s interface{}) string {
+	if s != nil {
+		return s.(string)
+	}
+	return ""
+}
+
+func geoToMercator(longitude, latitude float64) (float64, float64) {
+	// bound to world coordinates
+	if latitude > 80 {
+		latitude = 80
+	} else if latitude < -80 {
+		latitude = -80
+	}
+
+	origin := 6378137 * math.Pi // 6378137 is WGS84 semi-major axis
+	x := longitude * origin / 180
+	y := math.Log(math.Tan((90+latitude)*math.Pi/360)) / (math.Pi / 180) * (origin / 180)
+
+	return x, y
 }

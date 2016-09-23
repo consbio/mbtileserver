@@ -47,6 +47,13 @@ In the meantime, clone this repository using your `git` tool of choice.
 On Windows, it is necessary to install `gcc` in order to compile `mattn/go-sqlite3`.  
 MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
 
+Then build it:
+```
+go build .
+```
+
+This will create an executable called `mbtileserver`.
+
 
 ## Usage
 From within the repository root:

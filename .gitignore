@@ -3,3 +3,4 @@ tilesets/*
 .DS_Store
 main
 templates/static/node_modules/*
+mbtileserver
