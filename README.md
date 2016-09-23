@@ -11,10 +11,12 @@ coordinate reference system.
 
 At the moment, UTF8 Grids are not yet supported.
 
-It provides a TileJSON 2.1.0 endpoint for each tileset, with full metadata
+In addition to tile-level access, it provides:
+* TileJSON 2.1.0 endpoint for each tileset, with full metadata
 from the mbtiles file.
+* a preview map for exploring each tileset.
+* a minimal ArcGIS tile map service API (work in progress)
 
-It also provides a preview map for exploring each tileset.
 
 It uses `golang/groupcache` to provide caching of tiles for even faster
 performance.
@@ -148,13 +150,19 @@ TileJSON) and a transparency slider.  Vector tiles are previewed using
 Mapbox GL.
 
 
+## ArcGIS API
+We are currently working on providing a minimal ArcGIS tiled map service API for tiles stored in an mbtiles file.  This should be sufficient for use with online platforms such as [Data Basin](https://databasin.org).  Because the ArcGIS API relies on a number of properties that are not commonly available within an mbtiles file, so certain aspects are stubbed out with minimal information.
+
+This API is not intended for use with more full-featured ArcGIS applications such as ArcGIS Desktop.
+
+
 ## Live Examples
 These are hosted on a free dyno by Heroku (thanks Heroku!), so there might be a small delay when you first access these.
 
 * [List of services](http://frozen-island-41032.herokuapp.com/services)
 * [TileJSON](http://frozen-island-41032.herokuapp.com/services/geography-class-png) for a PNG based tileset generated using TileMill.
 * [Map Preview ](http://frozen-island-41032.herokuapp.com/services/geography-class-png/map) for a map preview of the above.
-
+* [ArcGIS Map Service](http://frozen-island-41032.herokuapp.com/arcgis/rest/services/geography-class-png/MapServer)
 
 ## Roadmap
 See the issues tagged to the [0.5 version](https://github.com/consbio/mbtileserver/milestone/1)
@@ -162,7 +170,6 @@ for our near term features and improvements.
 
 In short, we are planning to:
 * make this project `go get`-able
-* add an ArcGIS API for tilesets
 * refactor the internals to better separate mbtiles interface from API logic
 * add tests and benchmarks
 * get things production ready
