@@ -249,7 +249,6 @@ func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
 			metadata[record.Name] = stringToFloats(record.Value)
 		case "json":
 			json.Unmarshal([]byte(record.Value), &metadata)
-			//TODO: may be missing required props for each layer: source, source_layer
 		default:
 			metadata[record.Name] = record.Value
 		}
@@ -263,6 +262,8 @@ func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
 		}
 		metadata["format"] = strings.Replace(strings.Split(contentType, "/")[1], "jpeg", "jpg", 1)
 	}
+
+	metadata["format"] = metadata["format"].(string)[:3]
 
 	return metadata, nil
 }
@@ -349,7 +350,22 @@ func GetService(c echo.Context) error {
 	}
 
 	for k, v := range tileset.metadata {
-		out[k] = v
+		switch k {
+		// strip out values above
+		case "tilejson", "id", "scheme", "format", "tiles", "map":
+			continue
+
+		// strip out values that are not supported
+		case "grids", "interactivity":
+			continue
+
+		// strip out values that come from TileMill but aren't useful here
+		case "metatile", "scale", "autoscale", "_updated", "Layer", "Stylesheet":
+			continue
+
+		default:
+			out[k] = v
+		}
 	}
 
 	return c.JSON(http.StatusOK, out)
