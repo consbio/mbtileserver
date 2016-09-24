@@ -92,7 +92,7 @@ func init() {
 	flags.IntVarP(&port, "port", "p", 8000, "Server port.")
 	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
-	flags.StringVarP(&privateKey, "key", "k", "", "flag usage")
+	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
 	flags.Int64Var(&cacheSize, "cachesize", 250, "Size of cache in MB.")
 }
 
