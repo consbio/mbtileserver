@@ -133,7 +133,7 @@ func serve() {
 		// prepare query to fetch tile data
 		tileQuery, err := db.Prepare("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?")
 		if err != nil {
-			log.Printf("ERROR: could not create prepared tile query for file: %s\n", filename)
+			log.Printf("ERROR: could not create prepared tile query for file: %s\nReason: %s\n", filename, err)
 			continue
 		}
 		defer tileQuery.Close()
