@@ -12,6 +12,12 @@
 			"revisionTime": "2016-08-29T20:23:21Z"
 		},
 		{
+			"checksumSHA1": "8WBTeuikhJuMMqMF0O2MfZ2o6aY=",
+			"path": "github.com/certifi/gocertifi",
+			"revision": "ec89d50f00d39494f5b3ec5cf2fe75c53467a937",
+			"revisionTime": "2016-08-31T16:27:25Z"
+		},
+		{
 			"checksumSHA1": "EsJksAKyY2+r3mY+rdNocSCe1wg=",
 			"path": "github.com/dgrijalva/jwt-go",
 			"revision": "63734eae1ef55eaac06fdc0f312615f2e321e273",
@@ -22,6 +28,12 @@
 			"path": "github.com/evalphobia/logrus_sentry",
 			"revision": "162f5c6ab032c7151ea4129cc1d2f22ace3d9a55",
 			"revisionTime": "2016-09-09T06:10:22Z"
+		},
+		{
+			"checksumSHA1": "JgHJY5XaxWApPMb7vsqkOFqETc0=",
+			"path": "github.com/getsentry/raven-go",
+			"revision": "379f8d0a68ca237cf8893a1cdfd4f574125e2c51",
+			"revisionTime": "2016-09-08T23:20:54Z"
 		},
 		{
 			"checksumSHA1": "HiA1rI2ErqY3dtV6mrfZYC82zss=",
