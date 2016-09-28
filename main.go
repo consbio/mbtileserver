@@ -10,6 +10,8 @@ import (
 	"github.com/labstack/echo/engine"
 	// "github.com/labstack/echo/engine/fasthttp"
 	"encoding/json"
+	log "github.com/Sirupsen/logrus"
+	"github.com/evalphobia/logrus_sentry"
 	"github.com/labstack/echo/engine/standard"
 	"github.com/labstack/echo/middleware"
 	_ "github.com/mattn/go-sqlite3"
@@ -17,7 +19,6 @@ import (
 	"html/template"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"net/http"
 	"os"
@@ -85,6 +86,8 @@ var (
 	cacheSize   int64
 	certificate string
 	privateKey  string
+	sentry_DSN  string
+	verbose     bool
 )
 
 func init() {
@@ -94,6 +97,8 @@ func init() {
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
 	flags.Int64Var(&cacheSize, "cachesize", 250, "Size of cache in MB.")
+	flags.StringVar(&sentry_DSN, "dsn", "", "Sentry DSN")
+	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 }
 
 func main() {
@@ -103,11 +108,30 @@ func main() {
 }
 
 func serve() {
+	if verbose {
+		log.SetLevel(log.DebugLevel)
+	}
+
+	if len(sentry_DSN) > 0 {
+		hook, err := logrus_sentry.NewSentryHook(sentry_DSN, []log.Level{
+			log.PanicLevel,
+			log.FatalLevel,
+			log.ErrorLevel,
+			log.WarnLevel,
+		})
+		if err != nil {
+			log.Fatalln(err)
+		}
+		hook.Timeout = 30 * time.Second // allow up to 30 seconds for Sentry to respond
+		log.AddHook(hook)
+		log.Debugln("Added logging hook for Sentry")
+	}
+
 	certExists := len(certificate) > 0
 	keyExists := len(privateKey) > 0
 
 	if (certExists || keyExists) && !(certExists && keyExists) {
-		log.Fatal("ERROR: Both certificate and private key are required to use SSL")
+		log.Fatalln("Both certificate and private key are required to use SSL")
 	}
 
 	blankPNG, _ = ioutil.ReadFile("blank.png") // Cache the blank PNG in memory (it is tiny)
@@ -117,7 +141,11 @@ func serve() {
 	tilesets = make(map[string]Mbtiles)
 	filenames, _ := filepath.Glob(path.Join(tilePath, "*.mbtiles"))
 
-	log.Printf("Found %v mbtiles files in %s\n", len(filenames), tilePath)
+	if len(filenames) == 0 {
+		log.Fatal("No tilesets found in tileset directory")
+	}
+
+	log.Infof("Found %v mbtiles files in %s\n", len(filenames), tilePath)
 
 	for _, filename := range filenames {
 		_, id := filepath.Split(filename)
@@ -125,7 +153,7 @@ func serve() {
 
 		db, err := sqlx.Open("sqlite3", filename)
 		if err != nil {
-			log.Printf("ERROR: could not open mbtiles file: %s\n", filename)
+			log.Errorf("could not open mbtiles file: %s\n", filename)
 			continue
 		}
 		defer db.Close()
@@ -133,14 +161,14 @@ func serve() {
 		// prepare query to fetch tile data
 		tileQuery, err := db.Prepare("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?")
 		if err != nil {
-			log.Printf("ERROR: could not create prepared tile query for file: %s\n", filename)
+			log.Errorf("could not create prepared tile query for file: %s\n", filename)
 			continue
 		}
 		defer tileQuery.Close()
 
 		metadata, err := getMetadata(db)
 		if err != nil {
-			log.Printf("ERROR: metadata query failed for file: %s\n", filename)
+			log.Errorf("metadata query failed for file: %s\n", filename)
 			continue
 		}
 
@@ -152,13 +180,15 @@ func serve() {
 		}
 	}
 
-	log.Printf("Cache size: %v MB\n", cacheSize)
+	log.Debugf("Cache size: %v MB\n", cacheSize)
 
 	cache = groupcache.NewGroup("TileCache", cacheSize*1048576, groupcache.GetterFunc(cacheGetter))
 
 	e := echo.New()
 	e.Pre(middleware.RemoveTrailingSlash())
-	e.Use(middleware.Logger())
+	if verbose {
+		e.Use(middleware.Logger())
+	}
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
@@ -200,24 +230,25 @@ func serve() {
 	// Start the server
 	if certExists {
 		if _, err := os.Stat(certificate); os.IsNotExist(err) {
-			log.Fatalf("ERROR: Could not find certificate file: %s\n", certificate)
+			log.Fatalf("Could not find certificate file: %s\n", certificate)
 		}
 		if _, err := os.Stat(privateKey); os.IsNotExist(err) {
-			log.Fatalf("ERROR: Could not find private key file: %s\n", privateKey)
+			log.Fatalf("Could not find private key file: %s\n", privateKey)
 		}
 
 		config.TLSCertFile = certificate
 		config.TLSKeyFile = privateKey
-		log.Printf("Starting HTTPS server on port %v\n", port)
-
-		log.Println("Use Ctrl-C to exit the server")
+		fmt.Printf("Starting HTTPS server on port %v\n", port)
+		fmt.Println("Use Ctrl-C to exit the server")
 		e.Run(standard.WithConfig(config))
 
 	} else {
 		// TODO: use fasthttp engine, but beware issues with path (differs from standard)
 
-		log.Printf("Starting HTTP server on port %v\n", port)
-		log.Println("Use Ctrl-C to exit the server")
+		fmt.Println("\n--------------------------------------")
+		fmt.Printf("Starting HTTP server on port %v\n", port)
+		fmt.Println("Use Ctrl-C to exit the server")
+		fmt.Println("--------------------------------------\n")
 		e.Run(standard.WithConfig(config))
 	}
 
@@ -301,7 +332,7 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 func getServiceOr404(c echo.Context) (string, error) {
 	id := c.Param("id")
 	if _, exists := tilesets[id]; !exists {
-		log.Printf("Service not found: %s\n", id)
+		log.Warnf("Service not found: %s\n", id)
 		return "", echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("Service not found: %s", id))
 	}
 	return id, nil
@@ -406,7 +437,7 @@ func GetTile(c echo.Context) error {
 
 	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
-		log.Println("Error fetching key", key)
+		log.Errorf("Error fetching key: %s", key)
 		// TODO: log
 		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Cache get failed for key: %s", key))
 	}
