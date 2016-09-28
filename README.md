@@ -60,7 +60,7 @@ This will create an executable called `mbtileserver`.
 ## Usage
 From within the repository root:
 ```
-$ ./mbtileserver --help
+$  ./mbtileserver --help
 Serve tiles from mbtiles files
 
 Usage:
@@ -70,14 +70,18 @@ Flags:
       --cachesize int   Size of cache in MB. (default 250)
   -c, --cert string     X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
   -d, --dir string      Directory containing mbtiles files. (default "./tilesets")
-  -k, --key string      flag usage
+      --dsn string      Sentry DSN
+  -k, --key string      TLS private key
   -p, --port int        Server port. (default 8000)
+  -v, --verbose         Verbose logging
 ```
 
 So hosting tiles is as easy as putting your mbtiles files in the `tilesets`
 directory and starting the server.  Woo hoo!
 
 When you want to remove, modify, or add new tilesets, simply restart the server process.
+
+If a valid Sentry DSN is provided, warnings, errors, fatal errors, and panics will be reported to Sentry.
 
 
 ## Specifications
