@@ -36,8 +36,8 @@ type ArcGISLayerStub struct {
 	ParentLayerId     int16   `json:"parentLayerId"`
 	DefaultVisibility bool    `json:"defaultVisibility"`
 	SubLayerIds       []uint8 `json:"subLayerIds"`
-	MinScale          float32 `json:"minScale"`
-	MaxScale          float32 `json:"maxScale"`
+	MinScale          float64 `json:"minScale"`
+	MaxScale          float64 `json:"maxScale"`
 }
 
 type ArcGISLayer struct {
@@ -49,8 +49,8 @@ type ArcGISLayer struct {
 	CopyrightText     string            `json:"copyrightText"`
 	ParentLayer       interface{}       `json:"parentLayer"`
 	SubLayers         []ArcGISLayerStub `json:"subLayers"`
-	MinScale          float32           `json:"minScale"`
-	MaxScale          float32           `json:"maxScale"`
+	MinScale          float64           `json:"minScale"`
+	MaxScale          float64           `json:"maxScale"`
 	DefaultVisibility bool              `json:"defaultVisibility"`
 	Extent            ArcGISExtent      `json:"extent"`
 	HasAttachments    bool              `json:"hasAttachments"`
@@ -90,19 +90,21 @@ func GetArcGISService(c echo.Context) error {
 	attribution := toString(metadata["attribution"])
 
 	// TODO: make sure that min and max zoom always populated
-	scaleFactor := 156543.033928
-	dpi := 96 // TODO: extract from the image instead
 	minZoom := metadata["minzoom"].(int)
 	maxZoom := metadata["maxzoom"].(int)
+	dpi := 96 // TODO: extract dpi from the image instead
 	var lods []ArcGISLOD
 	for i := minZoom; i <= maxZoom; i++ {
-		resolution := scaleFactor / math.Pow(2, float64(i))
+		scale, resolution := calcScaleResolution(i, dpi)
 		lods = append(lods, ArcGISLOD{
 			Level:      i,
 			Resolution: resolution,
-			Scale:      float64(dpi) * 39.37 * resolution, // 39.37 in/m
+			Scale:      scale,
 		})
 	}
+
+	minScale := lods[0].Scale
+	maxScale := lods[len(lods)-1].Scale
 
 	bounds := metadata["bounds"].([]float32) // TODO: make sure this is always present
 	extent := geoBoundsToWMExtent(bounds)
@@ -148,12 +150,14 @@ func GetArcGISService(c echo.Context) error {
 				ParentLayerId:     -1,
 				DefaultVisibility: true,
 				SubLayerIds:       nil,
-				MinScale:          0,
-				MaxScale:          0,
+				MinScale:          minScale,
+				MaxScale:          maxScale,
 			},
 		},
 		"tables":              []string{},
 		"spatialReference":    WebMercatorSR,
+		"minScale":            minScale,
+		"maxScale":            maxScale,
 		"tileInfo":            tileInfo,
 		"documentInfo":        documentInfo,
 		"initialExtent":       extent,
@@ -178,6 +182,11 @@ func GetArcGISServiceLayers(c echo.Context) error {
 	bounds := metadata["bounds"].([]float32) // TODO: make sure this is always present
 	extent := geoBoundsToWMExtent(bounds)
 
+	minZoom := metadata["minzoom"].(int)
+	maxZoom := metadata["maxzoom"].(int)
+	minScale, _ := calcScaleResolution(minZoom, 96)
+	maxScale, _ := calcScaleResolution(maxZoom, 96)
+
 	// for now, just create a placeholder root layer
 	emptyArray := []interface{}{}
 	emptyLayerArray := []ArcGISLayerStub{}
@@ -190,6 +199,8 @@ func GetArcGISServiceLayers(c echo.Context) error {
 		Name:              toString(metadata["name"]),
 		Description:       toString(metadata["description"]),
 		Extent:            extent,
+		MinScale:          minScale,
+		MaxScale:          maxScale,
 		CopyrightText:     toString(metadata["attribution"]),
 		HtmlPopupType:     "esriServerHTMLPopupTypeAsHTMLText",
 		Fields:            emptyArray,
@@ -294,4 +305,10 @@ func geoBoundsToWMExtent(bounds []float32) ArcGISExtent {
 		Ymax:             ymax,
 		SpatialReference: WebMercatorSR,
 	}
+}
+
+func calcScaleResolution(zoomLevel int, dpi int) (float64, float64) {
+	resolution := 156543.033928 / math.Pow(2, float64(zoomLevel))
+	scale := float64(dpi) * 39.37 * resolution // 39.37 in/m
+	return scale, resolution
 }
