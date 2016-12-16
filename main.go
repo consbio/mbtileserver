@@ -152,19 +152,11 @@ func serve() {
 		id = strings.Split(id, ".")[0]
 
 		//Saves last modified mbtiles time for setting Last-Modified header
-		file, err := os.Open(filename)
+		fileStat, err := os.Stat(filename)
 		if err != nil {
-			log.Errorf("could not open mbtiles file for stat: %s\n", filename)
+			log.Errorf("could not read file stats for mbtiles file: %s\n", filename)
 			continue
 		}
-
-		fileStat, err := file.Stat()
-		if err != nil {
-			log.Errorf("could not read mbtiles file stat: %s\n", err)
-		}
-		fileMod := fileStat.ModTime()
-
-		file.Close()
 
 		db, err := sqlx.Open("sqlite3", filename)
 		if err != nil {
@@ -187,7 +179,7 @@ func serve() {
 			continue
 		}
 		//Round time since second is smallest unit of HTML time
-		metadata["modTime"] = fileMod.Round(time.Second)
+		metadata["modTime"] = fileStat.ModTime().Round(time.Second)
 
 		tilesets[id] = Mbtiles{
 			connection: db,
