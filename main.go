@@ -162,7 +162,7 @@ func serve() {
 		if err != nil {
 			log.Errorf("could not read mbtiles file stat: %s\n", err)
 		}
-		fileMod := fileStat.ModTime();
+		fileMod := fileStat.ModTime()
 
 		file.Close()
 
@@ -187,7 +187,7 @@ func serve() {
 			continue
 		}
 		//Round time since second is smallest unit of HTML time
-		metadata["modTime"]=fileMod.Round(time.Second);
+		metadata["modTime"] = fileMod.Round(time.Second)
 
 		tilesets[id] = Mbtiles{
 			connection: db,
@@ -517,7 +517,7 @@ func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			tileset := tilesets[id]
 
 			lastModified = tileset.metadata["modTime"].(time.Time)
-		//For rest use cacheTimestamp
+			//For rest use cacheTimestamp
 		} else {
 			lastModified = cacheTimestamp
 		}
