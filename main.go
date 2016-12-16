@@ -404,7 +404,7 @@ func GetService(c echo.Context) error {
 			continue
 
 		// strip out values that are not supported
-		case "grids", "interactivity":
+		case "grids", "interactivity", "modTime":
 			continue
 
 		// strip out values that come from TileMill but aren't useful here
