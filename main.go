@@ -151,6 +151,13 @@ func serve() {
 		_, id := filepath.Split(filename)
 		id = strings.Split(id, ".")[0]
 
+		//Saves last modified mbtiles time for setting Last-Modified header
+		fileStat, err := os.Stat(filename)
+		if err != nil {
+			log.Errorf("could not read file stats for mbtiles file: %s\n", filename)
+			continue
+		}
+
 		db, err := sqlx.Open("sqlite3", filename)
 		if err != nil {
 			log.Errorf("could not open mbtiles file: %s\n", filename)
@@ -171,6 +178,8 @@ func serve() {
 			log.Errorf("metadata query failed for file: %s\n", filename)
 			continue
 		}
+		//Round time since second is smallest unit of HTML time
+		metadata["modTime"] = fileStat.ModTime().Round(time.Second)
 
 		tilesets[id] = Mbtiles{
 			connection: db,
@@ -387,7 +396,7 @@ func GetService(c echo.Context) error {
 			continue
 
 		// strip out values that are not supported
-		case "grids", "interactivity":
+		case "grids", "interactivity", "modTime":
 			continue
 
 		// strip out values that come from TileMill but aren't useful here
@@ -493,13 +502,25 @@ func stringToFloats(str string) []float32 {
 
 func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		if t, err := time.Parse(http.TimeFormat, c.Request().Header().Get(echo.HeaderIfModifiedSince)); err == nil && cacheTimestamp.Before(t.Add(1*time.Second)) {
+		id, err := getServiceOr404(c)
+		var lastModified time.Time
+		//for requests of tiles and tilejsons for mbtiles use lastModified file time as lastModified
+		if err == nil {
+			tileset := tilesets[id]
+
+			lastModified = tileset.metadata["modTime"].(time.Time)
+			//For rest use cacheTimestamp
+		} else {
+			lastModified = cacheTimestamp
+		}
+
+		if t, err := time.Parse(http.TimeFormat, c.Request().Header().Get(echo.HeaderIfModifiedSince)); err == nil && lastModified.Before(t.Add(1*time.Second)) {
 			c.Response().Header().Del(echo.HeaderContentType)
 			c.Response().Header().Del(echo.HeaderContentLength)
 			return c.NoContent(http.StatusNotModified)
 		}
 
-		c.Response().Header().Set(echo.HeaderLastModified, cacheTimestamp.UTC().Format(http.TimeFormat))
+		c.Response().Header().Set(echo.HeaderLastModified, lastModified.UTC().Format(http.TimeFormat))
 		return next(c)
 	}
 }
