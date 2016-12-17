@@ -4,18 +4,13 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+
 	"github.com/golang/groupcache"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/engine"
 	// "github.com/labstack/echo/engine/fasthttp"
 	"encoding/json"
-	log "github.com/Sirupsen/logrus"
-	"github.com/evalphobia/logrus_sentry"
-	"github.com/labstack/echo/engine/standard"
-	"github.com/labstack/echo/middleware"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/spf13/cobra"
 	"html/template"
 	"io"
 	"io/ioutil"
@@ -27,6 +22,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/evalphobia/logrus_sentry"
+	"github.com/labstack/echo/engine/standard"
+	"github.com/labstack/echo/middleware"
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/spf13/cobra"
 )
 
 var ContentTypes = map[string]string{
@@ -502,13 +504,12 @@ func stringToFloats(str string) []float32 {
 
 func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		id, err := getServiceOr404(c)
 		var lastModified time.Time
 		//for requests of tiles and tilejsons for mbtiles use lastModified file time as lastModified
-		if err == nil {
-			tileset := tilesets[id]
 
-			lastModified = tileset.metadata["modTime"].(time.Time)
+		id := c.Param("id")
+		if _, exists := tilesets[id]; exists {
+			lastModified = tilesets[id].metadata["modTime"].(time.Time)
 			//For rest use cacheTimestamp
 		} else {
 			lastModified = cacheTimestamp
