@@ -329,7 +329,7 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 	y = (1 << z) - 1 - y
 
 	var tileData []byte
-	err := tilesets[id].tileQuery.QueryRow(uint8(z), uint16(x), uint16(y)).Scan(&tileData)
+	err := tilesets[id].tileQuery.QueryRow(uint8(z), uint64(x), uint64(y)).Scan(&tileData)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			log.Fatal(err)
