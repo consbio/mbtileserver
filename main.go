@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/golang/groupcache"
@@ -48,9 +49,10 @@ type Mbtiles struct {
 }
 
 type UTFGridConfig struct {
-	gridQuery     *sql.Stmt
-	gridDataQuery *sql.Stmt
-	hasGridData   bool
+	gridQuery       *sql.Stmt
+	gridDataQuery   *sql.Stmt
+	hasGridData     bool
+	compressionType CompressionType
 }
 
 func (g *UTFGridConfig) getGrid(z uint64, x uint64, y uint64, data *[]byte) error {
@@ -58,19 +60,76 @@ func (g *UTFGridConfig) getGrid(z uint64, x uint64, y uint64, data *[]byte) erro
 	if err != nil {
 		if err != sql.ErrNoRows {
 			log.Error(err)
+			return err
 		}
+		return nil // not a problem, just return empty bytes
+	}
+
+	compType, err := detectCompressionType(data)
+	if err != nil {
+		log.Error(err)
 		return err
 	}
+	log.Infof("Compression type: %s", compType)
 
 	if g.gridDataQuery != nil {
 		// TODO: munge in grid data
 		log.Info("Has grid data, TODO")
 
-	}
+	} // else if detect that this is zlib encoded, need to decode then re-encode to gzip instead
 
 	// TODO: zlib extract, munge, and return gzipped bytes here
+	// If content bytes are zlib encoded, they need to be decoded then converted to gzip
+	// Tilemill creates these in zlib format, most other things probably should just use gzip!
 
+	//zreader, err := zlib.NewReader(bytes.NewReader(data))
+	//if err != nil {
+	//log.Fatal(err)
+	//}
+
+	//var out map[string]interface{}
+	//jsonDecoder := json.NewDecoder(zreader)
+	//jsonDecoder.Decode(&out)
+
+	//TODO: bring in keys and values here
+
+	//return c.JSON(http.StatusOK, out)
+	//	res := c.Response()
+	//	res.Header().Add("Content-Type", "application/json")
+	//	res.WriteHeader(http.StatusOK)
+	//	_, err = io.Copy(res, zreader)
 	return nil
+}
+
+type CompressionType uint8
+
+const (
+	UNKNOWN CompressionType = iota
+	GZIP
+	ZLIB
+)
+
+// Inspects first two bytes and determines if compression is zlib or gzip
+// TODO: return an enum value
+// TODO: inspect a single grid at startup and store type with utfgridConfig instead
+func detectCompressionType(data *[]byte) (CompressionType, error) {
+	// first two bytes are 78 9c if zlib, and 1f 8b if zlib
+	//magic := (*data)[:2]
+	//log.Infof("%x", magic)
+	//switch magic {
+	//case []byte("\x1f\x8b"):
+	//return GZIP, nil
+	//case []byte("\x78\x9c"):
+	//return ZLIB, nil
+	//}
+
+	if bytes.HasPrefix(*data, []byte("\x1f\x8b")) {
+		return GZIP, nil
+	} else if bytes.HasPrefix(*data, []byte("\x78\x9c")) {
+		return ZLIB, nil
+	}
+
+	return UNKNOWN, errors.New("Could not detect compresion type")
 }
 
 type ServiceInfo struct {
@@ -379,8 +438,27 @@ func getUTFGridConfig(db *sqlx.DB) (*UTFGridConfig, error) {
 		return nil, err
 	}
 
+	// query a sample grid to detect type
+	var data []byte
+	err = db.Get(&data, "select grid from grids where grid is not null LIMIT 1")
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // view exists but has no data
+		}
+		log.Error("Could not read sample grid to determine type")
+		return nil, err
+	}
+
+	compressionType, err := detectCompressionType(&data)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	log.Infof("Compression type: %s", compressionType)
+
 	config := UTFGridConfig{
-		gridQuery: gridQuery,
+		gridQuery:       gridQuery,
+		compressionType: compressionType,
 	}
 
 	count = 0 // prevent use of prior value
