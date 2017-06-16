@@ -53,6 +53,26 @@ type UTFGridConfig struct {
 	hasGridData   bool
 }
 
+func (g *UTFGridConfig) getGrid(z uint64, x uint64, y uint64, data *[]byte) error {
+	err := g.gridQuery.QueryRow(uint8(z), uint64(x), uint64(y)).Scan(data)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			log.Error(err)
+		}
+		return err
+	}
+
+	if g.gridDataQuery != nil {
+		// TODO: munge in grid data
+		log.Info("Has grid data, TODO")
+
+	}
+
+	// TODO: zlib extract, munge, and return gzipped bytes here
+
+	return nil
+}
+
 type ServiceInfo struct {
 	ImageType string `json:"imageType"`
 	URL       string `json:"url"`
@@ -190,6 +210,17 @@ func serve() {
 			continue
 		}
 
+		if utfgridConfig != nil {
+			// defer closing of queries here
+			if utfgridConfig.gridQuery != nil {
+				defer utfgridConfig.gridQuery.Close()
+			}
+
+			if utfgridConfig.gridDataQuery != nil {
+				defer utfgridConfig.gridDataQuery.Close()
+			}
+		}
+
 		metadata, err := getMetadata(db)
 		if err != nil {
 			log.Errorf("metadata query failed for file: %s\n", filename)
@@ -239,8 +270,9 @@ func serve() {
 	services := e.Group("/services/") // has to be separate from endpoint for ListServices
 	services.GET(":id", GetService, NotModifiedMiddleware, gzip)
 	services.GET(":id/map", GetServiceHTML, NotModifiedMiddleware, gzip)
+	services.Get(":id/tiles/:z/:x/:y/grid.json", GetGrid, NotModifiedMiddleware, gzip)
 	services.Get(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
-	services.Get(":id/grids/:z/:x/:y", GetGrid, NotModifiedMiddleware, gzip)
+
 	arcgis := e.Group("/arcgis/rest/")
 	// arcgis.GET("services", GetArcGISServices, NotModifiedMiddleware, gzip)
 	arcgis.GET("services/:id/MapServer", GetArcGISService, NotModifiedMiddleware, gzip)
@@ -327,6 +359,8 @@ func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
 }
 
 func getUTFGridConfig(db *sqlx.DB) (*UTFGridConfig, error) {
+	// Queries created here will be closed using defer in the caller
+
 	// first check to see if requisite tables exist
 	var count int
 	err := db.Get(&count, "SELECT count(*) FROM sqlite_master WHERE type='view' AND name = 'grids'")
@@ -335,18 +369,15 @@ func getUTFGridConfig(db *sqlx.DB) (*UTFGridConfig, error) {
 		return nil, err
 	}
 	if count == 0 {
-		log.Info("Grid views do not appear to be present")
 		return nil, nil
 	}
 
 	// prepare query to fetch grid data
-	// TODO: make sure that there is a grids view, and that it is not empty!
 	gridQuery, err := db.Prepare("select grid from grids where zoom_level = ? and tile_column = ? and tile_row = ?")
 	if err != nil {
 		log.Error("could not create prepared grid query for file")
 		return nil, err
 	}
-	defer gridQuery.Close()
 
 	config := UTFGridConfig{
 		gridQuery: gridQuery,
@@ -359,13 +390,11 @@ func getUTFGridConfig(db *sqlx.DB) (*UTFGridConfig, error) {
 	}
 	if count == 1 {
 		// prepare query to fetch grid key data
-		// TODO: make sure that there is a grids view, and that it is not empty!
 		gridDataQuery, err := db.Prepare("select key_name, key_json FROM grid_data where zoom_level = ? and tile_column = ? and tile_row = ?")
 		if err != nil {
 			log.Error("could not create prepared grid data query for file")
 			return nil, err
 		}
-		defer gridDataQuery.Close()
 
 		config.gridDataQuery = gridDataQuery
 		config.hasGridData = true
@@ -386,28 +415,33 @@ func getTileContentType(db *sqlx.DB) (string, error) {
 func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
 	pathParams := strings.Split(key, "/")
 	id := pathParams[0]
-	z, _ := strconv.ParseUint(pathParams[1], 0, 64)
-	x, _ := strconv.ParseUint(pathParams[2], 0, 64)
-	y, _ := strconv.ParseUint(pathParams[3], 0, 64)
+	tileType := pathParams[1]
+	z, _ := strconv.ParseUint(pathParams[2], 0, 64)
+	x, _ := strconv.ParseUint(pathParams[3], 0, 64)
+	y, _ := strconv.ParseUint(pathParams[4], 0, 64)
 	//flip y to match the spec
 	y = (1 << z) - 1 - y
 
 	var data []byte
-	var query *sql.Stmt
+	tileset := tilesets[id]
 
-	if len(pathParams) == 5 && pathParams[4] == "grid" {
-		// TODO: make sure that we exit here if there is no utfgridConfig
-		query = tilesets[id].utfgridConfig.gridDataQuery
-		log.Println("querying grid")
-	} else {
-		query = tilesets[id].tileQuery
-	}
-
-	err := query.QueryRow(uint8(z), uint64(x), uint64(y)).Scan(&data)
-	if err != nil {
-		if err != sql.ErrNoRows {
-			log.Fatal(err)
+	if tileType == "tile" {
+		err := tileset.tileQuery.QueryRow(uint8(z), uint64(x), uint64(y)).Scan(&data)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				log.Error(err)
+			}
+			return err
 		}
+	} else if tileType == "grid" && tileset.hasUTFGrids {
+		// TODO: merge with gridKeyData
+		//query = tileset.utfgridConfig.gridQuery
+		err := tileset.utfgridConfig.getGrid(z, x, y, &data)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+		log.Infof("data recieved: %s", len(data))
 	}
 
 	dest.SetBytes(data)
@@ -486,7 +520,7 @@ func GetService(c echo.Context) error {
 	}
 
 	if tileset.utfgridConfig != nil {
-		out["grids"] = []string{fmt.Sprintf("%s/grids/{z}/{x}/{y}", svcURL)}
+		out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}/grid.json", svcURL)}
 	}
 
 	return c.JSON(http.StatusOK, out)
@@ -523,13 +557,13 @@ func GetTile(c echo.Context) error {
 	}
 
 	yParams := strings.Split(c.Param("filename"), ".")
-	key := strings.Join([]string{id, c.Param("z"), c.Param("x"), yParams[0]}, "/")
+	key := strings.Join([]string{id, "tile", c.Param("z"), c.Param("x"), yParams[0]}, "/")
 
 	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
-		log.Errorf("Error fetching key: %s", key)
+		log.Errorf("Error fetching key from cache: %s", key)
 		// TODO: log
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Cache get failed for key: %s", key))
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error retrieving tile")
 	}
 
 	tileset := tilesets[id]
@@ -568,15 +602,13 @@ func GetGrid(c echo.Context) error {
 		return err
 	}
 
-	//TODO: cleanup key
-	key := strings.Join([]string{id, c.Param("z"), c.Param("x"), c.Param("y"), "grid"}, "/")
-	log.Printf("Key: %s", key)
+	key := strings.Join([]string{id, "grid", c.Param("z"), c.Param("x"), c.Param("y")}, "/")
 
 	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
-		log.Errorf("Error fetching key: %s", key)
+		log.Errorf("Error fetching key from cache: %s", key)
 		// TODO: log
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Cache get failed for key: %s", key))
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error retriving tile")
 	}
 
 	if len(data) <= 1 {
