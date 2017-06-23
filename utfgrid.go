@@ -35,7 +35,7 @@ func detectCompressionType(data *[]byte) (CompressionType, error) {
 
 type UTFGridConfig struct {
 	gridQuery       *sql.Stmt
-	gridDataQuery   *sqlx.Stmt
+	gridDataQuery   *sql.Stmt
 	compressionType CompressionType
 }
 
@@ -76,7 +76,6 @@ func getUTFGridConfig(db *sqlx.DB) (*UTFGridConfig, error) {
 		log.Error(err)
 		return nil, err
 	}
-	log.Infof("Compression type: %s", compressionType)
 
 	config := UTFGridConfig{
 		gridQuery:       gridQuery,
@@ -109,9 +108,8 @@ func getUTFGridConfig(db *sqlx.DB) (*UTFGridConfig, error) {
 //}
 
 // Reads a grid at z, x, y into provided *[]byte.
-// This internally recodes zlib encoded data to gzip encoded data if necessary.
-// For example, TileMill creates zlib encoded data
-// TODO: recode back into the original encoded format
+// This merges in grid key data, if any exist
+// The data is returned in the original compression encoding (zlib or gzip)
 func (config *UTFGridConfig) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) error {
 	err := config.gridQuery.QueryRow(z, x, y).Scan(data)
 	if err != nil {
@@ -123,12 +121,7 @@ func (config *UTFGridConfig) ReadGrid(z uint8, x uint64, y uint64, data *[]byte)
 		return nil
 	}
 
-	log.Infof("data size: %v", len(*data))
-
 	if config.gridDataQuery != nil {
-		// TODO: munge in grid data, if there are any values to pull in
-		log.Info("Has grid data, TODO")
-
 		keydata := make(map[string]interface{})
 		var (
 			key   string
@@ -196,7 +189,6 @@ func (config *UTFGridConfig) ReadGrid(z uint8, x uint64, y uint64, data *[]byte)
 		}
 		zwriter.Close()
 		*data = buf.Bytes()
-
 	}
 	return nil
 }

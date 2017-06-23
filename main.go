@@ -50,11 +50,6 @@ type ServiceInfo struct {
 	URL       string `json:"url"`
 }
 
-type KeyValuePair struct {
-	Name  string
-	Value string
-}
-
 type Template struct {
 	templates *template.Template
 }
@@ -299,19 +294,23 @@ func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	var record KeyValuePair
-	for rows.Next() {
-		rows.StructScan(&record)
+	var (
+		key   string
+		value string
+	)
 
-		switch record.Name {
+	for rows.Next() {
+		rows.Scan(&key, &value)
+
+		switch key {
 		case "maxzoom", "minzoom":
-			metadata[record.Name], _ = strconv.Atoi(record.Value)
+			metadata[key], _ = strconv.Atoi(value)
 		case "bounds", "center":
-			metadata[record.Name] = stringToFloats(record.Value)
+			metadata[key] = stringToFloats(value)
 		case "json":
-			json.Unmarshal([]byte(record.Value), &metadata)
+			json.Unmarshal([]byte(value), &metadata)
 		default:
-			metadata[record.Name] = record.Value
+			metadata[key] = value
 		}
 	}
 
@@ -342,7 +341,7 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 	pathParams := strings.Split(key, "/")
 	id := pathParams[0]
 	tileType := pathParams[1]
-	z, _ := strconv.ParseUint(pathParams[2], 0, 64)
+	z, _ := strconv.ParseUint(pathParams[2], 0, 8)
 	x, _ := strconv.ParseUint(pathParams[3], 0, 64)
 	y, _ := strconv.ParseUint(pathParams[4], 0, 64)
 	//flip y to match the spec
@@ -354,7 +353,7 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 	tileset := tilesets[id]
 
 	if tileType == "tile" {
-		err := tileset.tileQuery.QueryRow(uint8(z), uint64(x), uint64(y)).Scan(&data)
+		err := tileset.tileQuery.QueryRow(z, x, y).Scan(&data)
 		if err != nil {
 			if err != sql.ErrNoRows {
 				log.Error(err)
@@ -367,7 +366,6 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 			log.Errorf("Error encountered reading grid for z=%v, x=%v, y=%v, \n%v", z, x, y, err)
 			return err
 		}
-		log.Infof("data recieved: %s", len(data))
 	}
 
 	dest.SetBytes(data)
