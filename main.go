@@ -2,9 +2,7 @@ package main
 
 import (
 	"bytes"
-	"compress/zlib"
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/golang/groupcache"
@@ -44,92 +42,7 @@ type Mbtiles struct {
 	tileQuery     *sql.Stmt
 	metadata      map[string]interface{}
 	format        string
-	hasUTFGrids   bool
 	utfgridConfig *UTFGridConfig
-}
-
-type UTFGridConfig struct {
-	gridQuery       *sql.Stmt
-	gridDataQuery   *sql.Stmt
-	hasGridData     bool
-	compressionType CompressionType
-}
-
-func (g *UTFGridConfig) getGrid(z uint64, x uint64, y uint64, data *[]byte) error {
-	err := g.gridQuery.QueryRow(uint8(z), uint64(x), uint64(y)).Scan(data)
-	if err != nil {
-		if err != sql.ErrNoRows {
-			log.Error(err)
-			return err
-		}
-		return nil // not a problem, just return empty bytes
-	}
-
-	compType, err := detectCompressionType(data)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	log.Infof("Compression type: %s", compType)
-
-	if g.gridDataQuery != nil {
-		// TODO: munge in grid data
-		log.Info("Has grid data, TODO")
-
-	} // else if detect that this is zlib encoded, need to decode then re-encode to gzip instead
-
-	// TODO: zlib extract, munge, and return gzipped bytes here
-	// If content bytes are zlib encoded, they need to be decoded then converted to gzip
-	// Tilemill creates these in zlib format, most other things probably should just use gzip!
-
-	//zreader, err := zlib.NewReader(bytes.NewReader(data))
-	//if err != nil {
-	//log.Fatal(err)
-	//}
-
-	//var out map[string]interface{}
-	//jsonDecoder := json.NewDecoder(zreader)
-	//jsonDecoder.Decode(&out)
-
-	//TODO: bring in keys and values here
-
-	//return c.JSON(http.StatusOK, out)
-	//	res := c.Response()
-	//	res.Header().Add("Content-Type", "application/json")
-	//	res.WriteHeader(http.StatusOK)
-	//	_, err = io.Copy(res, zreader)
-	return nil
-}
-
-type CompressionType uint8
-
-const (
-	UNKNOWN CompressionType = iota
-	GZIP
-	ZLIB
-)
-
-// Inspects first two bytes and determines if compression is zlib or gzip
-// TODO: return an enum value
-// TODO: inspect a single grid at startup and store type with utfgridConfig instead
-func detectCompressionType(data *[]byte) (CompressionType, error) {
-	// first two bytes are 78 9c if zlib, and 1f 8b if zlib
-	//magic := (*data)[:2]
-	//log.Infof("%x", magic)
-	//switch magic {
-	//case []byte("\x1f\x8b"):
-	//return GZIP, nil
-	//case []byte("\x78\x9c"):
-	//return ZLIB, nil
-	//}
-
-	if bytes.HasPrefix(*data, []byte("\x1f\x8b")) {
-		return GZIP, nil
-	} else if bytes.HasPrefix(*data, []byte("\x78\x9c")) {
-		return ZLIB, nil
-	}
-
-	return UNKNOWN, errors.New("Could not detect compresion type")
 }
 
 type ServiceInfo struct {
@@ -293,7 +206,6 @@ func serve() {
 			tileQuery:     tileQuery,
 			format:        metadata["format"].(string),
 			metadata:      metadata,
-			hasUTFGrids:   utfgridConfig != nil,
 			utfgridConfig: utfgridConfig,
 		}
 	}
@@ -329,7 +241,7 @@ func serve() {
 	services := e.Group("/services/") // has to be separate from endpoint for ListServices
 	services.GET(":id", GetService, NotModifiedMiddleware, gzip)
 	services.GET(":id/map", GetServiceHTML, NotModifiedMiddleware, gzip)
-	services.Get(":id/tiles/:z/:x/:y/grid.json", GetGrid, NotModifiedMiddleware, gzip)
+	services.Get(":id/tiles/:z/:x/:y/grid.json", GetGrid, NotModifiedMiddleware) // TODO: gzip?
 	services.Get(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
 
 	arcgis := e.Group("/arcgis/rest/")
@@ -417,70 +329,6 @@ func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
 	return metadata, nil
 }
 
-func getUTFGridConfig(db *sqlx.DB) (*UTFGridConfig, error) {
-	// Queries created here will be closed using defer in the caller
-
-	// first check to see if requisite tables exist
-	var count int
-	err := db.Get(&count, "SELECT count(*) FROM sqlite_master WHERE type='view' AND name = 'grids'")
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	if count == 0 {
-		return nil, nil
-	}
-
-	// prepare query to fetch grid data
-	gridQuery, err := db.Prepare("select grid from grids where zoom_level = ? and tile_column = ? and tile_row = ?")
-	if err != nil {
-		log.Error("could not create prepared grid query for file")
-		return nil, err
-	}
-
-	// query a sample grid to detect type
-	var data []byte
-	err = db.Get(&data, "select grid from grids where grid is not null LIMIT 1")
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil // view exists but has no data
-		}
-		log.Error("Could not read sample grid to determine type")
-		return nil, err
-	}
-
-	compressionType, err := detectCompressionType(&data)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	log.Infof("Compression type: %s", compressionType)
-
-	config := UTFGridConfig{
-		gridQuery:       gridQuery,
-		compressionType: compressionType,
-	}
-
-	count = 0 // prevent use of prior value
-	err = db.Get(&count, "SELECT count(*) FROM sqlite_master WHERE type='view' AND name = 'grid_data'")
-	if err != nil {
-		return nil, err
-	}
-	if count == 1 {
-		// prepare query to fetch grid key data
-		gridDataQuery, err := db.Prepare("select key_name, key_json FROM grid_data where zoom_level = ? and tile_column = ? and tile_row = ?")
-		if err != nil {
-			log.Error("could not create prepared grid data query for file")
-			return nil, err
-		}
-
-		config.gridDataQuery = gridDataQuery
-		config.hasGridData = true
-	}
-
-	return &config, nil
-}
-
 func getTileContentType(db *sqlx.DB) (string, error) {
 	var tileData []byte
 	var err = db.QueryRow("select tile_data from tiles limit 1").Scan(&tileData)
@@ -500,6 +348,8 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 	//flip y to match the spec
 	y = (1 << z) - 1 - y
 
+	// TODO: if y is a very large number, e.g., 18446744073709551615, then it is an overflow and not a valid y value
+
 	var data []byte
 	tileset := tilesets[id]
 
@@ -511,12 +361,10 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 			}
 			return err
 		}
-	} else if tileType == "grid" && tileset.hasUTFGrids {
-		// TODO: merge with gridKeyData
-		//query = tileset.utfgridConfig.gridQuery
-		err := tileset.utfgridConfig.getGrid(z, x, y, &data)
+	} else if tileType == "grid" && tileset.utfgridConfig != nil {
+		err := tileset.utfgridConfig.ReadGrid(uint8(z), x, y, &data)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("Error encountered reading grid for z=%v, x=%v, y=%v, \n%v", z, x, y, err)
 			return err
 		}
 		log.Infof("data recieved: %s", len(data))
@@ -693,25 +541,38 @@ func GetGrid(c echo.Context) error {
 		// TODO: confirm proper response type
 		return c.JSON(http.StatusNotFound, struct {
 			Message string `json:"message"`
-		}{"Tile does not exist"})
+		}{"UTF Grid does not exist"})
 	}
 
 	log.Printf("data size: %i", len(data))
 
-	//TODO: https://github.com/makinacorpus/landez/blob/8df5a9f22284395e01101b526a13609544484f87/landez/sources.py#L101
+	res := c.Response()
+	res.Header().Add("Content-Type", "application/json")
 
-	zreader, err := zlib.NewReader(bytes.NewReader(data))
-	if err != nil {
-		log.Fatal(err)
+	if tilesets[id].utfgridConfig.compressionType == ZLIB {
+		res.Header().Add("Content-Encoding", "deflate")
+	} else {
+		res.Header().Add("Content-Encoding", "gzip")
 	}
 
-	var out map[string]interface{}
-	jsonDecoder := json.NewDecoder(zreader)
-	jsonDecoder.Decode(&out)
+	res.WriteHeader(http.StatusOK)
+	_, err = io.Copy(res, bytes.NewReader(data))
+	return err
+
+	//TODO: https://github.com/makinacorpus/landez/blob/8df5a9f22284395e01101b526a13609544484f87/landez/sources.py#L101
+
+	//zreader, err := zlib.NewReader(bytes.NewReader(data))
+	//if err != nil {
+	//log.Fatal(err)
+	//}
+
+	//var out map[string]interface{}
+	//jsonDecoder := json.NewDecoder(zreader)
+	//jsonDecoder.Decode(&out)
 
 	//TODO: bring in keys and values here
 
-	return c.JSON(http.StatusOK, out)
+	//return c.JSON(http.StatusOK, out)
 	//	res := c.Response()
 	//	res.Header().Add("Content-Type", "application/json")
 	//	res.WriteHeader(http.StatusOK)
