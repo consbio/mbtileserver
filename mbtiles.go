@@ -1,5 +1,3 @@
-// TODO: eliminate need for sqlx
-
 package main
 
 import (
@@ -16,8 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmoiron/sqlx"
-	"github.com/murlokswarm/log"
+	log "github.com/Sirupsen/logrus"
 )
 
 type TileFormat uint8
@@ -47,36 +44,24 @@ var TileContentType = map[TileFormat]string{
 }
 
 type Mbtiles struct {
-	filename      string
-	connection    *sqlx.DB
-	tileQuery     *sql.Stmt
-	metadata      map[string]interface{}
-	tileformat    TileFormat // tile format: PNG, JPG, PBF
-	timestamp     time.Time  // timestamp of file, for cache control headers
-	utfgridConfig *UTFGridConfig
+	filename           string
+	db                 *sql.DB
+	metadata           map[string]interface{}
+	tileformat         TileFormat // tile format: PNG, JPG, PBF
+	timestamp          time.Time  // timestamp of file, for cache control headers
+	hasUTFGrid         bool
+	utfgridCompression TileFormat
+	hasUTFGridData     bool
 }
 
-// Creates a new Mbtiles instance
-// connection is closed on application termination
+// Creates a new Mbtiles instance.
+// Connection is closed by runtime on application termination.
 func NewMbtiles(filename string) (*Mbtiles, error) {
 	_, id := filepath.Split(filename)
 	id = strings.Split(id, ".")[0]
 
-	db, err := sqlx.Open("sqlite3", filename)
+	db, err := sql.Open("sqlite3", filename)
 	if err != nil {
-		return nil, err
-	}
-
-	// prepare query to fetch tile data
-	tileQuery, err := db.Prepare("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?")
-	if err != nil {
-		log.Errorf("could not create prepared tile query for file: %s\n", filename)
-		return nil, err
-	}
-
-	utfgridConfig, err := getUTFGridConfig(db)
-	if err != nil {
-		log.Errorf("could not retrieve utfgrids for file: %s\n%s\n", filename, err)
 		return nil, err
 	}
 
@@ -98,28 +83,58 @@ func NewMbtiles(filename string) (*Mbtiles, error) {
 		return nil, err
 	}
 	if tileformat == GZIP {
-		tileformat = PBF // GZIP masks PBF, which is only expected type here
+		tileformat = PBF // GZIP masks PBF, which is only expected type for tiles in GZIP format
+	}
+	out := Mbtiles{
+		db:         db,
+		tileformat: tileformat,
+		timestamp:  fileStat.ModTime().Round(time.Second), // round to nearest second
 	}
 
-	return &Mbtiles{
-		connection:    db,
-		tileQuery:     tileQuery,
-		tileformat:    tileformat,
-		timestamp:     fileStat.ModTime().Round(time.Second), // round to nearest second
-		utfgridConfig: utfgridConfig,
-	}, nil
+	// UTFGrids
+	// first check to see if requisite tables exist
+	var count int
+	err = db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='view' AND name = 'grids'").Scan(&count)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	if count == 1 {
+		// query a sample grid to detect type
+		var gridData []byte
+		err = db.QueryRow("select grid from grids where grid is not null LIMIT 1").Scan(&gridData)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				log.Error("Could not read sample grid to determine type")
+				return nil, err
+			}
+		} else {
+			out.hasUTFGrid = true
+			out.utfgridCompression, err = detectTileFormat(&gridData)
+			if err != nil {
+				log.Error("Could not determine UTF Grid compression type")
+				return nil, err
+			}
 
-}
+			// Check to see if grid_data view exists
+			count = 0 // prevent use of prior value
+			err = db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='view' AND name = 'grid_data'").Scan(&count)
+			if err != nil {
+				return nil, err
+			}
+			if count == 1 {
+				out.hasUTFGridData = true
+			}
+		}
+	}
 
-type UTFGridConfig struct {
-	gridQuery       *sql.Stmt
-	gridDataQuery   *sql.Stmt
-	compressionType TileFormat
+	return &out, nil
+
 }
 
 // Reads a grid at z, x, y into provided *[]byte.
 func (tileset *Mbtiles) ReadTile(z uint8, x uint64, y uint64, data *[]byte) error {
-	err := tileset.tileQuery.QueryRow(z, x, y).Scan(data)
+	err := tileset.db.QueryRow("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?", z, x, y).Scan(data)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			*data = nil // not a problem, just return empty bytes
@@ -134,9 +149,11 @@ func (tileset *Mbtiles) ReadTile(z uint8, x uint64, y uint64, data *[]byte) erro
 // This merges in grid key data, if any exist
 // The data is returned in the original compression encoding (zlib or gzip)
 func (tileset *Mbtiles) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) error {
-	config := tileset.utfgridConfig
+	if !tileset.hasUTFGrid {
+		return errors.New("Tileset does not contain UTFgrids")
+	}
 
-	err := config.gridQuery.QueryRow(z, x, y).Scan(data)
+	err := tileset.db.QueryRow("select grid from grids where zoom_level = ? and tile_column = ? and tile_row = ?", z, x, y).Scan(data)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			*data = nil // not a problem, just return empty bytes
@@ -145,14 +162,14 @@ func (tileset *Mbtiles) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) erro
 		return err
 	}
 
-	if config.gridDataQuery != nil {
+	if tileset.hasUTFGridData {
 		keydata := make(map[string]interface{})
 		var (
 			key   string
 			value []byte
 		)
 
-		rows, err := config.gridDataQuery.Query(z, x, y)
+		rows, err := tileset.db.Query("select key_name, key_json FROM grid_data where zoom_level = ? and tile_column = ? and tile_row = ?", z, x, y)
 		if err != nil {
 			log.Error("Error fetching grid data")
 			return err
@@ -180,7 +197,7 @@ func (tileset *Mbtiles) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) erro
 		)
 		reader := bytes.NewReader(*data)
 
-		if config.compressionType == ZLIB {
+		if tileset.utfgridCompression == ZLIB {
 			zreader, err = zlib.NewReader(reader)
 			if err != nil {
 				return err
@@ -225,7 +242,7 @@ func (tileset *Mbtiles) ReadMetadata() (map[string]interface{}, error) {
 	)
 	metadata := make(map[string]interface{})
 
-	rows, err := tileset.connection.Query("select * from metadata where value is not ''")
+	rows, err := tileset.db.Query("select * from metadata where value is not ''")
 	if err != nil {
 		return nil, err
 	}
@@ -246,68 +263,6 @@ func (tileset *Mbtiles) ReadMetadata() (map[string]interface{}, error) {
 		}
 	}
 	return metadata, nil
-}
-
-func getUTFGridConfig(db *sqlx.DB) (*UTFGridConfig, error) {
-	// Queries created here will be closed using defer in the caller
-
-	// first check to see if requisite tables exist
-	var count int
-	err := db.Get(&count, "SELECT count(*) FROM sqlite_master WHERE type='view' AND name = 'grids'")
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	if count == 0 {
-		return nil, nil
-	}
-
-	// prepare query to [<65;117;23Mfetch grid data
-	gridQuery, err := db.Prepare("select grid from grids where zoom_level = ? and tile_column = ? and tile_row = ?")
-	if err != nil {
-		log.Error("could not create prepared grid query for file")
-		return nil, err
-	}
-
-	// query a sample grid to detect type
-	var data []byte
-	err = db.Get(&data, "select grid from grids where grid is not null LIMIT 1")
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil // view exists but has no data
-		}
-		log.Error("Could not read sample grid to determine type")
-		return nil, err
-	}
-
-	compressionType, err := detectTileFormat(&data)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-
-	config := UTFGridConfig{
-		gridQuery:       gridQuery,
-		compressionType: compressionType,
-	}
-
-	count = 0 // prevent use of prior value
-	err = db.Get(&count, "SELECT count(*) FROM sqlite_master WHERE type='view' AND name = 'grid_data'")
-	if err != nil {
-		return nil, err
-	}
-	if count == 1 {
-		// prepare query to fetch grid key data
-		gridDataQuery, err := db.Prepare("select key_name, key_json FROM grid_data where zoom_level = ? and tile_column = ? and tile_row = ?")
-		if err != nil {
-			log.Error("could not create prepared grid data query for file")
-			return nil, err
-		}
-
-		config.gridDataQuery = gridDataQuery
-	}
-
-	return &config, nil
 }
 
 // Inpsect first few bytes of byte array to determine tile format

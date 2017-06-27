@@ -39,12 +39,14 @@ templates are not downloaded via `go get`.  We're working toward this.
 
 In the meantime, clone this repository using your `git` tool of choice.
 
-`go get` the dependencies:
+This uses `Govendor` tool, so dependencies ship with the repo for easier builds.
+
+Dependencies:
 * [github.com/labstack/echo](https://github.com/labstack/echo)
 * [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
-* [github.com/jmoiron/sqlx](https://github.com/jmoiron/sqlx)
 * [github.com/spf13/cobra](https://github.com/spf13/cobra)
 * [github.com/golang/groupcache](https://github.com/golang/groupcache)
+* [github.com/Sirupsen/logrus](https://github.com/Sirupsen/logrus)
 
 On Windows, it is necessary to install `gcc` in order to compile `mattn/go-sqlite3`.  
 MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
@@ -138,7 +140,7 @@ returns something like this;
 }
 ```
 
-It provides all elements of the `metadata` table in the mbtiles file.
+It provides most elements of the `metadata` table in the mbtiles file.
 
 
 XYZ tile endpoint for individual tiles:

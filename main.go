@@ -4,11 +4,6 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/golang/groupcache"
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/engine"
-	// "github.com/labstack/echo/engine/fasthttp"
-
 	"html/template"
 	"io"
 	"io/ioutil"
@@ -20,6 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/groupcache"
+	"github.com/labstack/echo"
+	"github.com/labstack/echo/engine"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/evalphobia/logrus_sentry"
 	"github.com/labstack/echo/engine/standard"
@@ -27,12 +26,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
 )
-
-//var ContentTypes = map[string]string{
-//"png": "image/png",
-//"jpg": "image/jpeg",
-//"pbf": "application/x-protobuf", // Content-Encoding header must be gzip
-//}
 
 type ServiceInfo struct {
 	ImageType string `json:"imageType"`
@@ -123,8 +116,6 @@ func serve() {
 
 	blankPNG, _ = ioutil.ReadFile("blank.png") // Cache the blank PNG in memory (it is tiny)
 
-	// Must manage these in main, based on how we are deferring closing of connections to DB
-	// TODO: clean that up
 	tilesets = make(map[string]Mbtiles)
 	filenames, _ := filepath.Glob(path.Join(tilePath, "*.mbtiles"))
 
@@ -208,8 +199,6 @@ func serve() {
 		e.Run(standard.WithConfig(config))
 
 	} else {
-		// TODO: use fasthttp engine, but beware issues with path (differs from standard)
-
 		fmt.Println("\n--------------------------------------")
 		fmt.Printf("Starting HTTP server on port %v\n", port)
 		fmt.Println("Use Ctrl-C to exit the server")
@@ -241,7 +230,7 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 			log.Errorf("Error encountered reading tile for z=%v, x=%v, y=%v, \n%v", z, x, y, err)
 			return err
 		}
-	} else if tileType == "grid" && tileset.utfgridConfig != nil {
+	} else if tileType == "grid" && tileset.hasUTFGrid {
 		err := tileset.ReadGrid(z, x, y, &data)
 		if err != nil {
 			log.Errorf("Error encountered reading grid for z=%v, x=%v, y=%v, \n%v", z, x, y, err)
@@ -330,7 +319,7 @@ func GetServiceInfo(c echo.Context) error {
 		}
 	}
 
-	if tileset.utfgridConfig != nil {
+	if tileset.hasUTFGrid {
 		out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}/grid.json", svcURL)}
 	}
 
@@ -379,7 +368,7 @@ func GetTile(c echo.Context) error {
 
 	tileset := tilesets[id]
 
-	if len(data) <= 1 {
+	if data == nil || len(data) <= 1 {
 		if tileset.tileformat == PBF {
 			// If pbf, return 404 w/ json, consistent w/ mapbox
 			return c.JSON(http.StatusNotFound, struct {
@@ -418,11 +407,10 @@ func GetGrid(c echo.Context) error {
 	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
 		log.Errorf("Error fetching key from cache: %s", key)
-		// TODO: log
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error retriving tile")
 	}
 
-	if len(data) <= 1 {
+	if data == nil || len(data) <= 1 {
 		// TODO: confirm proper response type
 		return c.JSON(http.StatusNotFound, struct {
 			Message string `json:"message"`
@@ -432,7 +420,7 @@ func GetGrid(c echo.Context) error {
 	res := c.Response()
 	res.Header().Add("Content-Type", "application/json")
 
-	if tilesets[id].utfgridConfig.compressionType == ZLIB {
+	if tilesets[id].utfgridCompression == ZLIB {
 		res.Header().Add("Content-Encoding", "deflate")
 	} else {
 		res.Header().Add("Content-Encoding", "gzip")
