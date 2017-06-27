@@ -3,13 +3,14 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/golang/groupcache"
-	"github.com/labstack/echo"
 	"io"
 	"log"
 	"math"
 	"net/http"
 	"strings"
+
+	"github.com/golang/groupcache"
+	"github.com/labstack/echo"
 )
 
 type ArcGISLOD struct {
@@ -83,7 +84,7 @@ func GetArcGISService(c echo.Context) error {
 	}
 
 	tileset := tilesets[id]
-	imgFormat := tileset.format
+	imgFormat := TileFormatStr[tileset.tileformat]
 	metadata := tileset.metadata
 	name := toString(metadata["name"])
 	description := toString(metadata["description"])
@@ -270,7 +271,7 @@ func GetArcGISTile(c echo.Context) error {
 	tileset := tilesets[id]
 
 	if len(data) <= 1 {
-		if tileset.format == "pbf" {
+		if tileset.tileformat == PBF {
 			// If pbf, return 404 w/ json, consistent w/ mapbox
 			return c.JSON(http.StatusNotFound, struct {
 				Message string `json:"message"`
@@ -280,13 +281,13 @@ func GetArcGISTile(c echo.Context) error {
 		data = blankPNG
 		contentType = "image/png"
 	} else {
-		contentType = ContentTypes[tileset.format]
+		contentType = TileContentType[tileset.tileformat]
 	}
 
 	res := c.Response()
 	res.Header().Add("Content-Type", contentType)
 
-	if tileset.format == "pbf" {
+	if tileset.tileformat == PBF {
 		res.Header().Add("Content-Encoding", "gzip")
 	}
 

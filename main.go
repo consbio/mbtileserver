@@ -2,19 +2,16 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"fmt"
 
 	"github.com/golang/groupcache"
-	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/engine"
 	// "github.com/labstack/echo/engine/fasthttp"
-	"encoding/json"
+
 	"html/template"
 	"io"
 	"io/ioutil"
-	"math"
 	"net/http"
 	"os"
 	"path"
@@ -31,19 +28,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var ContentTypes = map[string]string{
-	"png": "image/png",
-	"jpg": "image/jpeg",
-	"pbf": "application/x-protobuf", // Content-Encoding header must be gzip
-}
-
-type Mbtiles struct {
-	connection    *sqlx.DB
-	tileQuery     *sql.Stmt
-	metadata      map[string]interface{}
-	format        string
-	utfgridConfig *UTFGridConfig
-}
+//var ContentTypes = map[string]string{
+//"png": "image/png",
+//"jpg": "image/jpeg",
+//"pbf": "application/x-protobuf", // Content-Encoding header must be gzip
+//}
 
 type ServiceInfo struct {
 	ImageType string `json:"imageType"`
@@ -64,10 +53,10 @@ type TemplateParams struct {
 }
 
 var (
-	blankPNG       []byte
-	cache          *groupcache.Group
-	cacheTimestamp = time.Now()
-	tilesets       map[string]Mbtiles
+	blankPNG    []byte
+	cache       *groupcache.Group
+	tilesets    map[string]Mbtiles
+	startuptime = time.Now()
 )
 
 var RootCmd = &cobra.Command{
@@ -148,61 +137,12 @@ func serve() {
 	for _, filename := range filenames {
 		_, id := filepath.Split(filename)
 		id = strings.Split(id, ".")[0]
-
-		//Saves last modified mbtiles time for setting Last-Modified header
-		fileStat, err := os.Stat(filename)
+		tileset, err := NewMbtiles(filename)
 		if err != nil {
-			log.Errorf("could not read file stats for mbtiles file: %s\n", filename)
+			log.Errorf("could not open mbtiles file: %s\n%v", filename, err)
 			continue
 		}
-
-		db, err := sqlx.Open("sqlite3", filename)
-		if err != nil {
-			log.Errorf("could not open mbtiles file: %s\n", filename)
-			continue
-		}
-		defer db.Close()
-
-		// prepare query to fetch tile data
-		tileQuery, err := db.Prepare("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?")
-		if err != nil {
-			log.Errorf("could not create prepared tile query for file: %s\n", filename)
-			continue
-		}
-		defer tileQuery.Close()
-
-		utfgridConfig, err := getUTFGridConfig(db)
-		if err != nil {
-			log.Errorf("could not retrieve utfgrids for file: %s\n%s\n", filename, err)
-			continue
-		}
-
-		if utfgridConfig != nil {
-			// defer closing of queries here
-			if utfgridConfig.gridQuery != nil {
-				defer utfgridConfig.gridQuery.Close()
-			}
-
-			if utfgridConfig.gridDataQuery != nil {
-				defer utfgridConfig.gridDataQuery.Close()
-			}
-		}
-
-		metadata, err := getMetadata(db)
-		if err != nil {
-			log.Errorf("metadata query failed for file: %s\n", filename)
-			continue
-		}
-		//Round time since second is smallest unit of HTML time
-		metadata["modTime"] = fileStat.ModTime().Round(time.Second)
-
-		tilesets[id] = Mbtiles{
-			connection:    db,
-			tileQuery:     tileQuery,
-			format:        metadata["format"].(string),
-			metadata:      metadata,
-			utfgridConfig: utfgridConfig,
-		}
+		tilesets[id] = *tileset
 	}
 
 	log.Debugf("Cache size: %v MB\n", cacheSize)
@@ -234,9 +174,9 @@ func serve() {
 	e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
 
 	services := e.Group("/services/") // has to be separate from endpoint for ListServices
-	services.GET(":id", GetService, NotModifiedMiddleware, gzip)
+	services.GET(":id", GetServiceInfo, NotModifiedMiddleware, gzip)
 	services.GET(":id/map", GetServiceHTML, NotModifiedMiddleware, gzip)
-	services.Get(":id/tiles/:z/:x/:y/grid.json", GetGrid, NotModifiedMiddleware) // TODO: gzip?
+	services.Get(":id/tiles/:z/:x/:y/grid.json", GetGrid, NotModifiedMiddleware)
 	services.Get(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
 
 	arcgis := e.Group("/arcgis/rest/")
@@ -279,69 +219,12 @@ func serve() {
 
 }
 
-func getMetadata(db *sqlx.DB) (map[string]interface{}, error) {
-	metadata := make(map[string]interface{})
-
-	// prepare query to fetch metadata
-	query, err := db.Preparex("select * from metadata where value is not ''")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer query.Close()
-
-	rows, err := query.Queryx()
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		key   string
-		value string
-	)
-
-	for rows.Next() {
-		rows.Scan(&key, &value)
-
-		switch key {
-		case "maxzoom", "minzoom":
-			metadata[key], _ = strconv.Atoi(value)
-		case "bounds", "center":
-			metadata[key] = stringToFloats(value)
-		case "json":
-			json.Unmarshal([]byte(value), &metadata)
-		default:
-			metadata[key] = value
-		}
-	}
-
-	if _, ok := metadata["format"]; !ok {
-		//query a sample tile to determine if png or jpg, since metadata from tilemill doesn't give this to us
-		contentType, err := getTileContentType(db)
-		if err != nil {
-			return nil, err
-		}
-		metadata["format"] = strings.Replace(strings.Split(contentType, "/")[1], "jpeg", "jpg", 1)
-	}
-
-	metadata["format"] = metadata["format"].(string)[:3]
-
-	return metadata, nil
-}
-
-func getTileContentType(db *sqlx.DB) (string, error) {
-	var tileData []byte
-	var err = db.QueryRow("select tile_data from tiles limit 1").Scan(&tileData)
-	if err != nil {
-		return "", err
-	}
-	return http.DetectContentType(tileData), nil
-}
-
 func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
 	pathParams := strings.Split(key, "/")
 	id := pathParams[0]
 	tileType := pathParams[1]
-	z, _ := strconv.ParseUint(pathParams[2], 0, 8)
+	z64, _ := strconv.ParseUint(pathParams[2], 0, 8)
+	z := uint8(z64)
 	x, _ := strconv.ParseUint(pathParams[3], 0, 64)
 	y, _ := strconv.ParseUint(pathParams[4], 0, 64)
 	//flip y to match the spec
@@ -353,15 +236,13 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 	tileset := tilesets[id]
 
 	if tileType == "tile" {
-		err := tileset.tileQuery.QueryRow(z, x, y).Scan(&data)
+		err := tileset.ReadTile(z, x, y, &data)
 		if err != nil {
-			if err != sql.ErrNoRows {
-				log.Error(err)
-			}
+			log.Errorf("Error encountered reading tile for z=%v, x=%v, y=%v, \n%v", z, x, y, err)
 			return err
 		}
 	} else if tileType == "grid" && tileset.utfgridConfig != nil {
-		err := tileset.utfgridConfig.ReadGrid(uint8(z), x, y, &data)
+		err := tileset.ReadGrid(z, x, y, &data)
 		if err != nil {
 			log.Errorf("Error encountered reading grid for z=%v, x=%v, y=%v, \n%v", z, x, y, err)
 			return err
@@ -394,7 +275,7 @@ func ListServices(c echo.Context) error {
 	i := 0
 	for id, tileset := range tilesets {
 		services[i] = ServiceInfo{
-			ImageType: tileset.format, //fmt.Sprintf("%s", tileset.format),
+			ImageType: TileFormatStr[tileset.tileformat],
 			URL:       fmt.Sprintf("%s/%s", rootURL, id),
 		}
 		i++
@@ -404,7 +285,7 @@ func ListServices(c echo.Context) error {
 
 //TODO: separate out tileJSON render into a separate function
 //then it can be directly injected into template HTML instead of URL, and bypass one request
-func GetService(c echo.Context) error {
+func GetServiceInfo(c echo.Context) error {
 	id, err := getServiceOr404(c)
 	if err != nil {
 		return err
@@ -413,7 +294,7 @@ func GetService(c echo.Context) error {
 	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
 
 	tileset := tilesets[id]
-	imgFormat := tileset.format
+	imgFormat := TileFormatStr[tileset.tileformat]
 
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
@@ -424,7 +305,13 @@ func GetService(c echo.Context) error {
 		"map":      fmt.Sprintf("%s/map", svcURL),
 	}
 
-	for k, v := range tileset.metadata {
+	metadata, err := tileset.ReadMetadata()
+	if err != nil {
+		log.Errorf("Could not read metadata for tileset %v", id)
+		return err
+	}
+
+	for k, v := range metadata {
 		switch k {
 		// strip out values above
 		case "tilejson", "id", "scheme", "format", "tiles", "map":
@@ -461,7 +348,7 @@ func GetServiceHTML(c echo.Context) error {
 		ID:  id,
 	}
 
-	if tilesets[id].format == "pbf" {
+	if tilesets[id].tileformat == PBF {
 		return c.Render(http.StatusOK, "map_gl", p)
 	}
 
@@ -493,7 +380,7 @@ func GetTile(c echo.Context) error {
 	tileset := tilesets[id]
 
 	if len(data) <= 1 {
-		if tileset.format == "pbf" {
+		if tileset.tileformat == PBF {
 			// If pbf, return 404 w/ json, consistent w/ mapbox
 			return c.JSON(http.StatusNotFound, struct {
 				Message string `json:"message"`
@@ -503,13 +390,13 @@ func GetTile(c echo.Context) error {
 		data = blankPNG
 		contentType = "image/png"
 	} else {
-		contentType = ContentTypes[tileset.format]
+		contentType = TileContentType[tileset.tileformat]
 	}
 
 	res := c.Response()
 	res.Header().Add("Content-Type", contentType)
 
-	if tileset.format == "pbf" {
+	if tileset.tileformat == PBF {
 		res.Header().Add("Content-Encoding", "gzip")
 	}
 
@@ -542,8 +429,6 @@ func GetGrid(c echo.Context) error {
 		}{"UTF Grid does not exist"})
 	}
 
-	log.Printf("data size: %i", len(data))
-
 	res := c.Response()
 	res.Header().Add("Content-Type", "application/json")
 
@@ -556,26 +441,6 @@ func GetGrid(c echo.Context) error {
 	res.WriteHeader(http.StatusOK)
 	_, err = io.Copy(res, bytes.NewReader(data))
 	return err
-
-	//TODO: https://github.com/makinacorpus/landez/blob/8df5a9f22284395e01101b526a13609544484f87/landez/sources.py#L101
-
-	//zreader, err := zlib.NewReader(bytes.NewReader(data))
-	//if err != nil {
-	//log.Fatal(err)
-	//}
-
-	//var out map[string]interface{}
-	//jsonDecoder := json.NewDecoder(zreader)
-	//jsonDecoder.Decode(&out)
-
-	//TODO: bring in keys and values here
-
-	//return c.JSON(http.StatusOK, out)
-	//	res := c.Response()
-	//	res.Header().Add("Content-Type", "application/json")
-	//	res.WriteHeader(http.StatusOK)
-	//	_, err = io.Copy(res, zreader)
-	//	return err
 }
 
 func CacheInfo(c echo.Context) error {
@@ -589,27 +454,14 @@ func CacheInfo(c echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
-func stringToFloats(str string) []float32 {
-	split := strings.Split(str, ",")
-	var out = make([]float32, len(split))
-	for i, v := range split {
-		value, _ := strconv.ParseFloat(v, 32)
-		out[i] = float32(value)
-	}
-	return out
-}
-
 func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var lastModified time.Time
-		//for requests of tiles and tilejsons for mbtiles use lastModified file time as lastModified
-
 		id := c.Param("id")
 		if _, exists := tilesets[id]; exists {
-			lastModified = tilesets[id].metadata["modTime"].(time.Time)
-			//For rest use cacheTimestamp
+			lastModified = tilesets[id].timestamp
 		} else {
-			lastModified = cacheTimestamp
+			lastModified = startuptime // startup time of server
 		}
 
 		if t, err := time.Parse(http.TimeFormat, c.Request().Header().Get(echo.HeaderIfModifiedSince)); err == nil && lastModified.Before(t.Add(1*time.Second)) {
@@ -621,26 +473,4 @@ func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Response().Header().Set(echo.HeaderLastModified, lastModified.UTC().Format(http.TimeFormat))
 		return next(c)
 	}
-}
-
-func toString(s interface{}) string {
-	if s != nil {
-		return s.(string)
-	}
-	return ""
-}
-
-func geoToMercator(longitude, latitude float64) (float64, float64) {
-	// bound to world coordinates
-	if latitude > 80 {
-		latitude = 80
-	} else if latitude < -80 {
-		latitude = -80
-	}
-
-	origin := 6378137 * math.Pi // 6378137 is WGS84 semi-major axis
-	x := longitude * origin / 180
-	y := math.Log(math.Tan((90+latitude)*math.Pi/360)) / (math.Pi / 180) * (origin / 180)
-
-	return x, y
 }
