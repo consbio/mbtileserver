@@ -167,7 +167,6 @@ func serve() {
 	services := e.Group("/services/") // has to be separate from endpoint for ListServices
 	services.GET(":id", GetServiceInfo, NotModifiedMiddleware, gzip)
 	services.GET(":id/map", GetServiceHTML, NotModifiedMiddleware, gzip)
-	services.Get(":id/tiles/:z/:x/:y/grid.json", GetGrid, NotModifiedMiddleware)
 	services.Get(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
 
 	arcgis := e.Group("/arcgis/rest/")
@@ -320,7 +319,7 @@ func GetServiceInfo(c echo.Context) error {
 	}
 
 	if tileset.hasUTFGrid {
-		out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}/grid.json", svcURL)}
+		out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.json", svcURL)}
 	}
 
 	return c.JSON(http.StatusOK, out)
@@ -356,77 +355,57 @@ func GetTile(c echo.Context) error {
 		return err
 	}
 
-	yParams := strings.Split(c.Param("filename"), ".")
-	key := strings.Join([]string{id, "tile", c.Param("z"), c.Param("x"), yParams[0]}, "/")
+	filename := c.Param("filename")
+	y := strings.Split(filename, ".")[0]
+	tileType := "tile"
+	if strings.HasSuffix(filename, ".json") {
+		tileType = "grid"
+	}
+	key := strings.Join([]string{id, tileType, c.Param("z"), c.Param("x"), y}, "/")
 
 	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
 		log.Errorf("Error fetching key from cache: %s", key)
-		// TODO: log
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error retrieving tile")
 	}
-
 	tileset := tilesets[id]
+	res := c.Response()
 
 	if data == nil || len(data) <= 1 {
-		if tileset.tileformat == PBF {
-			// If pbf, return 404 w/ json, consistent w/ mapbox
+		switch tileset.tileformat {
+		case PNG, JPG, WEBP:
+			// Return blank PNG for all image types
+			res.Header().Add("Content-Type", "image/png")
+			res.WriteHeader(http.StatusOK)
+			_, err = io.Copy(res, bytes.NewReader(blankPNG))
+			return err
+
+		default:
+			// If pbf or utfgrid, return 404 w/ json, consistent w/ mapbox
 			return c.JSON(http.StatusNotFound, struct {
 				Message string `json:"message"`
 			}{"Tile does not exist"})
 		}
+	}
 
-		data = blankPNG
-		contentType = "image/png"
+	if tileType == "grid" {
+		contentType = "application/json"
+
+		if tileset.utfgridCompression == ZLIB {
+			res.Header().Add("Content-Encoding", "deflate")
+		} else {
+			res.Header().Add("Content-Encoding", "gzip")
+		}
 	} else {
 		contentType = TileContentType[tileset.tileformat]
-	}
 
-	res := c.Response()
+		if tileset.tileformat == PBF {
+			res.Header().Add("Content-Encoding", "gzip")
+		}
+	}
 	res.Header().Add("Content-Type", contentType)
 
-	if tileset.tileformat == PBF {
-		res.Header().Add("Content-Encoding", "gzip")
-	}
-
-	res.WriteHeader(http.StatusOK)
-	_, err = io.Copy(res, bytes.NewReader(data))
-	return err
-}
-
-func GetGrid(c echo.Context) error {
-	var data []byte
-
-	id, err := getServiceOr404(c)
-	if err != nil {
-		return err
-	}
-
-	key := strings.Join([]string{id, "grid", c.Param("z"), c.Param("x"), c.Param("y")}, "/")
-
-	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
-	if err != nil {
-		log.Errorf("Error fetching key from cache: %s", key)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error retriving tile")
-	}
-
-	if data == nil || len(data) <= 1 {
-		// TODO: confirm proper response type
-		return c.JSON(http.StatusNotFound, struct {
-			Message string `json:"message"`
-		}{"UTF Grid does not exist"})
-	}
-
-	res := c.Response()
-	res.Header().Add("Content-Type", "application/json")
-
-	if tilesets[id].utfgridCompression == ZLIB {
-		res.Header().Add("Content-Encoding", "deflate")
-	} else {
-		res.Header().Add("Content-Encoding", "gzip")
-	}
-
-	res.WriteHeader(http.StatusOK)
+	res.WriteHeader(http.StatusOK) // this must be after setting other headers
 	_, err = io.Copy(res, bytes.NewReader(data))
 	return err
 }
