@@ -33,6 +33,7 @@
     "leaflet-base64-legend": "git://github.com/consbio/Leaflet.Base64Legend.git",
     "leaflet-basemaps": "^0.1.1",
     "leaflet-range": "^0.1.0",
+    "leaflet-utfgrid": "^0.3.0",
     "leaflet-zoombox": "git://github.com/consbio/Leaflet.ZoomBox.git"
   }
 }
