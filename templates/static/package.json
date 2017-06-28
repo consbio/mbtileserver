@@ -26,14 +26,14 @@
     "gulp-strip-comments": "^2.4.3"
   },
   "dependencies": {
-    "d3-collection": "^1.0.1",
-    "d3-dispatch": "^1.0.1",
-    "d3-request": "^1.0.2",
-    "leaflet": "^1.0.0-rc.3",
-    "leaflet-base64-legend": "git://github.com/consbio/Leaflet.Base64Legend.git",
-    "leaflet-basemaps": "^0.1.1",
+    "d3-collection": "^1.0.4",
+    "d3-dispatch": "^1.0.3",
+    "d3-request": "^1.0.5",
+    "leaflet": "^1.1.0",
+    "leaflet-base64-legend": "^0.1.1",
+    "leaflet-basemaps": "^0.2.0",
     "leaflet-range": "^0.1.0",
     "leaflet-utfgrid": "^0.3.0",
-    "leaflet-zoombox": "git://github.com/consbio/Leaflet.ZoomBox.git"
+    "leaflet-zoombox": "^0.3.4"
   }
 }

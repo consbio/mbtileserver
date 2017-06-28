@@ -30,6 +30,22 @@
         .basemap img {
             width: 36px;
         }
+        .info {
+			padding: 6px 8px;
+			font: 14px/16px Arial, Helvetica, sans-serif;
+			background: white;
+			background: rgba(255,255,255,0.8);
+			box-shadow: 0 0 15px rgba(0,0,0,0.2);
+			border-radius: 5px;
+            position: absolute;
+            z-index: 2000;
+            top: 10px;
+            right: 10px;
+		}
+        .info h3 {
+            margin: 0;
+        }
+
     </style>
 </head>
 <body>
@@ -85,7 +101,7 @@
             map.addLayer(layer);
 
             var legendJSON = tileJSON.legend;
-            if (legendJSON) {
+            if (legendJSON && legendJSON.search(/\{/) === 0) {
                 legendJSON = JSON.parse(legendJSON);
                 // Make sure this is the legend JSON structure we expect
                 if (legendJSON.length && legendJSON[0].elements) {
@@ -97,8 +113,26 @@
                     }));
                 }
             }
-        });
 
+            if (tileJSON.grids && tileJSON.grids.length > 0) {
+                var gridURL = tileJSON.grids[0];
+                var utfgrid = L.utfGrid(gridURL, {
+                    resolution: 4,
+                    pointerCursor: true,
+                    mouseInterval: 66  // Delay for mousemove events
+                });
+                utfgrid.addTo(map);
+
+                var infoContainer = L.DomUtil.create('div', 'info', L.DomUtil.get('Map'));
+                var textNode = L.DomUtil.create('h3', '', infoContainer);
+                textNode.innerHTML = 'This service has UTF-8 Grids; see console for grid data.';
+
+
+                utfgrid.on("mouseover", function(e){
+                    console.log('UTF grid data:', e.data);
+                });
+            }
+        });
 
         map.zoomControl.setPosition('topleft');
         map.addControl(L.control.zoomBox({modal: true, position:'topleft'}));

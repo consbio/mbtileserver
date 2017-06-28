@@ -55,7 +55,7 @@ type Mbtiles struct {
 }
 
 // Creates a new Mbtiles instance.
-// Connection is closed by runtime on application termination.
+// Connection is closed by runtime on application termination or by calling .Close() method.
 func NewMbtiles(filename string) (*Mbtiles, error) {
 	_, id := filepath.Split(filename)
 	id = strings.Split(id, ".")[0]
@@ -263,6 +263,11 @@ func (tileset *Mbtiles) ReadMetadata() (map[string]interface{}, error) {
 		}
 	}
 	return metadata, nil
+}
+
+// Close the MBtiles database connection
+func (tileset *Mbtiles) Close() error {
+	return tileset.db.Close()
 }
 
 // Inpsect first few bytes of byte array to determine tile format
