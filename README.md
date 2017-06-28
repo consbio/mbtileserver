@@ -98,8 +98,6 @@ tiles for use with mbtileserver using:
 * [tippecanoe](https://github.com/mapbox/tippecanoe)   (vector tiles)
 * [tpkutils](https://github.com/consbio/tpkutils)  (image tiles from ArcGIS tile packages)
 
-We are working on some new tools to create UTF8 Grids for use here.
-
 
 ## Examples 
 
@@ -147,6 +145,16 @@ XYZ tile endpoint for individual tiles:
 `http://localhost/services/states_outline/tiles/{z}/{x}/{y}.png`
 
 
+If UTF-8 Grid data are present in the mbtiles file, they will be served up over the
+grid endpoint:
+`http://localhost/services/states_outline/tiles/{z}/{x}/{y}.json`
+
+Grids are assumed to be gzip or zlib compressed in the mbtiles file.  These grids
+are automatically spliced with any grid key/value data if such exists in the mbtiles
+file.
+
+
+
 The map endpoint:
 `http://localhost/services/states_outline/map`
 
@@ -157,7 +165,8 @@ Mapbox GL.
 
 
 ## ArcGIS API
-We are currently working on providing a minimal ArcGIS tiled map service API for tiles stored in an mbtiles file.  This should be sufficient for use with online platforms such as [Data Basin](https://databasin.org).  Because the ArcGIS API relies on a number of properties that are not commonly available within an mbtiles file, so certain aspects are stubbed out with minimal information.
+This project currently provides a minimal ArcGIS tiled map service API for tiles stored in an mbtiles file.
+This should be sufficient for use with online platforms such as [Data Basin](https://databasin.org).  Because the ArcGIS API relies on a number of properties that are not commonly available within an mbtiles file, so certain aspects are stubbed out with minimal information.
 
 This API is not intended for use with more full-featured ArcGIS applications such as ArcGIS Desktop.
 
@@ -176,7 +185,6 @@ for our near term features and improvements.
 
 In short, we are planning to:
 * make this project `go get`-able
-* refactor the internals to better separate mbtiles interface from API logic
 * add tests and benchmarks
 * get things production ready
 
