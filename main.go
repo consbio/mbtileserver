@@ -17,13 +17,11 @@ import (
 
 	"github.com/golang/groupcache"
 	"github.com/labstack/echo"
-	"github.com/labstack/echo/engine"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/evalphobia/logrus_sentry"
-	"github.com/labstack/echo/engine/standard"
 	"github.com/labstack/echo/middleware"
 	_ "github.com/mattn/go-sqlite3"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -151,7 +149,7 @@ func serve() {
 	t := &Template{
 		templates: template.Must(template.ParseGlob("templates/*.html")),
 	}
-	e.SetRenderer(t)
+	e.Renderer = t
 
 	gzip := middleware.Gzip()
 
@@ -167,20 +165,16 @@ func serve() {
 	services := e.Group("/services/") // has to be separate from endpoint for ListServices
 	services.GET(":id", GetServiceInfo, NotModifiedMiddleware, gzip)
 	services.GET(":id/map", GetServiceHTML, NotModifiedMiddleware, gzip)
-	services.Get(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
+	services.GET(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
 
 	arcgis := e.Group("/arcgis/rest/")
 	// arcgis.GET("services", GetArcGISServices, NotModifiedMiddleware, gzip)
 	arcgis.GET("services/:id/MapServer", GetArcGISService, NotModifiedMiddleware, gzip)
 	arcgis.GET("services/:id/MapServer/layers", GetArcGISServiceLayers, NotModifiedMiddleware, gzip)
 	arcgis.GET("services/:id/MapServer/legend", GetArcGISServiceLegend, NotModifiedMiddleware, gzip)
-	arcgis.Get("services/:id/MapServer/tile/:z/:y/:x", GetArcGISTile, NotModifiedMiddleware)
+	arcgis.GET("services/:id/MapServer/tile/:z/:y/:x", GetArcGISTile, NotModifiedMiddleware)
 
-	e.Get("/admin/cache", CacheInfo, gzip)
-
-	config := engine.Config{
-		Address: fmt.Sprintf(":%v", port),
-	}
+	e.GET("/admin/cache", CacheInfo, gzip)
 
 	// Start the server
 	if certExists {
@@ -191,18 +185,16 @@ func serve() {
 			log.Fatalf("Could not find private key file: %s\n", privateKey)
 		}
 
-		config.TLSCertFile = certificate
-		config.TLSKeyFile = privateKey
 		fmt.Printf("Starting HTTPS server on port %v\n", port)
 		fmt.Println("Use Ctrl-C to exit the server")
-		e.Run(standard.WithConfig(config))
+		e.StartTLS(fmt.Sprintf(":%v", port), certificate, privateKey)
 
 	} else {
 		fmt.Println("\n--------------------------------------")
 		fmt.Printf("Starting HTTP server on port %v\n", port)
 		fmt.Println("Use Ctrl-C to exit the server")
 		fmt.Println("--------------------------------------\n")
-		e.Run(standard.WithConfig(config))
+		e.Start(fmt.Sprintf(":%v", port))
 	}
 
 }
@@ -253,12 +245,12 @@ func getServiceOr404(c echo.Context) (string, error) {
 
 func getRootURL(c echo.Context) string {
 	// TODO: this won't be correct if we received this via proxy
-	return fmt.Sprintf("%s://%s", c.Request().Scheme(), c.Request().Host())
+	return fmt.Sprintf("%s://%s", c.Scheme(), c.Request().Host)
 }
 
 func ListServices(c echo.Context) error {
 	// TODO: need to paginate the responses
-	rootURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
+	rootURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL)
 	services := make([]ServiceInfo, len(tilesets))
 	i := 0
 	for id, tileset := range tilesets {
@@ -279,7 +271,7 @@ func GetServiceInfo(c echo.Context) error {
 		return err
 	}
 
-	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL())
+	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL)
 
 	tileset := tilesets[id]
 	imgFormat := TileFormatStr[tileset.tileformat]
@@ -332,7 +324,7 @@ func GetServiceHTML(c echo.Context) error {
 	}
 
 	p := TemplateParams{
-		URL: fmt.Sprintf("%s%s", getRootURL(c), strings.TrimSuffix(c.Request().URL().Path(), "/map")),
+		URL: fmt.Sprintf("%s%s", getRootURL(c), strings.TrimSuffix(c.Request().URL.Path, "/map")),
 		ID:  id,
 	}
 
@@ -431,7 +423,7 @@ func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			lastModified = startuptime // startup time of server
 		}
 
-		if t, err := time.Parse(http.TimeFormat, c.Request().Header().Get(echo.HeaderIfModifiedSince)); err == nil && lastModified.Before(t.Add(1*time.Second)) {
+		if t, err := time.Parse(http.TimeFormat, c.Request().Header.Get(echo.HeaderIfModifiedSince)); err == nil && lastModified.Before(t.Add(1*time.Second)) {
 			c.Response().Header().Del(echo.HeaderContentType)
 			c.Response().Header().Del(echo.HeaderContentLength)
 			return c.NoContent(http.StatusNotModified)

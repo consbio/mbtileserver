@@ -16,7 +16,7 @@ Every sentry application defined on the server gets a different
 
 ```go
 import (
-  "github.com/Sirupsen/logrus"
+  "github.com/sirupsen/logrus"
   "github.com/evalphobia/logrus_sentry"
 )
 
@@ -54,7 +54,7 @@ the `NewWithClientSentryHook` constructor:
 
 ```go
 import (
-  "github.com/Sirupsen/logrus"
+  "github.com/sirupsen/logrus"
   "github.com/evalphobia/logrus_sentry"
   "github.com/getsentry/raven-go"
 )
@@ -96,10 +96,10 @@ Some logrus fields have a special meaning in this hook, and they will be especia
 | `user_id`  | ID of the user who is in the context of the event |
 | `user_ip`  | IP of the user who is in the context of the event |
 | `server_name`  | Also known as hostname, it is the name of the server which is logging the event (hostname.example.com)  |
+| `tags`  | `tags` are `raven.Tags` struct from `github.com/getsentry/raven-go` and override default tags data |
+| `fingerprint`  | `fingerprint` is an string array, that allows you to affect sentry's grouping of events as detailed in the [sentry documentation](https://docs.sentry.io/learn/rollups/#customize-grouping-with-fingerprints) |
 | `logger`  | `logger` is the part of the application which is logging the event. In go this usually means setting it to the name of the package. |
 | `http_request`  | `http_request` is the in-coming request(*http.Request). The detailed request data are sent to Sentry. |
-
-
 
 ## Timeout
 

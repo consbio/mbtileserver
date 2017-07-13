@@ -32,7 +32,7 @@ type (
 var (
 	// DefaultRecoverConfig is the default Recover middleware config.
 	DefaultRecoverConfig = RecoverConfig{
-		Skipper:           defaultSkipper,
+		Skipper:           DefaultSkipper,
 		StackSize:         4 << 10, // 4 KB
 		DisableStackAll:   false,
 		DisablePrintStack: false,
@@ -45,7 +45,7 @@ func Recover() echo.MiddlewareFunc {
 	return RecoverWithConfig(DefaultRecoverConfig)
 }
 
-// RecoverWithConfig returns a Recover middleware from config.
+// RecoverWithConfig returns a Recover middleware with config.
 // See: `Recover()`.
 func RecoverWithConfig(config RecoverConfig) echo.MiddlewareFunc {
 	// Defaults
@@ -74,7 +74,7 @@ func RecoverWithConfig(config RecoverConfig) echo.MiddlewareFunc {
 					stack := make([]byte, config.StackSize)
 					length := runtime.Stack(stack, !config.DisableStackAll)
 					if !config.DisablePrintStack {
-						c.Logger().Printf("[%s] %s %s", color.Red("PANIC RECOVER"), err, stack[:length])
+						c.Logger().Printf("[%s] %s %s\n", color.Red("PANIC RECOVER"), err, stack[:length])
 					}
 					c.Error(err)
 				}

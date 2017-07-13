@@ -1,11 +1,13 @@
 package echo
 
+import "strings"
+
 type (
 	// Router is the registry of all registered routes for an `Echo` instance for
 	// request matching and URL path parameter parsing.
 	Router struct {
 		tree   *node
-		routes map[string]Route
+		routes map[string]*Route
 		echo   *Echo
 	}
 	node struct {
@@ -45,13 +47,13 @@ func NewRouter(e *Echo) *Router {
 		tree: &node{
 			methodHandler: new(methodHandler),
 		},
-		routes: make(map[string]Route),
+		routes: map[string]*Route{},
 		echo:   e,
 	}
 }
 
 // Add registers a new route for method and path with matching handler.
-func (r *Router) Add(method, path string, h HandlerFunc, e *Echo) {
+func (r *Router) Add(method, path string, h HandlerFunc) {
 	// Validate path
 	if path == "" {
 		panic("echo: path cannot be empty")
@@ -66,7 +68,7 @@ func (r *Router) Add(method, path string, h HandlerFunc, e *Echo) {
 		if path[i] == ':' {
 			j := i + 1
 
-			r.insert(method, path[:i], nil, skind, "", nil, e)
+			r.insert(method, path[:i], nil, skind, "", nil)
 			for ; i < l && path[i] != '/'; i++ {
 			}
 
@@ -75,31 +77,31 @@ func (r *Router) Add(method, path string, h HandlerFunc, e *Echo) {
 			i, l = j, len(path)
 
 			if i == l {
-				r.insert(method, path[:i], h, pkind, ppath, pnames, e)
+				r.insert(method, path[:i], h, pkind, ppath, pnames)
 				return
 			}
-			r.insert(method, path[:i], nil, pkind, ppath, pnames, e)
+			r.insert(method, path[:i], nil, pkind, ppath, pnames)
 		} else if path[i] == '*' {
-			r.insert(method, path[:i], nil, skind, "", nil, e)
-			pnames = append(pnames, "_*")
-			r.insert(method, path[:i+1], h, akind, ppath, pnames, e)
+			r.insert(method, path[:i], nil, skind, "", nil)
+			pnames = append(pnames, "*")
+			r.insert(method, path[:i+1], h, akind, ppath, pnames)
 			return
 		}
 	}
 
-	r.insert(method, path, h, skind, ppath, pnames, e)
+	r.insert(method, path, h, skind, ppath, pnames)
 }
 
-func (r *Router) insert(method, path string, h HandlerFunc, t kind, ppath string, pnames []string, e *Echo) {
+func (r *Router) insert(method, path string, h HandlerFunc, t kind, ppath string, pnames []string) {
 	// Adjust max param
 	l := len(pnames)
-	if *e.maxParam < l {
-		*e.maxParam = l
+	if *r.echo.maxParam < l {
+		*r.echo.maxParam = l
 	}
 
 	cn := r.tree // Current node as root
 	if cn == nil {
-		panic("echo ⇛ invalid method")
+		panic("echo: invalid method")
 	}
 	search := path
 
@@ -170,7 +172,15 @@ func (r *Router) insert(method, path string, h HandlerFunc, t kind, ppath string
 			if h != nil {
 				cn.addHandler(method, h)
 				cn.ppath = ppath
-				cn.pnames = pnames
+				if len(cn.pnames) == 0 { // Issue #729
+					cn.pnames = pnames
+				}
+				for i, n := range pnames {
+					// Param name aliases
+					if i < len(cn.pnames) && !strings.Contains(cn.pnames[i], n) {
+						cn.pnames[i] += "," + n
+					}
+				}
 			}
 		}
 		return
@@ -278,7 +288,7 @@ func (n *node) checkMethodNotAllowed() HandlerFunc {
 	return NotFoundHandler
 }
 
-// Find lookup a handler registed for method and path. It also parses URL for path
+// Find lookup a handler registered for method and path. It also parses URL for path
 // parameters and load them into context.
 //
 // For performance:
@@ -286,17 +296,19 @@ func (n *node) checkMethodNotAllowed() HandlerFunc {
 // - Get context from `Echo#AcquireContext()`
 // - Reset it `Context#Reset()`
 // - Return it `Echo#ReleaseContext()`.
-func (r *Router) Find(method, path string, context Context) {
+func (r *Router) Find(method, path string, c Context) {
+	ctx := c.(*context)
+	ctx.path = path
 	cn := r.tree // Current node as root
 
 	var (
 		search  = path
-		c       *node  // Child node
-		n       int    // Param counter
-		nk      kind   // Next kind
-		nn      *node  // Next node
-		ns      string // Next search
-		pvalues = context.ParamValues()
+		child   *node         // Child node
+		n       int           // Param counter
+		nk      kind          // Next kind
+		nn      *node         // Next node
+		ns      string        // Next search
+		pvalues = ctx.pvalues // Use the internal slice so the interface can keep the illusion of a dynamic slice
 	)
 
 	// Search order static > param > any
@@ -341,33 +353,33 @@ func (r *Router) Find(method, path string, context Context) {
 		}
 
 		// Static node
-		if c = cn.findChild(search[0], skind); c != nil {
+		if child = cn.findChild(search[0], skind); child != nil {
 			// Save next
-			if cn.label == '/' {
+			if cn.prefix[len(cn.prefix)-1] == '/' { // Issue #623
 				nk = pkind
 				nn = cn
 				ns = search
 			}
-			cn = c
+			cn = child
 			continue
 		}
 
 		// Param node
 	Param:
-		if c = cn.findChildByKind(pkind); c != nil {
+		if child = cn.findChildByKind(pkind); child != nil {
 			// Issue #378
 			if len(pvalues) == n {
 				continue
 			}
 
 			// Save next
-			if cn.label == '/' {
+			if cn.prefix[len(cn.prefix)-1] == '/' { // Issue #623
 				nk = akind
 				nn = cn
 				ns = search
 			}
 
-			cn = c
+			cn = child
 			i, l := 0, len(search)
 			for ; i < l && search[i] != '/'; i++ {
 			}
@@ -382,7 +394,7 @@ func (r *Router) Find(method, path string, context Context) {
 		if cn = cn.findChildByKind(akind); cn == nil {
 			if nn != nil {
 				cn = nn
-				nn = nil // Next
+				nn = cn.parent // Next (Issue #954)
 				search = ns
 				if nk == pkind {
 					goto Param
@@ -398,13 +410,13 @@ func (r *Router) Find(method, path string, context Context) {
 	}
 
 End:
-	context.SetHandler(cn.findHandler(method))
-	context.SetPath(cn.ppath)
-	context.SetParamNames(cn.pnames...)
+	ctx.handler = cn.findHandler(method)
+	ctx.path = cn.ppath
+	ctx.pnames = cn.pnames
 
 	// NOTE: Slow zone...
-	if context.Handler() == nil {
-		context.SetHandler(cn.checkMethodNotAllowed())
+	if ctx.handler == nil {
+		ctx.handler = cn.checkMethodNotAllowed()
 
 		// Dig further for any, might have an empty value for *, e.g.
 		// serving a directory. Issue #207.
@@ -412,12 +424,12 @@ End:
 			return
 		}
 		if h := cn.findHandler(method); h != nil {
-			context.SetHandler(h)
+			ctx.handler = h
 		} else {
-			context.SetHandler(cn.checkMethodNotAllowed())
+			ctx.handler = cn.checkMethodNotAllowed()
 		}
-		context.SetPath(cn.ppath)
-		context.SetParamNames(cn.pnames...)
+		ctx.path = cn.ppath
+		ctx.pnames = cn.pnames
 		pvalues[len(cn.pnames)-1] = ""
 	}
 

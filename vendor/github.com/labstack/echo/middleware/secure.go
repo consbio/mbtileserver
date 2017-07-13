@@ -59,7 +59,7 @@ type (
 var (
 	// DefaultSecureConfig is the default Secure middleware config.
 	DefaultSecureConfig = SecureConfig{
-		Skipper:            defaultSkipper,
+		Skipper:            DefaultSkipper,
 		XSSProtection:      "1; mode=block",
 		ContentTypeNosniff: "nosniff",
 		XFrameOptions:      "SAMEORIGIN",
@@ -74,7 +74,7 @@ func Secure() echo.MiddlewareFunc {
 	return SecureWithConfig(DefaultSecureConfig)
 }
 
-// SecureWithConfig returns a Secure middleware from config.
+// SecureWithConfig returns a Secure middleware with config.
 // See: `Secure()`.
 func SecureWithConfig(config SecureConfig) echo.MiddlewareFunc {
 	// Defaults
@@ -100,7 +100,7 @@ func SecureWithConfig(config SecureConfig) echo.MiddlewareFunc {
 			if config.XFrameOptions != "" {
 				res.Header().Set(echo.HeaderXFrameOptions, config.XFrameOptions)
 			}
-			if (req.IsTLS() || (req.Header().Get(echo.HeaderXForwardedProto) == "https")) && config.HSTSMaxAge != 0 {
+			if (c.IsTLS() || (req.Header.Get(echo.HeaderXForwardedProto) == "https")) && config.HSTSMaxAge != 0 {
 				subdomains := ""
 				if !config.HSTSExcludeSubdomains {
 					subdomains = "; includeSubdomains"

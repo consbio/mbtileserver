@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -236,8 +237,11 @@ func uuid() (string, error) {
 	return hex.EncodeToString(id), nil
 }
 
-func (packet *Packet) JSON() []byte {
-	packetJSON, _ := json.Marshal(packet)
+func (packet *Packet) JSON() ([]byte, error) {
+	packetJSON, err := json.Marshal(packet)
+	if err != nil {
+		return nil, err
+	}
 
 	interfaces := make(map[string]Interface, len(packet.Interfaces))
 	for _, inter := range packet.Interfaces {
@@ -247,12 +251,15 @@ func (packet *Packet) JSON() []byte {
 	}
 
 	if len(interfaces) > 0 {
-		interfaceJSON, _ := json.Marshal(interfaces)
+		interfaceJSON, err := json.Marshal(interfaces)
+		if err != nil {
+			return nil, err
+		}
 		packetJSON[len(packetJSON)-1] = ','
 		packetJSON = append(packetJSON, interfaceJSON[1:]...)
 	}
 
-	return packetJSON
+	return packetJSON, nil
 }
 
 type context struct {
@@ -261,9 +268,9 @@ type context struct {
 	tags map[string]string
 }
 
-func (c *context) SetUser(u *User) { c.user = u }
-func (c *context) SetHttp(h *Http) { c.http = h }
-func (c *context) SetTags(t map[string]string) {
+func (c *context) setUser(u *User) { c.user = u }
+func (c *context) setHttp(h *Http) { c.http = h }
+func (c *context) setTags(t map[string]string) {
 	if c.tags == nil {
 		c.tags = make(map[string]string)
 	}
@@ -271,7 +278,7 @@ func (c *context) SetTags(t map[string]string) {
 		c.tags[k] = v
 	}
 }
-func (c *context) Clear() {
+func (c *context) clear() {
 	c.user = nil
 	c.http = nil
 	c.tags = nil
@@ -310,6 +317,7 @@ func newTransport() Transport {
 	} else {
 		t.Client = &http.Client{
 			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
 				TLSClientConfig: &tls.Config{RootCAs: rootCAs},
 			},
 		}
@@ -324,7 +332,6 @@ func newClient(tags map[string]string) *Client {
 		context:   &context{},
 		queue:     make(chan *outgoingPacket, MaxQueueBuffer),
 	}
-	go client.worker()
 	client.SetDSN(os.Getenv("SENTRY_DSN"))
 	return client
 }
@@ -364,23 +371,54 @@ type Client struct {
 	// Context that will get appending to all packets
 	context *context
 
-	mu           sync.RWMutex
-	url          string
-	projectID    string
-	authHeader   string
-	release      string
-	environment  string
-	includePaths []string
-	queue        chan *outgoingPacket
+	mu          sync.RWMutex
+	url         string
+	projectID   string
+	authHeader  string
+	release     string
+	environment string
+
+	// default logger name (leave empty for 'root')
+	defaultLoggerName string
+
+	includePaths       []string
+	ignoreErrorsRegexp *regexp.Regexp
+	queue              chan *outgoingPacket
 
 	// A WaitGroup to keep track of all currently in-progress captures
 	// This is intended to be used with Client.Wait() to assure that
 	// all messages have been transported before exiting the process.
 	wg sync.WaitGroup
+
+	// A Once to track only starting up the background worker once
+	start sync.Once
 }
 
 // Initialize a default *Client instance
 var DefaultClient = newClient(nil)
+
+func (c *Client) SetIgnoreErrors(errs []string) error {
+	joinedRegexp := strings.Join(errs, "|")
+	r, err := regexp.Compile(joinedRegexp)
+	if err != nil {
+		return fmt.Errorf("failed to compile regexp %q for %q: %v", joinedRegexp, errs, err)
+	}
+
+	c.mu.Lock()
+	c.ignoreErrorsRegexp = r
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *Client) shouldExcludeErr(errStr string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ignoreErrorsRegexp != nil && c.ignoreErrorsRegexp.MatchString(errStr)
+}
+
+func SetIgnoreErrors(errs ...string) error {
+	return DefaultClient.SetIgnoreErrors(errs)
+}
 
 // SetDSN updates a client with a new DSN. It safe to call after and
 // concurrently with calls to Report and Send.
@@ -439,11 +477,23 @@ func (client *Client) SetEnvironment(environment string) {
 	client.environment = environment
 }
 
+// SetDefaultLoggerName sets the default logger name.
+func (client *Client) SetDefaultLoggerName(name string) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.defaultLoggerName = name
+}
+
 // SetRelease sets the "release" tag on the default *Client
 func SetRelease(release string) { DefaultClient.SetRelease(release) }
 
 // SetEnvironment sets the "environment" tag on the default *Client
 func SetEnvironment(environment string) { DefaultClient.SetEnvironment(environment) }
+
+// SetDefaultLoggerName sets the "defaultLoggerName" on the default *Client
+func SetDefaultLoggerName(name string) {
+	DefaultClient.SetDefaultLoggerName(name)
+}
 
 func (client *Client) worker() {
 	for outgoingPacket := range client.queue {
@@ -461,7 +511,15 @@ func (client *Client) worker() {
 // when client is nil. A channel is provided if it is important to check for a
 // send's success.
 func (client *Client) Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
+	ch = make(chan error, 1)
+
 	if client == nil {
+		// return a chan that always returns nil when the caller receives from it
+		close(ch)
+		return
+	}
+
+	if client.shouldExcludeErr(packet.Message) {
 		return
 	}
 
@@ -470,19 +528,23 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	// finished being acted upon, whether success or failure
 	client.wg.Add(1)
 
-	ch = make(chan error, 1)
-
 	// Merge capture tags and client tags
 	packet.AddTags(captureTags)
 	packet.AddTags(client.Tags)
-	packet.AddTags(client.context.tags)
 
 	// Initialize any required packet fields
 	client.mu.RLock()
+	packet.AddTags(client.context.tags)
 	projectID := client.projectID
 	release := client.release
 	environment := client.environment
+	defaultLoggerName := client.defaultLoggerName
 	client.mu.RUnlock()
+
+	// set the global logger name on the packet if we must
+	if packet.Logger == "" && defaultLoggerName != "" {
+		packet.Logger = defaultLoggerName
+	}
 
 	err := packet.Init(projectID)
 	if err != nil {
@@ -495,6 +557,12 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	packet.Environment = environment
 
 	outgoingPacket := &outgoingPacket{packet, ch}
+
+	// Lazily start background worker until we
+	// do our first write into the queue.
+	client.start.Do(func() {
+		go client.worker()
+	})
 
 	select {
 	case client.queue <- outgoingPacket:
@@ -523,6 +591,10 @@ func (client *Client) CaptureMessage(message string, tags map[string]string, int
 		return ""
 	}
 
+	if client.shouldExcludeErr(message) {
+		return ""
+	}
+
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
 	eventID, _ := client.Capture(packet, tags)
 
@@ -537,6 +609,10 @@ func CaptureMessage(message string, tags map[string]string, interfaces ...Interf
 // CaptureMessageAndWait is identical to CaptureMessage except it blocks and waits for the message to be sent.
 func (client *Client) CaptureMessageAndWait(message string, tags map[string]string, interfaces ...Interface) string {
 	if client == nil {
+		return ""
+	}
+
+	if client.shouldExcludeErr(message) {
 		return ""
 	}
 
@@ -559,6 +635,10 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 		return ""
 	}
 
+	if client.shouldExcludeErr(err.Error()) {
+		return ""
+	}
+
 	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
 
@@ -574,6 +654,10 @@ func CaptureError(err error, tags map[string]string, interfaces ...Interface) st
 // CaptureErrorAndWait is identical to CaptureError, except it blocks and assures that the event was sent
 func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interface) string {
 	if client == nil {
+		return ""
+	}
+
+	if client.shouldExcludeErr(err.Error()) {
 		return ""
 	}
 
@@ -603,9 +687,15 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 		case nil:
 			return
 		case error:
+			if client.shouldExcludeErr(rval.Error()) {
+				return
+			}
 			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
+			if client.shouldExcludeErr(rvalStr) {
+				return
+			}
 			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
 		}
 
@@ -635,9 +725,15 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 		case nil:
 			return
 		case error:
+			if client.shouldExcludeErr(rval.Error()) {
+				return
+			}
 			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
+			if client.shouldExcludeErr(rvalStr) {
+				return
+			}
 			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
 		}
 
@@ -714,10 +810,29 @@ func (client *Client) SetIncludePaths(p []string) {
 	client.includePaths = p
 }
 
-func (c *Client) SetUserContext(u *User)             { c.context.SetUser(u) }
-func (c *Client) SetHttpContext(h *Http)             { c.context.SetHttp(h) }
-func (c *Client) SetTagsContext(t map[string]string) { c.context.SetTags(t) }
-func (c *Client) ClearContext()                      { c.context.Clear() }
+func (c *Client) SetUserContext(u *User) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.setUser(u)
+}
+
+func (c *Client) SetHttpContext(h *Http) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.setHttp(h)
+}
+
+func (c *Client) SetTagsContext(t map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.setTags(t)
+}
+
+func (c *Client) ClearContext() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.clear()
+}
 
 func SetUserContext(u *User)             { DefaultClient.SetUserContext(u) }
 func SetHttpContext(h *Http)             { DefaultClient.SetHttpContext(h) }
@@ -735,8 +850,14 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 		return nil
 	}
 
-	body, contentType := serializedPacket(packet)
-	req, _ := http.NewRequest("POST", url, body)
+	body, contentType, err := serializedPacket(packet)
+	if err != nil {
+		return fmt.Errorf("error serializing packet: %v", err)
+	}
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return fmt.Errorf("can't create new request: %v", err)
+	}
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", contentType)
@@ -752,8 +873,11 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	return nil
 }
 
-func serializedPacket(packet *Packet) (r io.Reader, contentType string) {
-	packetJSON := packet.JSON()
+func serializedPacket(packet *Packet) (io.Reader, string, error) {
+	packetJSON, err := packet.JSON()
+	if err != nil {
+		return nil, "", fmt.Errorf("error marshaling packet %+v to JSON: %v", packet, err)
+	}
 
 	// Only deflate/base64 the packet if it is bigger than 1KB, as there is
 	// overhead.
@@ -764,9 +888,9 @@ func serializedPacket(packet *Packet) (r io.Reader, contentType string) {
 		deflate.Write(packetJSON)
 		deflate.Close()
 		b64.Close()
-		return buf, "application/octet-stream"
+		return buf, "application/octet-stream", nil
 	}
-	return bytes.NewReader(packetJSON), "application/json"
+	return bytes.NewReader(packetJSON), "application/json", nil
 }
 
 var hostname string

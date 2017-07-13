@@ -3,7 +3,9 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/labstack/echo"
@@ -37,7 +39,7 @@ type (
 var (
 	// DefaultStaticConfig is the default Static middleware config.
 	DefaultStaticConfig = StaticConfig{
-		Skipper: defaultSkipper,
+		Skipper: DefaultSkipper,
 		Index:   "index.html",
 	}
 )
@@ -50,10 +52,13 @@ func Static(root string) echo.MiddlewareFunc {
 	return StaticWithConfig(c)
 }
 
-// StaticWithConfig returns a Static middleware from config.
+// StaticWithConfig returns a Static middleware with config.
 // See `Static()`.
 func StaticWithConfig(config StaticConfig) echo.MiddlewareFunc {
 	// Defaults
+	if config.Root == "" {
+		config.Root = "." // For security we want to restrict to CWD.
+	}
 	if config.Skipper == nil {
 		config.Skipper = DefaultStaticConfig.Skipper
 	}
@@ -62,83 +67,84 @@ func StaticWithConfig(config StaticConfig) echo.MiddlewareFunc {
 	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c echo.Context) (err error) {
 			if config.Skipper(c) {
 				return next(c)
 			}
 
-			fs := http.Dir(config.Root)
-			p := c.Request().URL().Path()
-			if strings.Contains(c.Path(), "*") { // If serving from a group, e.g. `/static*`.
-				p = c.P(0)
+			p := c.Request().URL.Path
+			if strings.HasSuffix(c.Path(), "*") { // When serving from a group, e.g. `/static*`.
+				p = c.Param("*")
 			}
-			file := path.Clean(p)
-			f, err := fs.Open(file)
+			p, err = echo.PathUnescape(p)
 			if err != nil {
-				// HTML5 mode
-				err = next(c)
-				if he, ok := err.(*echo.HTTPError); ok {
-					if config.HTML5 && he.Code == http.StatusNotFound {
-						file = ""
-						f, err = fs.Open(file)
-					} else {
-						return err
+				return
+			}
+			name := filepath.Join(config.Root, path.Clean("/"+p)) // "/"+ for security
+
+			fi, err := os.Stat(name)
+			if err != nil {
+				if os.IsNotExist(err) {
+					if err = next(c); err != nil {
+						if he, ok := err.(*echo.HTTPError); ok {
+							if config.HTML5 && he.Code == http.StatusNotFound {
+								return c.File(filepath.Join(config.Root, config.Index))
+							}
+						}
+						return
 					}
-				} else {
-					return err
 				}
-			}
-			defer f.Close()
-			fi, err := f.Stat()
-			if err != nil {
-				return err
+				return
 			}
 
 			if fi.IsDir() {
-				/* NOTE:
-				Not checking the Last-Modified header as it caches the response `304` when
-				changing different directories for the same path.
-				*/
-				d := f
+				index := filepath.Join(name, config.Index)
+				fi, err = os.Stat(index)
 
-				// Index file
-				file = path.Join(file, config.Index)
-				f, err = fs.Open(file)
-				if err == nil {
-					// Index file
-					if fi, err = f.Stat(); err != nil {
-						return err
+				if err != nil {
+					if config.Browse {
+						return listDir(name, c.Response())
 					}
-				} else if err != nil && config.Browse {
-					dirs, err := d.Readdir(-1)
-					if err != nil {
-						return err
+					if os.IsNotExist(err) {
+						return next(c)
 					}
-
-					// Create a directory index
-					res := c.Response()
-					res.Header().Set(echo.HeaderContentType, echo.MIMETextHTMLCharsetUTF8)
-					if _, err = fmt.Fprintf(res, "<pre>\n"); err != nil {
-						return err
-					}
-					for _, d := range dirs {
-						name := d.Name()
-						color := "#212121"
-						if d.IsDir() {
-							color = "#e91e63"
-							name += "/"
-						}
-						if _, err = fmt.Fprintf(res, "<a href=\"%s\" style=\"color: %s;\">%s</a>\n", name, color, name); err != nil {
-							return err
-						}
-					}
-					_, err = fmt.Fprintf(res, "</pre>\n")
-					return err
-				} else {
-					return next(c)
+					return
 				}
+
+				return c.File(index)
 			}
-			return c.ServeContent(f, fi.Name(), fi.ModTime())
+
+			return c.File(name)
 		}
 	}
+}
+
+func listDir(name string, res *echo.Response) (err error) {
+	dir, err := os.Open(name)
+	if err != nil {
+		return
+	}
+	dirs, err := dir.Readdir(-1)
+	if err != nil {
+		return
+	}
+
+	// Create a directory index
+	res.Header().Set(echo.HeaderContentType, echo.MIMETextHTMLCharsetUTF8)
+	if _, err = fmt.Fprintf(res, "<pre>\n"); err != nil {
+		return
+	}
+	for _, d := range dirs {
+		name := d.Name()
+		color := "#212121"
+		if d.IsDir() {
+			color = "#e91e63"
+			name += "/"
+		}
+		if _, err = fmt.Fprintf(res, "<a href=\"%s\" style=\"color: %s;\">%s</a>\n", name, color, name); err != nil {
+			return
+		}
+	}
+	_, err = fmt.Fprintf(res, "</pre>\n")
+	return
 }

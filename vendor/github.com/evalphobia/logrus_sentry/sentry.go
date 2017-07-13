@@ -3,11 +3,13 @@ package logrus_sentry
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"runtime"
+	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/getsentry/raven-go"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -25,7 +27,13 @@ var (
 type SentryHook struct {
 	// Timeout sets the time to wait for a delivery error from the sentry server.
 	// If this is set to zero the server will not wait for any response and will
-	// consider the message correctly sent
+	// consider the message correctly sent.
+	//
+	// This is ignored for asynchronous hooks. If you want to set a timeout when
+	// using an async hook (to bound the length of time that hook.Flush can take),
+	// you probably want to create your own raven.Client and set
+	// ravenClient.Transport.(*raven.HTTPTransport).Client.Timeout to set a
+	// timeout on the underlying HTTP request instead.
 	Timeout                 time.Duration
 	StacktraceConfiguration StackTraceConfiguration
 
@@ -34,10 +42,24 @@ type SentryHook struct {
 
 	ignoreFields map[string]struct{}
 	extraFilters map[string]func(interface{}) interface{}
+
+	asynchronous bool
+
+	mu sync.RWMutex
+	wg sync.WaitGroup
 }
 
+// The Stacktracer interface allows an error type to return a raven.Stacktrace.
 type Stacktracer interface {
 	GetStacktrace() *raven.Stacktrace
+}
+
+type causer interface {
+	Cause() error
+}
+
+type pkgErrorStackTracer interface {
+	StackTrace() errors.StackTrace
 }
 
 // StackTraceConfiguration allows for configuring stacktraces
@@ -54,6 +76,8 @@ type StackTraceConfiguration struct {
 	// if the stack frame's package matches one of these prefixes
 	// sentry will identify the stack frame as "in_app"
 	InAppPrefixes []string
+	// whether sending exception type should be enabled.
+	SendExceptionType bool
 }
 
 // NewSentryHook creates a hook to be added to an instance of logger
@@ -84,11 +108,12 @@ func NewWithClientSentryHook(client *raven.Client, levels []logrus.Level) (*Sent
 	return &SentryHook{
 		Timeout: 100 * time.Millisecond,
 		StacktraceConfiguration: StackTraceConfiguration{
-			Enable:        false,
-			Level:         logrus.ErrorLevel,
-			Skip:          5,
-			Context:       0,
-			InAppPrefixes: nil,
+			Enable:            false,
+			Level:             logrus.ErrorLevel,
+			Skip:              5,
+			Context:           0,
+			InAppPrefixes:     nil,
+			SendExceptionType: true,
 		},
 		client:       client,
 		levels:       levels,
@@ -97,59 +122,127 @@ func NewWithClientSentryHook(client *raven.Client, levels []logrus.Level) (*Sent
 	}, nil
 }
 
+// NewAsyncSentryHook creates a hook same as NewSentryHook, but in asynchronous
+// mode.
+func NewAsyncSentryHook(DSN string, levels []logrus.Level) (*SentryHook, error) {
+	hook, err := NewSentryHook(DSN, levels)
+	return setAsync(hook), err
+}
+
+// NewAsyncWithTagsSentryHook creates a hook same as NewWithTagsSentryHook, but
+// in asynchronous mode.
+func NewAsyncWithTagsSentryHook(DSN string, tags map[string]string, levels []logrus.Level) (*SentryHook, error) {
+	hook, err := NewWithTagsSentryHook(DSN, tags, levels)
+	return setAsync(hook), err
+}
+
+// NewAsyncWithClientSentryHook creates a hook same as NewWithClientSentryHook,
+// but in asynchronous mode.
+func NewAsyncWithClientSentryHook(client *raven.Client, levels []logrus.Level) (*SentryHook, error) {
+	hook, err := NewWithClientSentryHook(client, levels)
+	return setAsync(hook), err
+}
+
+func setAsync(hook *SentryHook) *SentryHook {
+	if hook == nil {
+		return nil
+	}
+	hook.asynchronous = true
+	return hook
+}
+
 // Fire is called when an event should be sent to sentry
 // Special fields that sentry uses to give more information to the server
 // are extracted from entry.Data (if they are found)
-// These fields are: error, logger, server_name and http_request
+// These fields are: error, logger, server_name, http_request, tags
 func (hook *SentryHook) Fire(entry *logrus.Entry) error {
-	packet := &raven.Packet{
-		Message:   entry.Message,
-		Timestamp: raven.Timestamp(entry.Time),
-		Level:     severityMap[entry.Level],
-		Platform:  "go",
-	}
+	hook.mu.RLock() // Allow multiple go routines to log simultaneously
+	defer hook.mu.RUnlock()
+	packet := raven.NewPacket(entry.Message)
+	packet.Timestamp = raven.Timestamp(entry.Time)
+	packet.Level = severityMap[entry.Level]
+	packet.Platform = "go"
 
-	d := entry.Data
+	df := newDataField(entry.Data)
 
-	if logger, ok := getAndDelString(d, "logger"); ok {
+	// set special fields
+	if logger, ok := df.getLogger(); ok {
 		packet.Logger = logger
 	}
-	if serverName, ok := getAndDelString(d, "server_name"); ok {
+	if serverName, ok := df.getServerName(); ok {
 		packet.ServerName = serverName
 	}
-	if req, ok := getAndDelRequest(d, "http_request"); ok {
-		packet.Interfaces = append(packet.Interfaces, raven.NewHttp(req))
-	}
-	if user, ok := getUserContext(d); ok {
-		packet.Interfaces = append(packet.Interfaces, user)
-	}
-	if eventID, ok := getEventID(d); ok {
+	if eventID, ok := df.getEventID(); ok {
 		packet.EventID = eventID
 	}
+	if tags, ok := df.getTags(); ok {
+		packet.Tags = tags
+	}
+	if fingerprint, ok := df.getFingerprint(); ok {
+		packet.Fingerprint = fingerprint
+	}
+	if req, ok := df.getHTTPRequest(); ok {
+		packet.Interfaces = append(packet.Interfaces, req)
+	}
+	if user, ok := df.getUser(); ok {
+		packet.Interfaces = append(packet.Interfaces, user)
+	}
 
+	// set stacktrace data
 	stConfig := &hook.StacktraceConfiguration
 	if stConfig.Enable && entry.Level <= stConfig.Level {
-		if err, ok := getAndDelError(d, logrus.ErrorKey); ok {
+		if err, ok := df.getError(); ok {
 			var currentStacktrace *raven.Stacktrace
-			if stacktracer, ok := err.(Stacktracer); ok {
-				currentStacktrace = stacktracer.GetStacktrace()
-			} else {
+			currentStacktrace = hook.findStacktrace(err)
+			if currentStacktrace == nil {
 				currentStacktrace = raven.NewStacktrace(stConfig.Skip, stConfig.Context, stConfig.InAppPrefixes)
 			}
+			err := errors.Cause(err)
 			exc := raven.NewException(err, currentStacktrace)
+			if !stConfig.SendExceptionType {
+				exc.Type = ""
+			}
 			packet.Interfaces = append(packet.Interfaces, exc)
 			packet.Culprit = err.Error()
 		} else {
 			currentStacktrace := raven.NewStacktrace(stConfig.Skip, stConfig.Context, stConfig.InAppPrefixes)
-			packet.Interfaces = append(packet.Interfaces, currentStacktrace)
+			if currentStacktrace != nil {
+				packet.Interfaces = append(packet.Interfaces, currentStacktrace)
+			}
+		}
+	} else {
+		// set the culprit even when the stack trace is disabled, as long as we have an error
+		if err, ok := df.getError(); ok {
+			packet.Culprit = err.Error()
 		}
 	}
 
-	packet.Extra = hook.formatExtraData(d)
+	// set other fields
+	dataExtra := hook.formatExtraData(df)
+	if packet.Extra == nil {
+		packet.Extra = dataExtra
+	} else {
+		for k, v := range dataExtra {
+			packet.Extra[k] = v
+		}
+	}
 
 	_, errCh := hook.client.Capture(packet, nil)
-	timeout := hook.Timeout
-	if timeout != 0 {
+
+	if hook.asynchronous {
+		// Our use of hook.mu guarantees that we are following the WaitGroup rule of
+		// not calling Add in parallel with Wait.
+		hook.wg.Add(1)
+		go func() {
+			if err := <-errCh; err != nil {
+				fmt.Println(err)
+			}
+			hook.wg.Done()
+		}()
+		return nil
+	} else if timeout := hook.Timeout; timeout == 0 {
+		return nil
+	} else {
 		timeoutCh := time.After(timeout)
 		select {
 		case err := <-errCh:
@@ -158,12 +251,80 @@ func (hook *SentryHook) Fire(entry *logrus.Entry) error {
 			return fmt.Errorf("no response from sentry server in %s", timeout)
 		}
 	}
-	return nil
+}
+
+// Flush waits for the log queue to empty. This function only does anything in
+// asynchronous mode.
+func (hook *SentryHook) Flush() {
+	if !hook.asynchronous {
+		return
+	}
+	hook.mu.Lock() // Claim exclusive access; any logging goroutines will block until the flush completes
+	defer hook.mu.Unlock()
+
+	hook.wg.Wait()
+}
+
+func (hook *SentryHook) findStacktrace(err error) *raven.Stacktrace {
+	var stacktrace *raven.Stacktrace
+	var stackErr errors.StackTrace
+	for err != nil {
+		// Find the earliest *raven.Stacktrace, or error.StackTrace
+		if tracer, ok := err.(Stacktracer); ok {
+			stacktrace = tracer.GetStacktrace()
+			stackErr = nil
+		} else if tracer, ok := err.(pkgErrorStackTracer); ok {
+			stacktrace = nil
+			stackErr = tracer.StackTrace()
+		}
+		if cause, ok := err.(causer); ok {
+			err = cause.Cause()
+		} else {
+			break
+		}
+	}
+	if stackErr != nil {
+		stacktrace = hook.convertStackTrace(stackErr)
+	}
+	return stacktrace
+}
+
+// convertStackTrace converts an errors.StackTrace into a natively consumable
+// *raven.Stacktrace
+func (hook *SentryHook) convertStackTrace(st errors.StackTrace) *raven.Stacktrace {
+	stConfig := &hook.StacktraceConfiguration
+	stFrames := []errors.Frame(st)
+	frames := make([]*raven.StacktraceFrame, 0, len(stFrames))
+	for i := range stFrames {
+		pc := uintptr(stFrames[i])
+		fn := runtime.FuncForPC(pc)
+		file, line := fn.FileLine(pc)
+		frame := raven.NewStacktraceFrame(pc, file, line, stConfig.Context, stConfig.InAppPrefixes)
+		if frame != nil {
+			frames = append(frames, frame)
+		}
+	}
+
+	// Sentry wants the frames with the oldest first, so reverse them
+	for i, j := 0, len(frames)-1; i < j; i, j = i+1, j-1 {
+		frames[i], frames[j] = frames[j], frames[i]
+	}
+	return &raven.Stacktrace{Frames: frames}
 }
 
 // Levels returns the available logging levels.
 func (hook *SentryHook) Levels() []logrus.Level {
 	return hook.levels
+}
+
+// SetRelease sets release tag.
+func (hook *SentryHook) SetRelease(release string) {
+	hook.client.SetRelease(release)
+}
+
+// SetEnvironment sets environment tag.
+func (hook *SentryHook) SetEnvironment(environment string) {
+	hook.client.SetEnvironment(environment)
 }
 
 // AddIgnore adds field name to ignore.
@@ -176,13 +337,17 @@ func (hook *SentryHook) AddExtraFilter(name string, fn func(interface{}) interfa
 	hook.extraFilters[name] = fn
 }
 
-func (hook *SentryHook) formatExtraData(fields logrus.Fields) (result map[string]interface{}) {
+func (hook *SentryHook) formatExtraData(df *dataField) (result map[string]interface{}) {
 	// create a map for passing to Sentry's extra data
-	result = make(map[string]interface{}, len(fields))
-	for k, v := range fields {
+	result = make(map[string]interface{}, df.len())
+	for k, v := range df.data {
+		if df.isOmit(k) {
+			continue // skip already used special fields
+		}
 		if _, ok := hook.ignoreFields[k]; ok {
 			continue
 		}
+
 		if fn, ok := hook.extraFilters[k]; ok {
 			v = fn(v) // apply custom filter
 		} else {
@@ -205,73 +370,4 @@ func formatData(value interface{}) (formatted interface{}) {
 	default:
 		return value
 	}
-}
-
-func getEventID(d logrus.Fields) (string, bool) {
-	eventID, ok := d["event_id"].(string)
-
-	if !ok {
-		return "", false
-	}
-
-	//verify eventID is 32 characters hexadecimal string (UUID4)
-	uuid := parseUUID(eventID)
-
-	if uuid == nil {
-		return "", false
-	}
-
-	return uuid.noDashString(), true
-}
-
-func getAndDelString(d logrus.Fields, key string) (string, bool) {
-	if value, ok := d[key].(string); ok {
-		delete(d, key)
-		return value, true
-	}
-	return "", false
-}
-
-func getAndDelError(d logrus.Fields, key string) (error, bool) {
-	if value, ok := d[key].(error); ok {
-		delete(d, key)
-		return value, true
-	}
-	return nil, false
-}
-
-func getAndDelRequest(d logrus.Fields, key string) (*http.Request, bool) {
-	if value, ok := d[key].(*http.Request); ok {
-		delete(d, key)
-		return value, true
-	}
-	return nil, false
-}
-
-func getUserContext(d logrus.Fields) (*raven.User, bool) {
-	if v, ok := d["user"]; ok {
-		switch val := v.(type) {
-		case *raven.User:
-			return val, true
-
-		case raven.User:
-			return &val, true
-		}
-	}
-
-	username, _ := d["user_name"].(string)
-	email, _ := d["user_email"].(string)
-	id, _ := d["user_id"].(string)
-	ip, _ := d["user_ip"].(string)
-
-	if username == "" && email == "" && id == "" && ip == "" {
-		return nil, false
-	}
-
-	return &raven.User{
-		ID:       id,
-		Username: username,
-		Email:    email,
-		IP:       ip,
-	}, true
 }
