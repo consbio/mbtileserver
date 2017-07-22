@@ -123,12 +123,6 @@
 			"revisionTime": "2017-05-05T04:36:39Z"
 		},
 		{
-			"checksumSHA1": "/YsxkUA+LSSCvK4zVU7Oa3s0470=",
-			"path": "github.com/sirupsen/logrus",
-			"revision": "3d4380f53a34dcdc95f0c1db702615992b38d9a4",
-			"revisionTime": "2017-06-20T14:45:10Z"
-		},
-		{
 			"checksumSHA1": "Df7POUkeRf36/ZV7kIdo411gojc=",
 			"path": "github.com/spf13/cobra",
 			"revision": "4d647c8944eb42504a714e57e97f244ed6344722",
@@ -170,6 +164,12 @@
 			"path": "golang.org/x/net/context",
 			"revision": "c81e7f25cb61200d8bf0ae971a0bac8cb638d5bc",
 			"revisionTime": "2017-06-28T23:42:41Z"
+		},
+		{
+			"checksumSHA1": "8kL646+qstT+qD19J+i1Y+0ThMY=",
+			"path": "golang.org/x/sys/unix",
+			"revision": "c4489faa6e5ab84c0ef40d6ee878f7a030281f0f",
+			"revisionTime": "2017-07-20T20:22:48Z"
 		}
 	],
 	"rootPath": "github.com/consbio/mbtileserver"
