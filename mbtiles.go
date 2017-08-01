@@ -46,7 +46,6 @@ var TileContentType = map[TileFormat]string{
 type Mbtiles struct {
 	filename           string
 	db                 *sql.DB
-	metadata           map[string]interface{}
 	tileformat         TileFormat // tile format: PNG, JPG, PBF
 	timestamp          time.Time  // timestamp of file, for cache control headers
 	hasUTFGrid         bool
@@ -261,6 +260,20 @@ func (tileset *Mbtiles) ReadMetadata() (map[string]interface{}, error) {
 		default:
 			metadata[key] = value
 		}
+	}
+
+	// Supplement missing values by inferring from available data
+	_, hasMinZoom := metadata["minzoom"]
+	_, hasMaxZoom := metadata["maxzoom"]
+	if !(hasMinZoom && hasMaxZoom) {
+		var minZoom, maxZoom int
+		err := tileset.db.QueryRow("select min(zoom_level), max(zoom_level) from tiles").Scan(&minZoom, &maxZoom)
+		if err != nil {
+			log.Errorf("Error retrieving min and max zoom for tileset: %v", err)
+			return metadata, nil
+		}
+		metadata["minzoom"] = minZoom
+		metadata["maxzoom"] = maxZoom
 	}
 	return metadata, nil
 }

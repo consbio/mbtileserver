@@ -81,6 +81,10 @@ Flags:
 So hosting tiles is as easy as putting your mbtiles files in the `tilesets`
 directory and starting the server.  Woo hoo!
 
+You can have multiple directories in your `tilesets` directory; these will be converted into appropriate URLs:
+
+`mytiles/foo/bar/baz.mbtiles` will be available at `/services/foo/bar/baz`.
+
 When you want to remove, modify, or add new tilesets, simply restart the server process.
 
 If a valid Sentry DSN is provided, warnings, errors, fatal errors, and panics will be reported to Sentry.
