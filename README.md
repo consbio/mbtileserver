@@ -4,6 +4,8 @@ mbtileserver
 A simple Go-based server for map tiles stored in [mbtiles](https://github.com/mapbox/mbtiles-spec) 
 format.
 
+Requires Go 1.8.
+
 It currently provides support for `png`, `jpg`, and `pbf` (vector tile)
 tilesets according to version 1.0 of the mbtiles specification.  Tiles
 are served following the XYZ tile scheme, based on the Web Mercator

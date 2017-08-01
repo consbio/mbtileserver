@@ -86,7 +86,11 @@ func GetArcGISService(c echo.Context) error {
 
 	tileset := tilesets[id]
 	imgFormat := TileFormatStr[tileset.tileformat]
-	metadata := tileset.metadata
+	metadata, err := tileset.ReadMetadata()
+	if err != nil {
+		log.Errorf("Could not read metadata for tileset %v", id)
+		return err
+	}
 	name := toString(metadata["name"])
 	description := toString(metadata["description"])
 	attribution := toString(metadata["attribution"])
