@@ -46,6 +46,7 @@ var TileContentType = map[TileFormat]string{
 type Mbtiles struct {
 	filename           string
 	db                 *sql.DB
+	metadata           map[string]interface{}
 	tileformat         TileFormat // tile format: PNG, JPG, PBF
 	timestamp          time.Time  // timestamp of file, for cache control headers
 	hasUTFGrid         bool
