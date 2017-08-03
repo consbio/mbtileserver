@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/golang/groupcache"
 	"github.com/labstack/echo"
@@ -85,7 +86,11 @@ func GetArcGISService(c echo.Context) error {
 
 	tileset := tilesets[id]
 	imgFormat := TileFormatStr[tileset.tileformat]
-	metadata := tileset.metadata
+	metadata, err := tileset.ReadMetadata()
+	if err != nil {
+		log.Errorf("Could not read metadata for tileset %v", id)
+		return err
+	}
 	name := toString(metadata["name"])
 	description := toString(metadata["description"])
 	attribution := toString(metadata["attribution"])
@@ -178,7 +183,11 @@ func GetArcGISServiceLayers(c echo.Context) error {
 	}
 
 	tileset := tilesets[id]
-	metadata := tileset.metadata
+	metadata, err := tileset.ReadMetadata()
+	if err != nil {
+		log.Errorf("Could not read metadata for tileset %v", id)
+		return err
+	}
 
 	bounds := metadata["bounds"].([]float32) // TODO: make sure this is always present
 	extent := geoBoundsToWMExtent(bounds)
@@ -225,7 +234,11 @@ func GetArcGISServiceLegend(c echo.Context) error {
 	}
 
 	tileset := tilesets[id]
-	metadata := tileset.metadata
+	metadata, err := tileset.ReadMetadata()
+	if err != nil {
+		log.Errorf("Could not read metadata for tileset %v", id)
+		return err
+	}
 
 	// TODO: pull the legend from ArcGIS specific metadata tables
 	var elements [0]interface{}

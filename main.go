@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -114,8 +113,19 @@ func serve() {
 
 	blankPNG, _ = ioutil.ReadFile("blank.png") // Cache the blank PNG in memory (it is tiny)
 
-	tilesets = make(map[string]Mbtiles)
-	filenames, _ := filepath.Glob(path.Join(tilePath, "*.mbtiles"))
+	var filenames []string
+	err := filepath.Walk(tilePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if ext := filepath.Ext(path); ext == ".mbtiles" {
+			filenames = append(filenames, path)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatalf("Unable to scan tileset directory for mbtiles files\n%v", err)
+	}
 
 	if len(filenames) == 0 {
 		log.Fatal("No tilesets found in tileset directory")
@@ -123,9 +133,21 @@ func serve() {
 
 	log.Infof("Found %v mbtiles files in %s\n", len(filenames), tilePath)
 
+	tilesets = make(map[string]Mbtiles)
+	urlDirs := make(map[string]bool)
 	for _, filename := range filenames {
-		_, id := filepath.Split(filename)
-		id = strings.Split(id, ".")[0]
+		subpath, err := filepath.Rel(tilePath, filename)
+		if err != nil {
+			log.Errorf("Unable to extract ID for file: %s\n%v", filename, err)
+			continue
+		}
+		id := strings.ToLower(strings.Split(filepath.ToSlash(subpath), ".")[0])
+
+		// Extract url directories
+		parts := strings.Split(id, "/")
+		dir := strings.Join(parts[:len(parts)-1], "/")
+		urlDirs[dir] = true
+
 		tileset, err := NewMbtiles(filename)
 		if err != nil {
 			log.Errorf("could not open mbtiles file: %s\n%v", filename, err)
@@ -160,19 +182,32 @@ func serve() {
 	// TODO: can use more caching here
 	e.Group("/static/", gzip, middleware.Static("templates/static/dist/"))
 
-	e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
+	services := e.Group("/services/")
+	arcgis := e.Group("/arcgis/rest/services/")
 
-	services := e.Group("/services/") // has to be separate from endpoint for ListServices
-	services.GET(":id", GetServiceInfo, NotModifiedMiddleware, gzip)
-	services.GET(":id/map", GetServiceHTML, NotModifiedMiddleware, gzip)
-	services.GET(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
+	var g, ag *echo.Group
+	for dir, _ := range urlDirs {
+		if len(dir) == 0 {
+			g = services
+			ag = arcgis
+			e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
+			// TODO: e.GET("/arcgis/rest/services", GetArcGISServices, NotModifiedMiddleware, gzip)
+		} else {
+			g = services.Group(fmt.Sprintf("%s/", dir))
+			ag = arcgis.Group(fmt.Sprintf("%s/", dir))
+			// TODO: services listing for tiles in this dir
+			// TODO: services listing for ArcGIS in this dir
+		}
 
-	arcgis := e.Group("/arcgis/rest/")
-	// arcgis.GET("services", GetArcGISServices, NotModifiedMiddleware, gzip)
-	arcgis.GET("services/:id/MapServer", GetArcGISService, NotModifiedMiddleware, gzip)
-	arcgis.GET("services/:id/MapServer/layers", GetArcGISServiceLayers, NotModifiedMiddleware, gzip)
-	arcgis.GET("services/:id/MapServer/legend", GetArcGISServiceLegend, NotModifiedMiddleware, gzip)
-	arcgis.GET("services/:id/MapServer/tile/:z/:y/:x", GetArcGISTile, NotModifiedMiddleware)
+		g.GET(":id", GetServiceInfo, NotModifiedMiddleware, gzip)
+		g.GET(":id/map", GetServiceHTML, NotModifiedMiddleware, gzip)
+		g.GET(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
+
+		ag.GET(":id/MapServer", GetArcGISService, NotModifiedMiddleware, gzip)
+		ag.GET(":id/MapServer/layers", GetArcGISServiceLayers, NotModifiedMiddleware, gzip)
+		ag.GET(":id/MapServer/legend", GetArcGISServiceLegend, NotModifiedMiddleware, gzip)
+		ag.GET(":id/MapServer/tile/:z/:y/:x", GetArcGISTile, NotModifiedMiddleware)
+	}
 
 	e.GET("/admin/cache", CacheInfo, gzip)
 
@@ -196,11 +231,10 @@ func serve() {
 		fmt.Println("--------------------------------------\n")
 		e.Start(fmt.Sprintf(":%v", port))
 	}
-
 }
 
 func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
-	pathParams := strings.Split(key, "/")
+	pathParams := strings.Split(key, "|")
 	id := pathParams[0]
 	tileType := pathParams[1]
 	z64, _ := strconv.ParseUint(pathParams[2], 0, 8)
@@ -235,7 +269,13 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 
 // Verifies that service exists and return 404 otherwise
 func getServiceOr404(c echo.Context) (string, error) {
-	id := c.Param("id")
+	requestPath := strings.ToLower(c.Request().URL.Path)
+	idPos := strings.Index(c.Path(), ":id")
+	if idPos != -1 {
+		// remove trailing part of path after :id
+		requestPath = fmt.Sprintf("%s/%s", requestPath[:idPos-1], strings.ToLower(c.Param("id")))
+	}
+	id := strings.Split(requestPath, "/services/")[1]
 	if _, exists := tilesets[id]; !exists {
 		log.Warnf("Service not found: %s\n", id)
 		return "", echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("Service not found: %s", id))
@@ -353,7 +393,7 @@ func GetTile(c echo.Context) error {
 	if strings.HasSuffix(filename, ".json") {
 		tileType = "grid"
 	}
-	key := strings.Join([]string{id, tileType, c.Param("z"), c.Param("x"), y}, "/")
+	key := strings.Join([]string{id, tileType, c.Param("z"), c.Param("x"), y}, "|")
 
 	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {

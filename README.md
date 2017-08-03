@@ -4,6 +4,8 @@ mbtileserver
 A simple Go-based server for map tiles stored in [mbtiles](https://github.com/mapbox/mbtiles-spec) 
 format.
 
+Requires Go 1.8.
+
 It currently provides support for `png`, `jpg`, and `pbf` (vector tile)
 tilesets according to version 1.0 of the mbtiles specification.  Tiles
 are served following the XYZ tile scheme, based on the Web Mercator
@@ -59,6 +61,14 @@ go build .
 This will create an executable called `mbtileserver`.
 
 
+If you experience very slow builds each time, it may be that you need to first run
+```
+go build . -a
+```
+
+to make subsequent builds much faster.
+
+
 ## Usage
 From within the repository root:
 ```
@@ -80,6 +90,10 @@ Flags:
 
 So hosting tiles is as easy as putting your mbtiles files in the `tilesets`
 directory and starting the server.  Woo hoo!
+
+You can have multiple directories in your `tilesets` directory; these will be converted into appropriate URLs:
+
+`mytiles/foo/bar/baz.mbtiles` will be available at `/services/foo/bar/baz`.
 
 When you want to remove, modify, or add new tilesets, simply restart the server process.
 
