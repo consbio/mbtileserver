@@ -273,7 +273,7 @@ func getServiceOr404(c echo.Context) (string, error) {
 	idPos := strings.Index(c.Path(), ":id")
 	if idPos != -1 {
 		// remove trailing part of path after :id
-		requestPath = fmt.Sprintf("%s/%s", requestPath[:idPos-1], c.Param("id"))
+		requestPath = fmt.Sprintf("%s/%s", requestPath[:idPos-1], strings.ToLower(c.Param("id")))
 	}
 	id := strings.Split(requestPath, "/services/")[1]
 	if _, exists := tilesets[id]; !exists {
