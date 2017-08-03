@@ -61,6 +61,14 @@ go build .
 This will create an executable called `mbtileserver`.
 
 
+If you experience very slow builds each time, it may be that you need to first run
+```
+go build . -a
+```
+
+to make subsequent builds much faster.
+
+
 ## Usage
 From within the repository root:
 ```
