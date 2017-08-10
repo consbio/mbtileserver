@@ -412,8 +412,13 @@ func GetTile(c echo.Context) error {
 			_, err = io.Copy(res, bytes.NewReader(blankPNG))
 			return err
 
+		case PBF:
+			// Return 204
+			res.WriteHeader(http.StatusNoContent) // this must be after setting other headers
+			return nil
+
 		default:
-			// If pbf or utfgrid, return 404 w/ json, consistent w/ mapbox
+			// If  utfgrid, return 404 w/ json, consistent w/ mapbox
 			return c.JSON(http.StatusNotFound, struct {
 				Message string `json:"message"`
 			}{"Tile does not exist"})
