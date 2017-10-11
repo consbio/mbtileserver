@@ -284,7 +284,6 @@ func getServiceOr404(c echo.Context) (string, error) {
 }
 
 func getRootURL(c echo.Context) string {
-	// TODO: this won't be correct if we received this via proxy
 	return fmt.Sprintf("%s://%s", c.Scheme(), c.Request().Host)
 }
 
