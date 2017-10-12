@@ -272,7 +272,7 @@ func GetArcGISTile(c echo.Context) error {
 		return err
 	}
 
-	key := strings.Join([]string{id, c.Param("z"), c.Param("x"), c.Param("y")}, "/")
+	key := strings.Join([]string{id, "tile", c.Param("z"), c.Param("x"), c.Param("y")}, "|")
 
 	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
 	if err != nil {
