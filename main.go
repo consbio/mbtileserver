@@ -63,6 +63,8 @@ var (
 	cacheSize   int64
 	certificate string
 	privateKey  string
+	path        string
+	domain      string
 	sentry_DSN  string
 	verbose     bool
 )
@@ -74,6 +76,8 @@ func init() {
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
 	flags.Int64Var(&cacheSize, "cachesize", 250, "Size of cache in MB.")
+	flags.StringVar(&path, "path", "", "URL root path of this server (if behind a proxy)")
+	flags.StringVar(&domain, "domain", "", "Domain name of this server")
 	flags.StringVar(&sentry_DSN, "dsn", "", "Sentry DSN")
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 }
@@ -107,8 +111,12 @@ func serve() {
 	certExists := len(certificate) > 0
 	keyExists := len(privateKey) > 0
 
-	if (certExists || keyExists) && !(certExists && keyExists) {
+	if certExists != keyExists {
 		log.Fatalln("Both certificate and private key are required to use SSL")
+	}
+
+	if len(path) > 0 && len(domain) == 0 {
+		log.Fatalln("Domain is required if path is provided")
 	}
 
 	blankPNG, _ = ioutil.ReadFile("blank.png") // Cache the blank PNG in memory (it is tiny)
@@ -284,7 +292,17 @@ func getServiceOr404(c echo.Context) (string, error) {
 }
 
 func getRootURL(c echo.Context) string {
-	return fmt.Sprintf("%s://%s", c.Scheme(), c.Request().Host)
+	host := c.Request().Host
+	if len(domain) > 0 {
+		host = domain
+	}
+
+	root := fmt.Sprintf("%s://%s", c.Scheme(), host)
+	if len(path) > 0 {
+		root = fmt.Sprintf("%s/%s", root, path)
+	}
+
+	return root
 }
 
 func ListServices(c echo.Context) error {

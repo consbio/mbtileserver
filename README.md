@@ -82,8 +82,11 @@ Flags:
       --cachesize int   Size of cache in MB. (default 250)
   -c, --cert string     X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
   -d, --dir string      Directory containing mbtiles files. (default "./tilesets")
+      --domain string   Domain name of this server
       --dsn string      Sentry DSN
+  -h, --help            help for mbtileserver
   -k, --key string      TLS private key
+      --path string     URL root path of this server (if behind a proxy)
   -p, --port int        Server port. (default 8000)
   -v, --verbose         Verbose logging
 ```
