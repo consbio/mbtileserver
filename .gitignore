@@ -5,3 +5,4 @@ main
 templates/static/node_modules/*
 mbtileserver
 *.pem
+.certs/*

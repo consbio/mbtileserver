@@ -49,6 +49,7 @@ Dependencies:
 * [github.com/spf13/cobra](https://github.com/spf13/cobra)
 * [github.com/golang/groupcache](https://github.com/golang/groupcache)
 * [github.com/Sirupsen/logrus](https://github.com/Sirupsen/logrus)
+* [golang.org/x/crypto/acme/autocert](https://golang.org/x/crypto/acme/autocert)
 
 On Windows, it is necessary to install `gcc` in order to compile `mattn/go-sqlite3`.  
 MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
@@ -73,7 +74,7 @@ to make subsequent builds much faster.
 From within the repository root:
 ```
 $  ./mbtileserver --help
-Serve tiles from mbtiles files
+Serve tiles from mbtiles files.
 
 Usage:
   mbtileserver [flags]
@@ -88,6 +89,8 @@ Flags:
   -k, --key string      TLS private key
       --path string     URL root path of this server (if behind a proxy)
   -p, --port int        Server port. (default 8000)
+  -t, --tls				Auto TLS using Let's Encrypt
+  -r, --redirect		Redirect HTTP to HTTPS
   -v, --verbose         Verbose logging
 ```
 
@@ -102,6 +105,7 @@ When you want to remove, modify, or add new tilesets, simply restart the server 
 
 If a valid Sentry DSN is provided, warnings, errors, fatal errors, and panics will be reported to Sentry.
 
+If `redirect` option is provided, the server also listens on port 80 and redirects to port 443.
 
 ## Specifications
 * expects mbtiles files to follow version 1.0 of the [mbtiles specification](https://github.com/mapbox/mbtiles-spec).  Version 1.1 is preferred.

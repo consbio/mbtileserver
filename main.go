@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
+	"golang.org/x/crypto/acme/autocert"
+
 	"html/template"
 	"io"
 	"io/ioutil"
@@ -67,6 +69,8 @@ var (
 	domain      string
 	sentry_DSN  string
 	verbose     bool
+	autotls     bool
+	redirect    bool
 )
 
 func init() {
@@ -80,6 +84,8 @@ func init() {
 	flags.StringVar(&domain, "domain", "", "Domain name of this server")
 	flags.StringVar(&sentry_DSN, "dsn", "", "Sentry DSN")
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
+	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
+	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 }
 
 func main() {
@@ -110,13 +116,26 @@ func serve() {
 
 	certExists := len(certificate) > 0
 	keyExists := len(privateKey) > 0
+	domainExists := len(domain) > 0
 
 	if certExists != keyExists {
 		log.Fatalln("Both certificate and private key are required to use SSL")
 	}
 
-	if len(path) > 0 && len(domain) == 0 {
+	if len(path) > 0 && !domainExists {
 		log.Fatalln("Domain is required if path is provided")
+	}
+
+	if autotls && !domainExists {
+		log.Fatalln("Domain is required to use auto TLS")
+	}
+
+	if (certExists || autotls) && port != 443 {
+		log.Warnln("Port 443 should be used for TLS")
+	}
+
+	if redirect && !(certExists || autotls) {
+		log.Fatalln("Certificate or tls options are required to use redirect")
 	}
 
 	blankPNG, _ = ioutil.ReadFile("blank.png") // Cache the blank PNG in memory (it is tiny)
@@ -169,6 +188,7 @@ func serve() {
 	cache = groupcache.NewGroup("TileCache", cacheSize*1048576, groupcache.GetterFunc(cacheGetter))
 
 	e := echo.New()
+	e.HideBanner = true
 	e.Pre(middleware.RemoveTrailingSlash())
 	if verbose {
 		e.Use(middleware.Logger())
@@ -188,7 +208,7 @@ func serve() {
 	e.File("/favicon.png", "favicon.png")
 
 	// TODO: can use more caching here
-	e.Group("/static/", gzip, middleware.Static("templates/static/dist/"))
+	e.Group(fmt.Sprintf("/%s/static/", path), gzip, middleware.Static("templates/static/dist/"))
 
 	services := e.Group("/services/")
 	arcgis := e.Group("/arcgis/rest/services/")
@@ -220,25 +240,50 @@ func serve() {
 	e.GET("/admin/cache", CacheInfo, gzip)
 
 	// Start the server
-	if certExists {
-		if _, err := os.Stat(certificate); os.IsNotExist(err) {
-			log.Fatalf("Could not find certificate file: %s\n", certificate)
-		}
-		if _, err := os.Stat(privateKey); os.IsNotExist(err) {
-			log.Fatalf("Could not find private key file: %s\n", privateKey)
-		}
+	fmt.Println("\n--------------------------------------")
+	fmt.Println("Use Ctrl-C to exit the server")
+	fmt.Println("--------------------------------------")
 
-		fmt.Printf("Starting HTTPS server on port %v\n", port)
-		fmt.Println("Use Ctrl-C to exit the server")
-		e.StartTLS(fmt.Sprintf(":%v", port), certificate, privateKey)
-
-	} else {
-		fmt.Println("\n--------------------------------------")
-		fmt.Printf("Starting HTTP server on port %v\n", port)
-		fmt.Println("Use Ctrl-C to exit the server")
-		fmt.Println("--------------------------------------\n")
-		e.Start(fmt.Sprintf(":%v", port))
+	// If starting TLS on 443, start server on port 80 too
+	if redirect {
+		e.Pre(middleware.HTTPSRedirect())
+		if port == 443 {
+			go func(c *echo.Echo) {
+				fmt.Println("HTTP server with redirect started on port 80\n")
+				log.Fatal(e.Start(":80"))
+			}(e)
+		}
 	}
+
+	switch {
+	case certExists:
+		{
+			log.Debug("Starting HTTPS using provided certificate")
+			if _, err := os.Stat(certificate); os.IsNotExist(err) {
+				log.Fatalf("Could not find certificate file: %s\n", certificate)
+			}
+			if _, err := os.Stat(privateKey); os.IsNotExist(err) {
+				log.Fatalf("Could not find private key file: %s\n", privateKey)
+			}
+
+			fmt.Printf("HTTPS server started on port %v\n", port)
+			log.Fatal(e.StartTLS(fmt.Sprintf(":%v", port), certificate, privateKey))
+		}
+	case autotls:
+		{
+			log.Debug("Starting HTTPS using Let's Encrypt")
+			e.AutoTLSManager.Cache = autocert.DirCache(".certs")
+			e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(domain)
+			fmt.Printf("HTTPS server started on port %v\n", port)
+			log.Fatal(e.StartAutoTLS(fmt.Sprintf(":%v", port)))
+		}
+	default:
+		{
+			fmt.Printf("HTTP server started on port %v\n", port)
+			log.Fatal(e.Start(fmt.Sprintf(":%v", port)))
+		}
+	}
+
 }
 
 func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
