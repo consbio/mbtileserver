@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/consbio/mbtileserver/mbtiles"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/golang/groupcache"
@@ -85,7 +86,7 @@ func GetArcGISService(c echo.Context) error {
 	}
 
 	tileset := tilesets[id]
-	imgFormat := TileFormatStr[tileset.tileformat]
+	imgFormat := tileset.TileFormatString()
 	metadata, err := tileset.ReadMetadata()
 	if err != nil {
 		log.Errorf("Could not read metadata for tileset %v", id)
@@ -284,7 +285,7 @@ func GetArcGISTile(c echo.Context) error {
 	tileset := tilesets[id]
 
 	if len(data) <= 1 {
-		if tileset.tileformat == PBF {
+		if tileset.TileFormat() == mbtiles.PBF {
 			// If pbf, return 404 w/ json, consistent w/ mapbox
 			return c.JSON(http.StatusNotFound, struct {
 				Message string `json:"message"`
@@ -294,13 +295,13 @@ func GetArcGISTile(c echo.Context) error {
 		data = blankPNG
 		contentType = "image/png"
 	} else {
-		contentType = TileContentType[tileset.tileformat]
+		contentType = tileset.ContentType()
 	}
 
 	res := c.Response()
 	res.Header().Add("Content-Type", contentType)
 
-	if tileset.tileformat == PBF {
+	if tileset.TileFormat() == mbtiles.PBF {
 		res.Header().Add("Content-Encoding", "gzip")
 	}
 

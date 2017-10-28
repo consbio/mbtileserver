@@ -1,11 +1,9 @@
 package main
 
 import (
-	"net/http"
 	"testing"
 	//
 	"github.com/labstack/echo"
-	"github.com/labstack/echo/engine/standard"
 	//"github.com/labstack/echo/test"
 	//"github.com/stretchr/testify/assert"
 	//	"net/http/httptest"
@@ -25,9 +23,9 @@ func TestGetServices(t *testing.T) {
 	//assert := assert.New(t)
 
 	e := echo.New()
-	req := new(http.Request)
+	req := httptest.NewRequest("GET", "/services", nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(standard.NewRequest(req, e.Logger()), standard.NewResponse(rec, e.Logger()))
+	c := e.NewContext(req, rec)
 
 	//c := e.NewContext(standard.NewRequest(req), standard.NewResponse(rec))
 
