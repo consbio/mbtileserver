@@ -24,6 +24,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
+	"github.com/consbio/mbtileserver/handlers"
 )
 
 type ServiceInfo struct {
@@ -336,18 +338,10 @@ func getServiceOr404(c echo.Context) (string, error) {
 	return id, nil
 }
 
+// getRootURL is a convenience function to determine the root URL from the
+// echo.Context.
 func getRootURL(c echo.Context) string {
-	host := c.Request().Host
-	if len(domain) > 0 {
-		host = domain
-	}
-
-	root := fmt.Sprintf("%s://%s", c.Scheme(), host)
-	if len(path) > 0 {
-		root = fmt.Sprintf("%s/%s", root, path)
-	}
-
-	return root
+	return handlers.RootURL(c.Request(), domain, path)
 }
 
 func ListServices(c echo.Context) error {
