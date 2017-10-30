@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/consbio/mbtileserver/handlers"
+	"github.com/consbio/mbtileserver/mbtiles"
 )
 
 type ServiceInfo struct {
@@ -49,7 +50,7 @@ type TemplateParams struct {
 var (
 	blankPNG    []byte
 	cache       *groupcache.Group
-	tilesets    map[string]Mbtiles
+	tilesets    map[string]mbtiles.DB
 	startuptime = time.Now()
 )
 
@@ -162,7 +163,7 @@ func serve() {
 
 	log.Infof("Found %v mbtiles files in %s\n", len(filenames), tilePath)
 
-	tilesets = make(map[string]Mbtiles)
+	tilesets = make(map[string]mbtiles.DB)
 	urlDirs := make(map[string]bool)
 	for _, filename := range filenames {
 		subpath, err := filepath.Rel(tilePath, filename)
@@ -177,7 +178,7 @@ func serve() {
 		dir := strings.Join(parts[:len(parts)-1], "/")
 		urlDirs[dir] = true
 
-		tileset, err := NewMbtiles(filename)
+		tileset, err := mbtiles.NewDB(filename)
 		if err != nil {
 			log.Errorf("could not open mbtiles file: %s\n%v", filename, err)
 			continue
@@ -310,7 +311,7 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 			log.Errorf("Error encountered reading tile for z=%v, x=%v, y=%v, \n%v", z, x, y, err)
 			return err
 		}
-	} else if tileType == "grid" && tileset.hasUTFGrid {
+	} else if tileType == "grid" && tileset.HasUTFGrid() {
 		err := tileset.ReadGrid(z, x, y, &data)
 		if err != nil {
 			log.Errorf("Error encountered reading grid for z=%v, x=%v, y=%v, \n%v", z, x, y, err)
@@ -351,7 +352,7 @@ func ListServices(c echo.Context) error {
 	i := 0
 	for id, tileset := range tilesets {
 		services[i] = ServiceInfo{
-			ImageType: TileFormatStr[tileset.tileformat],
+			ImageType: tileset.TileFormatString(),
 			URL:       fmt.Sprintf("%s/%s", rootURL, id),
 		}
 		i++
@@ -370,7 +371,7 @@ func GetServiceInfo(c echo.Context) error {
 	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL)
 
 	tileset := tilesets[id]
-	imgFormat := TileFormatStr[tileset.tileformat]
+	imgFormat := tileset.TileFormatString()
 
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
@@ -406,7 +407,7 @@ func GetServiceInfo(c echo.Context) error {
 		}
 	}
 
-	if tileset.hasUTFGrid {
+	if tileset.HasUTFGrid() {
 		out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.json", svcURL)}
 	}
 
@@ -424,7 +425,7 @@ func GetServiceHTML(c echo.Context) error {
 		ID:  id,
 	}
 
-	if tilesets[id].tileformat == PBF {
+	if tilesets[id].TileFormat() == mbtiles.PBF {
 		return c.Render(http.StatusOK, "map_gl", p)
 	}
 
@@ -460,15 +461,15 @@ func GetTile(c echo.Context) error {
 	res := c.Response()
 
 	if data == nil || len(data) <= 1 {
-		switch tileset.tileformat {
-		case PNG, JPG, WEBP:
+		switch tileset.TileFormat() {
+		case mbtiles.PNG, mbtiles.JPG, mbtiles.WEBP:
 			// Return blank PNG for all image types
 			res.Header().Add("Content-Type", "image/png")
 			res.WriteHeader(http.StatusOK)
 			_, err = io.Copy(res, bytes.NewReader(blankPNG))
 			return err
 
-		case PBF:
+		case mbtiles.PBF:
 			// Return 204
 			res.WriteHeader(http.StatusNoContent) // this must be after setting other headers
 			return nil
@@ -484,15 +485,15 @@ func GetTile(c echo.Context) error {
 	if tileType == "grid" {
 		contentType = "application/json"
 
-		if tileset.utfgridCompression == ZLIB {
+		if tileset.UTFGridCompression() == mbtiles.ZLIB {
 			res.Header().Add("Content-Encoding", "deflate")
 		} else {
 			res.Header().Add("Content-Encoding", "gzip")
 		}
 	} else {
-		contentType = TileContentType[tileset.tileformat]
+		contentType = tileset.ContentType()
 
-		if tileset.tileformat == PBF {
+		if tileset.TileFormat() == mbtiles.PBF {
 			res.Header().Add("Content-Encoding", "gzip")
 		}
 	}
@@ -519,7 +520,7 @@ func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		var lastModified time.Time
 		id := c.Param("id")
 		if _, exists := tilesets[id]; exists {
-			lastModified = tilesets[id].timestamp
+			lastModified = tilesets[id].TimeStamp()
 		} else {
 			lastModified = startuptime // startup time of server
 		}

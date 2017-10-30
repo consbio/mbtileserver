@@ -9,9 +9,7 @@ Requires Go 1.8.
 It currently provides support for `png`, `jpg`, and `pbf` (vector tile)
 tilesets according to version 1.0 of the mbtiles specification.  Tiles
 are served following the XYZ tile scheme, based on the Web Mercator
-coordinate reference system.
-
-At the moment, UTF8 Grids are not yet supported.
+coordinate reference system. UTF8 Grids are also supported.
 
 In addition to tile-level access, it provides:
 * TileJSON 2.1.0 endpoint for each tileset, with full metadata
