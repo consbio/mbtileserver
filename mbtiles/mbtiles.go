@@ -1,4 +1,4 @@
-package main
+package mbtiles
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,21 +30,37 @@ const (
 	WEBP
 )
 
-var TileFormatStr = map[TileFormat]string{
-	PNG:  "png",
-	JPG:  "jpg",
-	PBF:  "pbf",
-	WEBP: "webp",
+func (t TileFormat) String() string {
+	switch t {
+	case PNG:
+		return "png"
+	case JPG:
+		return "jpg"
+	case PBF:
+		return "pbf"
+	case WEBP:
+		return "webp"
+	default:
+		return ""
+	}
 }
 
-var TileContentType = map[TileFormat]string{
-	PNG:  "image/png",
-	JPG:  "image/jpeg",
-	PBF:  "application/x-protobuf", // Content-Encoding header must be gzip
-	WEBP: "image/webp",
+func (t TileFormat) ContentType() string {
+	switch t {
+	case PNG:
+		return "image/png"
+	case JPG:
+		return "image/jpeg"
+	case PBF:
+		return "application/x-protobuf" // Content-Encoding header must be gzip
+	case WEBP:
+		return "image/webp"
+	default:
+		return ""
+	}
 }
 
-type Mbtiles struct {
+type DB struct {
 	filename           string
 	db                 *sql.DB
 	tileformat         TileFormat // tile format: PNG, JPG, PBF
@@ -53,9 +70,9 @@ type Mbtiles struct {
 	hasUTFGridData     bool
 }
 
-// Creates a new Mbtiles instance.
+// Creates a new DB instance.
 // Connection is closed by runtime on application termination or by calling .Close() method.
-func NewMbtiles(filename string) (*Mbtiles, error) {
+func NewDB(filename string) (*DB, error) {
 	_, id := filepath.Split(filename)
 	id = strings.Split(id, ".")[0]
 
@@ -84,7 +101,7 @@ func NewMbtiles(filename string) (*Mbtiles, error) {
 	if tileformat == GZIP {
 		tileformat = PBF // GZIP masks PBF, which is only expected type for tiles in GZIP format
 	}
-	out := Mbtiles{
+	out := DB{
 		db:         db,
 		tileformat: tileformat,
 		timestamp:  fileStat.ModTime().Round(time.Second), // round to nearest second
@@ -132,7 +149,7 @@ func NewMbtiles(filename string) (*Mbtiles, error) {
 }
 
 // Reads a grid at z, x, y into provided *[]byte.
-func (tileset *Mbtiles) ReadTile(z uint8, x uint64, y uint64, data *[]byte) error {
+func (tileset *DB) ReadTile(z uint8, x uint64, y uint64, data *[]byte) error {
 	err := tileset.db.QueryRow("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?", z, x, y).Scan(data)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -147,7 +164,7 @@ func (tileset *Mbtiles) ReadTile(z uint8, x uint64, y uint64, data *[]byte) erro
 // Reads a grid at z, x, y into provided *[]byte.
 // This merges in grid key data, if any exist
 // The data is returned in the original compression encoding (zlib or gzip)
-func (tileset *Mbtiles) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) error {
+func (tileset *DB) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) error {
 	if !tileset.hasUTFGrid {
 		return errors.New("Tileset does not contain UTFgrids")
 	}
@@ -234,7 +251,7 @@ func (tileset *Mbtiles) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) erro
 }
 
 // Read the metadata table into a map, casting their values into the appropriate type
-func (tileset *Mbtiles) ReadMetadata() (map[string]interface{}, error) {
+func (tileset *DB) ReadMetadata() (map[string]interface{}, error) {
 	var (
 		key   string
 		value string
@@ -252,11 +269,20 @@ func (tileset *Mbtiles) ReadMetadata() (map[string]interface{}, error) {
 
 		switch key {
 		case "maxzoom", "minzoom":
-			metadata[key], _ = strconv.Atoi(value)
+			metadata[key], err = strconv.Atoi(value)
+			if err != nil {
+				return nil, fmt.Errorf("cannot read metadata item %s: %v", key, err)
+			}
 		case "bounds", "center":
-			metadata[key] = stringToFloats(value)
+			metadata[key], err = stringToFloats(value)
+			if err != nil {
+				return nil, fmt.Errorf("cannot read metadata item %s: %v", key, err)
+			}
 		case "json":
-			json.Unmarshal([]byte(value), &metadata)
+			err = json.Unmarshal([]byte(value), &metadata)
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse JSON metadata item: %v", err)
+			}
 		default:
 			metadata[key] = value
 		}
@@ -278,8 +304,44 @@ func (tileset *Mbtiles) ReadMetadata() (map[string]interface{}, error) {
 	return metadata, nil
 }
 
-// Close the MBtiles database connection
-func (tileset *Mbtiles) Close() error {
+// TileFormatreturns the TileFormat of the DB.
+func (d DB) TileFormat() TileFormat {
+	return d.tileformat
+}
+
+// TileFormatString returns the string representation of the TileFormat of the DB.
+func (d DB) TileFormatString() string {
+	return d.tileformat.String()
+}
+
+// ContentType returns the content-type string of the TileFormat of the DB.
+func (d DB) ContentType() string {
+	return d.tileformat.ContentType()
+}
+
+// HasUTFGrid returns whether the DB has a UTF grid.
+func (d DB) HasUTFGrid() bool {
+	return d.hasUTFGrid
+}
+
+// HasUTFGridData returns whether the DB has UTF grid data.
+func (d DB) HasUTFGridData() bool {
+	return d.hasUTFGridData
+}
+
+// UTFGridCompression returns the compression type of the UTFGrid in the DB:
+// ZLIB or GZIP
+func (d DB) UTFGridCompression() TileFormat {
+	return d.utfgridCompression
+}
+
+// TimeStamp returns the time stamp of the DB.
+func (d DB) TimeStamp() time.Time {
+	return d.timestamp
+}
+
+// Close closes the DB database connection
+func (tileset *DB) Close() error {
 	return tileset.db.Close()
 }
 
