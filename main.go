@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"path"
 
 	"golang.org/x/crypto/acme/autocert"
 
@@ -68,7 +69,7 @@ var (
 	cacheSize   int64
 	certificate string
 	privateKey  string
-	path        string
+	pathPrefix  string
 	domain      string
 	sentry_DSN  string
 	verbose     bool
@@ -83,7 +84,7 @@ func init() {
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
 	flags.Int64Var(&cacheSize, "cachesize", 250, "Size of cache in MB.")
-	flags.StringVar(&path, "path", "", "URL root path of this server (if behind a proxy)")
+	flags.StringVar(&pathPrefix, "path", "", "URL root path of this server (if behind a proxy)")
 	flags.StringVar(&domain, "domain", "", "Domain name of this server")
 	flags.StringVar(&sentry_DSN, "dsn", "", "Sentry DSN")
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
@@ -125,7 +126,7 @@ func serve() {
 		log.Fatalln("Both certificate and private key are required to use SSL")
 	}
 
-	if len(path) > 0 && !domainExists {
+	if len(pathPrefix) > 0 && !domainExists {
 		log.Fatalln("Domain is required if path is provided")
 	}
 
@@ -148,7 +149,7 @@ func serve() {
 		if err != nil {
 			return err
 		}
-		if ext := filepath.Ext(path); ext == ".mbtiles" {
+		if strings.HasSuffix(strings.ToLower(path), ".mbtiles") {
 			filenames = append(filenames, path)
 		}
 		return nil
@@ -161,28 +162,25 @@ func serve() {
 		log.Fatal("No tilesets found in tileset directory")
 	}
 
-	log.Infof("Found %v mbtiles files in %s\n", len(filenames), tilePath)
+	log.Infof("Found %v mbtiles files in %s", len(filenames), tilePath)
 
 	tilesets = make(map[string]mbtiles.DB)
-	urlDirs := make(map[string]bool)
 	for _, filename := range filenames {
 		subpath, err := filepath.Rel(tilePath, filename)
 		if err != nil {
 			log.Errorf("Unable to extract ID for file: %s\n%v", filename, err)
 			continue
 		}
-		id := strings.ToLower(strings.Split(filepath.ToSlash(subpath), ".")[0])
-
-		// Extract url directories
-		parts := strings.Split(id, "/")
-		dir := strings.Join(parts[:len(parts)-1], "/")
-		urlDirs[dir] = true
+		e := filepath.Ext(filename)
+		p := filepath.ToSlash(subpath)
+		id := strings.ToLower(p[:len(p)-len(e)])
 
 		tileset, err := mbtiles.NewDB(filename)
 		if err != nil {
 			log.Errorf("could not open mbtiles file: %s\n%v", filename, err)
 			continue
 		}
+		log.Infof("providing tiles from %q as %q", filename, id)
 		tilesets[id] = *tileset
 	}
 
@@ -211,21 +209,23 @@ func serve() {
 	e.File("/favicon.png", "favicon.png")
 
 	// TODO: can use more caching here
-	e.Group(fmt.Sprintf("/%s/static/", path), gzip, middleware.Static("templates/static/dist/"))
+	e.Group(fmt.Sprintf("/%s/static/", pathPrefix), gzip, middleware.Static("templates/static/dist/"))
+
+	e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
 
 	services := e.Group("/services/")
 	arcgis := e.Group("/arcgis/rest/services/")
 
 	var g, ag *echo.Group
-	for dir, _ := range urlDirs {
+	for id := range tilesets {
+		dir, _ := path.Split(id)
 		if len(dir) == 0 {
 			g = services
 			ag = arcgis
-			e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
 			// TODO: e.GET("/arcgis/rest/services", GetArcGISServices, NotModifiedMiddleware, gzip)
 		} else {
-			g = services.Group(fmt.Sprintf("%s/", dir))
-			ag = arcgis.Group(fmt.Sprintf("%s/", dir))
+			g = services.Group(dir)
+			ag = arcgis.Group(dir)
 			// TODO: services listing for tiles in this dir
 			// TODO: services listing for ArcGIS in this dir
 		}
@@ -342,7 +342,7 @@ func getServiceOr404(c echo.Context) (string, error) {
 // getRootURL is a convenience function to determine the root URL from the
 // echo.Context.
 func getRootURL(c echo.Context) string {
-	return handlers.RootURL(c.Request(), domain, path)
+	return handlers.RootURL(c.Request(), domain, pathPrefix)
 }
 
 func ListServices(c echo.Context) error {
