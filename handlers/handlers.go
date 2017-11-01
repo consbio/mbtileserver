@@ -83,45 +83,41 @@ type ServiceSet struct {
 	Path     string
 }
 
-// New returns a new ServiceSet. Use AddDBFromPath to add a mbtiles file.
+// New returns a new ServiceSet. Use AddDBOnPath to add a mbtiles file.
 func New() *ServiceSet {
 	return &ServiceSet{
 		tilesets: make(map[string]*mbtiles.DB),
 	}
 }
 
-// AddDB interprets filename a path to an mbtiles file which is opened and
-// served under id. In case the file cannot be opened, nil is returned.
-func (s *ServiceSet) AddDB(filename string) error {
-	subpath, err := filepath.Rel(".", filename)
-	if err != nil {
-		return fmt.Errorf("unable to extract ID for %q: %v", filename, err)
-	}
-	return s.addDBWithSubPath(filename, subpath)
-}
-
-func (s *ServiceSet) addDBWithSubPath(filename, subpath string) error {
-	e := filepath.Ext(filename)
-	p := filepath.ToSlash(subpath)
-	id := strings.ToLower(p[:len(p)-len(e)])
+// AddDBOnPath interprets filename as mbtiles file which is opened and which will be
+// served under "/services/<urlPath>" by Handler(). The parameter urlPath may not be
+// nil, otherwise an error is returned. In case the DB cannot be opened the returned
+// error is non-nil.
+func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 	var err error
+	if urlPath == "" {
+		return fmt.Errorf("path parameter may not be empty")
+	}
 	ts, err := mbtiles.NewDB(filename)
 	if err != nil {
 		return fmt.Errorf("could not open mbtiles file %q: %v", filename, err)
 	}
-	s.tilesets[id] = ts
+	s.tilesets[urlPath] = ts
 	return nil
 }
 
-// NewFromPath returns a ServiceSet that combines all .mbtiles files under path.
-func NewFromPath(path string) (*ServiceSet, error) {
+// NewFromBaseDir returns a ServiceSet that combines all .mbtiles files under
+// the directory at baseDir. The DBs will all be served under their relative paths
+// to baseDir.
+func NewFromBaseDir(baseDir string) (*ServiceSet, error) {
 	var filenames []string
-	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(baseDir, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if ext := filepath.Ext(path); ext == ".mbtiles" {
-			filenames = append(filenames, path)
+		if ext := filepath.Ext(p); ext == ".mbtiles" {
+			filenames = append(filenames, p)
 		}
 		return nil
 	})
@@ -130,17 +126,20 @@ func NewFromPath(path string) (*ServiceSet, error) {
 	}
 
 	if len(filenames) == 0 {
-		return nil, fmt.Errorf("no tilesets found in %q", path)
+		return nil, fmt.Errorf("no tilesets found in %q", baseDir)
 	}
 
 	s := New()
 
 	for _, filename := range filenames {
-		subpath, err := filepath.Rel(path, filename)
+		subpath, err := filepath.Rel(baseDir, filename)
 		if err != nil {
-			return nil, fmt.Errorf("unable to extract ID for %q: %v", filename, err)
+			return nil, fmt.Errorf("unable to extract URL path for %q: %v", filename, err)
 		}
-		err = s.addDBWithSubPath(filename, subpath)
+		e := filepath.Ext(filename)
+		p := filepath.ToSlash(subpath)
+		id := strings.ToLower(p[:len(p)-len(e)])
+		err = s.AddDBOnPath(filename, id)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +148,7 @@ func NewFromPath(path string) (*ServiceSet, error) {
 }
 
 // Len returns the number of tilesets in this ServiceSet
-func (s *ServiceSet) Len() int {
+func (s *ServiceSet) Size() int {
 	return len(s.tilesets)
 }
 
