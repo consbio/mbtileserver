@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/consbio/mbtileserver/handlers"
 	"github.com/consbio/mbtileserver/mbtiles"
 	log "github.com/sirupsen/logrus"
 
@@ -292,7 +293,7 @@ func GetArcGISTile(c echo.Context) error {
 			}{"Tile does not exist"})
 		}
 
-		data = blankPNG
+		data = handlers.BlankPNG()
 		contentType = "image/png"
 	} else {
 		contentType = tileset.ContentType()

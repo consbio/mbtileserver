@@ -9,7 +9,6 @@ import (
 
 	"html/template"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -49,7 +48,6 @@ type TemplateParams struct {
 }
 
 var (
-	blankPNG    []byte
 	cache       *groupcache.Group
 	tilesets    map[string]mbtiles.DB
 	startuptime = time.Now()
@@ -141,8 +139,6 @@ func serve() {
 	if redirect && !(certExists || autotls) {
 		log.Fatalln("Certificate or tls options are required to use redirect")
 	}
-
-	blankPNG, _ = ioutil.ReadFile("blank.png") // Cache the blank PNG in memory (it is tiny)
 
 	var filenames []string
 	err := filepath.Walk(tilePath, func(path string, info os.FileInfo, err error) error {
@@ -466,7 +462,7 @@ func GetTile(c echo.Context) error {
 			// Return blank PNG for all image types
 			res.Header().Add("Content-Type", "image/png")
 			res.WriteHeader(http.StatusOK)
-			_, err = io.Copy(res, bytes.NewReader(blankPNG))
+			_, err = res.Write(handlers.BlankPNG())
 			return err
 
 		case mbtiles.PBF:
