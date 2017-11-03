@@ -194,7 +194,7 @@ func serve() {
 	e.Use(middleware.CORS())
 
 	t := &Template{
-		templates: template.Must(template.ParseGlob("templates/*.html")),
+		templates: template.Must(template.ParseGlob("handlers/templates/*.html")),
 	}
 	e.Renderer = t
 
@@ -205,7 +205,7 @@ func serve() {
 	e.File("/favicon.png", "favicon.png")
 
 	// TODO: can use more caching here
-	e.Group(fmt.Sprintf("/%s/static/", pathPrefix), gzip, middleware.Static("templates/static/dist/"))
+	e.Group(fmt.Sprintf("/%s/static/", pathPrefix), gzip, middleware.Static("handlers/templates/static/dist/"))
 
 	e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
 

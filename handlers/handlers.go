@@ -1,5 +1,7 @@
 package handlers
 
+//go:generate go run -tags=dev assets_generate.go
+
 import (
 	"encoding/json"
 	"fmt"
