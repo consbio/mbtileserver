@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"path"
 
 	"golang.org/x/crypto/acme/autocert"
 
@@ -159,24 +157,9 @@ func serve() {
 
 	log.Infof("Found %v mbtiles files in %s", len(filenames), tilePath)
 
-	tilesets = make(map[string]mbtiles.DB)
-	for _, filename := range filenames {
-		subpath, err := filepath.Rel(tilePath, filename)
-		if err != nil {
-			log.Errorf("Unable to extract ID for file: %s\n%v", filename, err)
-			continue
-		}
-		e := filepath.Ext(filename)
-		p := filepath.ToSlash(subpath)
-		id := strings.ToLower(p[:len(p)-len(e)])
-
-		tileset, err := mbtiles.NewDB(filename)
-		if err != nil {
-			log.Errorf("could not open mbtiles file: %s\n%v", filename, err)
-			continue
-		}
-		log.Infof("providing tiles from %q as %q", filename, id)
-		tilesets[id] = *tileset
+	svcSet, err := handlers.NewFromBaseDir(tilePath)
+	if err != nil {
+		log.Errorf("Unable to create service set: %v", err)
 	}
 
 	log.Debugf("Cache size: %v MB\n", cacheSize)
@@ -211,34 +194,11 @@ func serve() {
 	staticHandler := http.StripPrefix(staticPrefix, handlers.Static())
 	e.GET(staticPrefix+"*", echo.WrapHandler(staticHandler), gzip)
 
-	e.GET("/services", ListServices, NotModifiedMiddleware, gzip)
-
-	services := e.Group("/services/")
-	arcgis := e.Group("/arcgis/rest/services/")
-
-	var g, ag *echo.Group
-	for id := range tilesets {
-		dir, _ := path.Split(id)
-		if len(dir) == 0 {
-			g = services
-			ag = arcgis
-			// TODO: e.GET("/arcgis/rest/services", GetArcGISServices, NotModifiedMiddleware, gzip)
-		} else {
-			g = services.Group(dir)
-			ag = arcgis.Group(dir)
-			// TODO: services listing for tiles in this dir
-			// TODO: services listing for ArcGIS in this dir
-		}
-
-		g.GET(":id", GetServiceInfo, NotModifiedMiddleware, gzip)
-		g.GET(":id/map", GetServiceHTML, NotModifiedMiddleware, gzip)
-		g.GET(":id/tiles/:z/:x/:filename", GetTile, NotModifiedMiddleware)
-
-		ag.GET(":id/MapServer", GetArcGISService, NotModifiedMiddleware, gzip)
-		ag.GET(":id/MapServer/layers", GetArcGISServiceLayers, NotModifiedMiddleware, gzip)
-		ag.GET(":id/MapServer/legend", GetArcGISServiceLegend, NotModifiedMiddleware, gzip)
-		ag.GET(":id/MapServer/tile/:z/:y/:x", GetArcGISTile, NotModifiedMiddleware)
+	ef := func(err error) {
+		log.Errorf("%v", err)
 	}
+	h := echo.WrapHandler(svcSet.Handler(ef, true))
+	e.GET("/*", h, NotModifiedMiddleware)
 
 	e.GET("/admin/cache", CacheInfo, gzip)
 
@@ -337,171 +297,6 @@ func getServiceOr404(c echo.Context) (string, error) {
 		return "", echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("Service not found: %s", id))
 	}
 	return id, nil
-}
-
-// getRootURL is a convenience function to determine the root URL from the
-// echo.Context.
-func getRootURL(c echo.Context) string {
-	return handlers.RootURL(c.Request(), domain, pathPrefix)
-}
-
-func ListServices(c echo.Context) error {
-	// TODO: need to paginate the responses
-	rootURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL)
-	services := make([]ServiceInfo, len(tilesets))
-	i := 0
-	for id, tileset := range tilesets {
-		services[i] = ServiceInfo{
-			ImageType: tileset.TileFormatString(),
-			URL:       fmt.Sprintf("%s/%s", rootURL, id),
-		}
-		i++
-	}
-	return c.JSON(http.StatusOK, services)
-}
-
-//TODO: separate out tileJSON render into a separate function
-//then it can be directly injected into template HTML instead of URL, and bypass one request
-func GetServiceInfo(c echo.Context) error {
-	id, err := getServiceOr404(c)
-	if err != nil {
-		return err
-	}
-
-	svcURL := fmt.Sprintf("%s%s", getRootURL(c), c.Request().URL)
-
-	tileset := tilesets[id]
-	imgFormat := tileset.TileFormatString()
-
-	out := map[string]interface{}{
-		"tilejson": "2.1.0",
-		"id":       id,
-		"scheme":   "xyz",
-		"format":   imgFormat,
-		"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s", svcURL, imgFormat)},
-		"map":      fmt.Sprintf("%s/map", svcURL),
-	}
-
-	metadata, err := tileset.ReadMetadata()
-	if err != nil {
-		log.Errorf("Could not read metadata for tileset %v", id)
-		return err
-	}
-
-	for k, v := range metadata {
-		switch k {
-		// strip out values above
-		case "tilejson", "id", "scheme", "format", "tiles", "map":
-			continue
-
-		// strip out values that are not supported or are overridden below
-		case "grids", "interactivity", "modTime":
-			continue
-
-		// strip out values that come from TileMill but aren't useful here
-		case "metatile", "scale", "autoscale", "_updated", "Layer", "Stylesheet":
-			continue
-
-		default:
-			out[k] = v
-		}
-	}
-
-	if tileset.HasUTFGrid() {
-		out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.json", svcURL)}
-	}
-
-	return c.JSON(http.StatusOK, out)
-}
-
-func GetServiceHTML(c echo.Context) error {
-	id, err := getServiceOr404(c)
-	if err != nil {
-		return err
-	}
-
-	p := TemplateParams{
-		URL: fmt.Sprintf("%s%s", getRootURL(c), strings.TrimSuffix(c.Request().URL.Path, "/map")),
-		ID:  id,
-	}
-
-	if tilesets[id].TileFormat() == mbtiles.PBF {
-		return c.Render(http.StatusOK, "map_gl", p)
-	}
-
-	return c.Render(http.StatusOK, "map", p)
-}
-
-func GetTile(c echo.Context) error {
-	var (
-		data        []byte
-		contentType string
-	)
-	//TODO: validate x, y, z
-
-	id, err := getServiceOr404(c)
-	if err != nil {
-		return err
-	}
-
-	filename := c.Param("filename")
-	y := strings.Split(filename, ".")[0]
-	tileType := "tile"
-	if strings.HasSuffix(filename, ".json") {
-		tileType = "grid"
-	}
-	key := strings.Join([]string{id, tileType, c.Param("z"), c.Param("x"), y}, "|")
-
-	err = cache.Get(nil, key, groupcache.AllocatingByteSliceSink(&data))
-	if err != nil {
-		log.Errorf("Error fetching key from cache: %s", key)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error retrieving tile")
-	}
-	tileset := tilesets[id]
-	res := c.Response()
-
-	if data == nil || len(data) <= 1 {
-		switch tileset.TileFormat() {
-		case mbtiles.PNG, mbtiles.JPG, mbtiles.WEBP:
-			// Return blank PNG for all image types
-			res.Header().Add("Content-Type", "image/png")
-			res.WriteHeader(http.StatusOK)
-			_, err = res.Write(handlers.BlankPNG())
-			return err
-
-		case mbtiles.PBF:
-			// Return 204
-			res.WriteHeader(http.StatusNoContent) // this must be after setting other headers
-			return nil
-
-		default:
-			// If  utfgrid, return 404 w/ json, consistent w/ mapbox
-			return c.JSON(http.StatusNotFound, struct {
-				Message string `json:"message"`
-			}{"Tile does not exist"})
-		}
-	}
-
-	if tileType == "grid" {
-		contentType = "application/json"
-
-		if tileset.UTFGridCompression() == mbtiles.ZLIB {
-			res.Header().Add("Content-Encoding", "deflate")
-		} else {
-			res.Header().Add("Content-Encoding", "gzip")
-		}
-	} else {
-		contentType = tileset.ContentType()
-
-		if tileset.TileFormat() == mbtiles.PBF {
-			res.Header().Add("Content-Encoding", "gzip")
-		}
-	}
-	res.Header().Add("Content-Type", contentType)
-
-	res.WriteHeader(http.StatusOK) // this must be after setting other headers
-	_, err = io.Copy(res, bytes.NewReader(data))
-	return err
 }
 
 func CacheInfo(c echo.Context) error {
