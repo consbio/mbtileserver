@@ -170,7 +170,7 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 	}
 	bytes, err := json.Marshal(services)
 	if err != nil {
-		return 500, fmt.Errorf("cannot marshal services JSON: %v", err)
+		return http.StatusInternalServerError, fmt.Errorf("cannot marshal services JSON: %v", err)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(bytes)
@@ -180,10 +180,54 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 	return 0, nil
 }
 
-func (s *ServiceSet) serviceInfo(db *mbtiles.DB) handlerFunc {
+func (s *ServiceSet) serviceInfo(id string, db *mbtiles.DB) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
-		// TODO implement this
-		return http.StatusNotImplemented, nil
+		svcURL := fmt.Sprintf("%s%s", s.RootURL(r), r.URL.Path)
+		imgFormat := db.TileFormatString()
+		out := map[string]interface{}{
+			"tilejson": "2.1.0",
+			"id":       id,
+			"scheme":   "xyz",
+			"format":   imgFormat,
+			"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s", svcURL, imgFormat)},
+			"map":      fmt.Sprintf("%s/map", svcURL),
+		}
+		metadata, err := db.ReadMetadata()
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+		for k, v := range metadata {
+			switch k {
+			// strip out values above
+			case "tilejson", "id", "scheme", "format", "tiles", "map":
+				continue
+
+			// strip out values that are not supported or are overridden below
+			case "grids", "interactivity", "modTime":
+				continue
+
+			// strip out values that come from TileMill but aren't useful here
+			case "metatile", "scale", "autoscale", "_updated", "Layer", "Stylesheet":
+				continue
+
+			default:
+				out[k] = v
+			}
+		}
+
+		if db.HasUTFGrid() {
+			out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.json", svcURL)}
+		}
+		bytes, err := json.Marshal(out)
+		if err != nil {
+			return http.StatusInternalServerError, fmt.Errorf("cannot marshal service info JSON: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, err = w.Write(bytes)
+		if err != nil {
+			return 0, err
+		}
+		return 0, nil
 	}
 }
 
@@ -209,7 +253,7 @@ func (s *ServiceSet) Handler(ef func(error)) http.Handler {
 	m.Handle("/services", wrapGetWithErrors(ef, s.listServices))
 	for id, db := range s.tilesets {
 		p := "/services/" + id
-		m.Handle(p, wrapGetWithErrors(ef, s.serviceInfo(db)))
+		m.Handle(p, wrapGetWithErrors(ef, s.serviceInfo(id, db)))
 		m.Handle(p+"/map", wrapGetWithErrors(ef, s.serviceHTML(db)))
 		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, s.tiles(db)))
 		// TODO arcgis handlers
