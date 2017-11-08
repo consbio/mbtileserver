@@ -195,25 +195,23 @@ func (s *ServiceSet) serviceHTML(db *mbtiles.DB) handlerFunc {
 	}
 }
 
-type tileCoord struct {
+type Tile struct {
 	z    uint8
 	x, y uint64
 }
 
-// extractTileCoord extracts and returns tile coordinates and an optional
-// extension from a byte slice and returns them. In case the byte slice is too
-// short or the number parsing cannot be performed, the returned error is
-// non-nil.  pcs is expected to be in order (z, y, x) when the parameter swapXY
-// is false, and in order (z, x, y) when swapXY is true. The extension is
-// extracted from the third element of pcs. Any elements in pcs beyond the
-// third are ignored.
-func extractTileCoord(pcs []string, swapXY bool) (tc tileCoord, ext string, err error) {
-	if len(pcs) < 3 {
-		err = fmt.Errorf("not enough elements to extract tile coordinates")
-		return
-	}
+// parseTileCoord parses and returns tile coordinates and an optional extension
+// from a the three parameters. The parameter z is interpreted as the web
+// mercator zoom level, it's supposed to be an unsigned integer that will fit
+// into 8 bit. The parameters x and y are interpreted as longitudinal and
+// lateral tile indices for that zoom level, both are supposed be in the range
+// [0,2^z[. Additionally, y may also have an optional filename extension (e.g.
+// "42.png") which is removed before parsing the number, and returned, too. In
+// case an error occured during parsing or if the values are not in the
+// expected range, the returned error is non-nil
+func TileFromStrings(z, x, y string) (tc Tile, ext string, err error) {
 	var z64 uint64
-	if z64, err = strconv.ParseUint(pcs[0], 10, 8); err != nil {
+	if z64, err = strconv.ParseUint(z, 10, 8); err != nil {
 		err = fmt.Errorf("cannot parse zoom level: %v", err)
 		return
 	}
@@ -222,34 +220,31 @@ func extractTileCoord(pcs []string, swapXY bool) (tc tileCoord, ext string, err 
 		errMsgParse = "cannot parse %s coordinate axis: %v"
 		errMsgOOB   = "%s coordinate (%d) is out of bounds for zoom level %d"
 	)
-	if tc.x, err = strconv.ParseUint(pcs[1], 10, 64); err != nil {
+	if tc.x, err = strconv.ParseUint(x, 10, 64); err != nil {
 		err = fmt.Errorf(errMsgParse, "first", err)
 		return
 	}
 	if tc.x >= (1 << z64) {
-		err = fmt.Errorf(errMsgOOB, "first", tc.x, tc.z)
+		err = fmt.Errorf(errMsgOOB, "x", tc.x, tc.z)
 		return
 	}
-	s := pcs[2]
+	s := y
 	if l := strings.LastIndex(s, "."); l >= 0 {
 		s, ext = s[:l], s[l:]
 	}
 	if tc.y, err = strconv.ParseUint(s, 10, 64); err != nil {
-		err = fmt.Errorf(errMsgParse, "second", err)
+		err = fmt.Errorf(errMsgParse, "y", err)
 		return
 	}
 	if tc.y >= (1 << z64) {
-		err = fmt.Errorf(errMsgOOB, "second", tc.y, tc.z)
+		err = fmt.Errorf(errMsgOOB, "y", tc.y, tc.z)
 		return
-	}
-	if swapXY {
-		tc.x, tc.y = tc.y, tc.x
 	}
 	return
 }
 
-// respondNoTileFound writes the default response for a non-existing tile of type f to w
-func respondNoTileFound(w http.ResponseWriter, f mbtiles.TileFormat) (int, error) {
+// tileNotFoundHandler writes the default response for a non-existing tile of type f to w
+func tileNotFoundHandler(w http.ResponseWriter, f mbtiles.TileFormat) (int, error) {
 	var err error
 	switch f {
 	case mbtiles.PNG, mbtiles.JPG, mbtiles.WEBP:
@@ -271,12 +266,14 @@ func respondNoTileFound(w http.ResponseWriter, f mbtiles.TileFormat) (int, error
 func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		// split path components to extract tile coordinates x, y and z
-		pcs := strings.Split(r.URL.Path, "/")
-		// we are expecting at least "", "services", <id> , "tiles", <z>, <x>, <y plus .ext>
-		if len(pcs) < 7 || pcs[5] == "" {
+		pcs := strings.Split(r.URL.Path[1:], "/")
+		// we are expecting at least "services", <id> , "tiles", <z>, <x>, <y plus .ext>
+		l := len(pcs)
+		if l < 6 || pcs[5] == "" {
 			return http.StatusBadRequest, fmt.Errorf("requested path is too short")
 		}
-		tc, ext, err := extractTileCoord(pcs[len(pcs)-3:], true)
+		z, x, y := pcs[l-3], pcs[l-2], pcs[l-1]
+		tc, ext, err := TileFromStrings(z, x, y)
 		if err != nil {
 			return http.StatusBadRequest, err
 		}
@@ -302,7 +299,7 @@ func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 			return http.StatusInternalServerError, err
 		}
 		if data == nil || len(data) <= 1 {
-			return respondNoTileFound(w, db.TileFormat())
+			return tileNotFoundHandler(w, db.TileFormat())
 		}
 
 		if isGrid {
