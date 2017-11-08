@@ -195,21 +195,21 @@ func (s *ServiceSet) serviceHTML(db *mbtiles.DB) handlerFunc {
 	}
 }
 
-type Tile struct {
+type tileCoord struct {
 	z    uint8
 	x, y uint64
 }
 
-// parseTileCoord parses and returns tile coordinates and an optional extension
-// from a the three parameters. The parameter z is interpreted as the web
-// mercator zoom level, it's supposed to be an unsigned integer that will fit
-// into 8 bit. The parameters x and y are interpreted as longitudinal and
-// lateral tile indices for that zoom level, both are supposed be in the range
-// [0,2^z[. Additionally, y may also have an optional filename extension (e.g.
-// "42.png") which is removed before parsing the number, and returned, too. In
-// case an error occured during parsing or if the values are not in the
-// expected range, the returned error is non-nil
-func TileFromStrings(z, x, y string) (tc Tile, ext string, err error) {
+// tileCoordFromString parses and returns tileCoord coordinates and an optional
+// extension from a the three parameters. The parameter z is interpreted as the
+// web mercator zoom level, it's supposed to be an unsigned integer that will
+// fit into 8 bit. The parameters x and y are interpreted as longitudinal and
+// lateral tileCoord indices for that zoom level, both are supposed be in the
+// range [0,2^z[. Additionally, y may also have an optional filename extension
+// (e.g.  "42.png") which is removed before parsing the number, and returned,
+// too. In case an error occured during parsing or if the values are not in the
+// expected range, the returned error is non-nil.
+func tileCoordFromString(z, x, y string) (tc tileCoord, ext string, err error) {
 	var z64 uint64
 	if z64, err = strconv.ParseUint(z, 10, 8); err != nil {
 		err = fmt.Errorf("cannot parse zoom level: %v", err)
@@ -273,7 +273,7 @@ func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 			return http.StatusBadRequest, fmt.Errorf("requested path is too short")
 		}
 		z, x, y := pcs[l-3], pcs[l-2], pcs[l-1]
-		tc, ext, err := TileFromStrings(z, x, y)
+		tc, ext, err := tileCoordFromString(z, x, y)
 		if err != nil {
 			return http.StatusBadRequest, err
 		}
