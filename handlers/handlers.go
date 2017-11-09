@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/consbio/mbtileserver/mbtiles"
@@ -238,10 +239,128 @@ func (s *ServiceSet) serviceHTML(db *mbtiles.DB) handlerFunc {
 	}
 }
 
+type tileCoord struct {
+	z    uint8
+	x, y uint64
+}
+
+// tileCoordFromString parses and returns tileCoord coordinates and an optional
+// extension from the three parameters. The parameter z is interpreted as the
+// web mercator zoom level, it is supposed to be an unsigned integer that will
+// fit into 8 bit. The parameters x and y are interpreted as longitude and
+// latitude tile indices for that zoom level, both are supposed be integers in
+// the integer interval [0,2^z). Additionally, y may also have an optional
+// filename extension (e.g. "42.png") which is removed before parsing the
+// number, and returned, too. In case an error occured during parsing or if the
+// values are not in the expected interval, the returned error is non-nil.
+func tileCoordFromString(z, x, y string) (tc tileCoord, ext string, err error) {
+	var z64 uint64
+	if z64, err = strconv.ParseUint(z, 10, 8); err != nil {
+		err = fmt.Errorf("cannot parse zoom level: %v", err)
+		return
+	}
+	tc.z = uint8(z64)
+	const (
+		errMsgParse = "cannot parse %s coordinate axis: %v"
+		errMsgOOB   = "%s coordinate (%d) is out of bounds for zoom level %d"
+	)
+	if tc.x, err = strconv.ParseUint(x, 10, 64); err != nil {
+		err = fmt.Errorf(errMsgParse, "first", err)
+		return
+	}
+	if tc.x >= (1 << z64) {
+		err = fmt.Errorf(errMsgOOB, "x", tc.x, tc.z)
+		return
+	}
+	s := y
+	if l := strings.LastIndex(s, "."); l >= 0 {
+		s, ext = s[:l], s[l:]
+	}
+	if tc.y, err = strconv.ParseUint(s, 10, 64); err != nil {
+		err = fmt.Errorf(errMsgParse, "y", err)
+		return
+	}
+	if tc.y >= (1 << z64) {
+		err = fmt.Errorf(errMsgOOB, "y", tc.y, tc.z)
+		return
+	}
+	return
+}
+
+// tileNotFoundHandler writes the default response for a non-existing tile of type f to w
+func tileNotFoundHandler(w http.ResponseWriter, f mbtiles.TileFormat) (int, error) {
+	var err error
+	switch f {
+	case mbtiles.PNG, mbtiles.JPG, mbtiles.WEBP:
+		// Return blank PNG for all image types
+		w.Header().Set("Content-Type", "image/png")
+		w.WriteHeader(http.StatusOK)
+		_, err = w.Write(BlankPNG())
+	case mbtiles.PBF:
+		// Return 204
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"message": "Tile does not exist"}`)
+	}
+	return 0, err
+}
+
 func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
-		// TODO implement this
-		return http.StatusNotImplemented, nil
+		// split path components to extract tile coordinates x, y and z
+		pcs := strings.Split(r.URL.Path[1:], "/")
+		// we are expecting at least "services", <id> , "tiles", <z>, <x>, <y plus .ext>
+		l := len(pcs)
+		if l < 6 || pcs[5] == "" {
+			return http.StatusBadRequest, fmt.Errorf("requested path is too short")
+		}
+		z, x, y := pcs[l-3], pcs[l-2], pcs[l-1]
+		tc, ext, err := tileCoordFromString(z, x, y)
+		if err != nil {
+			return http.StatusBadRequest, err
+		}
+		var data []byte
+		// flip y to match the spec
+		tc.y = (1 << uint64(tc.z)) - 1 - tc.y
+		isGrid := ext == ".json"
+		switch {
+		case !isGrid:
+			err = db.ReadTile(tc.z, tc.x, tc.y, &data)
+		case isGrid && db.HasUTFGrid():
+			err = db.ReadGrid(tc.z, tc.x, tc.y, &data)
+		default:
+			err = fmt.Errorf("no grid supplied by tile database")
+		}
+		if err != nil {
+			// augment error info
+			t := "tile"
+			if isGrid {
+				t = "grid"
+			}
+			err = fmt.Errorf("cannot fetch %s from DB for z=%d, x=%d, y=%d: %v", t, tc.z, tc.x, tc.y, err)
+			return http.StatusInternalServerError, err
+		}
+		if data == nil || len(data) <= 1 {
+			return tileNotFoundHandler(w, db.TileFormat())
+		}
+
+		if isGrid {
+			w.Header().Set("Content-Type", "application/json")
+			if db.UTFGridCompression() == mbtiles.ZLIB {
+				w.Header().Set("Content-Encoding", "deflate")
+			} else {
+				w.Header().Set("Content-Encoding", "gzip")
+			}
+		} else {
+			w.Header().Set("Content-Type", db.ContentType())
+			if db.TileFormat() == mbtiles.PBF {
+				w.Header().Set("Content-Encoding", "gzip")
+			}
+		}
+		_, err = w.Write(data)
+		return 0, err
 	}
 }
 
