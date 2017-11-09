@@ -201,14 +201,14 @@ type tileCoord struct {
 }
 
 // tileCoordFromString parses and returns tileCoord coordinates and an optional
-// extension from a the three parameters. The parameter z is interpreted as the
-// web mercator zoom level, it's supposed to be an unsigned integer that will
-// fit into 8 bit. The parameters x and y are interpreted as longitudinal and
-// lateral tileCoord indices for that zoom level, both are supposed be in the
-// range [0,2^z[. Additionally, y may also have an optional filename extension
-// (e.g.  "42.png") which is removed before parsing the number, and returned,
-// too. In case an error occured during parsing or if the values are not in the
-// expected range, the returned error is non-nil.
+// extension from the three parameters. The parameter z is interpreted as the
+// web mercator zoom level, it is supposed to be an unsigned integer that will
+// fit into 8 bit. The parameters x and y are interpreted as longitude and
+// latitude tile indices for that zoom level, both are supposed be integers in
+// the integer interval [0,2^z). Additionally, y may also have an optional
+// filename extension (e.g. "42.png") which is removed before parsing the
+// number, and returned, too. In case an error occured during parsing or if the
+// values are not in the expected interval, the returned error is non-nil.
 func tileCoordFromString(z, x, y string) (tc tileCoord, ext string, err error) {
 	var z64 uint64
 	if z64, err = strconv.ParseUint(z, 10, 8); err != nil {
