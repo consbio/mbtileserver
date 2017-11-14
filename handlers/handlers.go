@@ -3,9 +3,11 @@ package handlers
 //go:generate go run -tags=dev assets_generate.go
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -92,7 +94,7 @@ type ServiceSet struct {
 func New() *ServiceSet {
 	s := &ServiceSet{
 		tilesets:  make(map[string]*mbtiles.DB),
-		templates: template.New("base"),
+		templates: template.New("_base_"),
 	}
 	return s
 
@@ -182,10 +184,7 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(bytes)
-	if err != nil {
-		return 0, err
-	}
-	return 0, nil
+	return http.StatusOK, err
 }
 
 func (s *ServiceSet) serviceInfo(id string, db *mbtiles.DB) handlerFunc {
@@ -232,10 +231,7 @@ func (s *ServiceSet) serviceInfo(id string, db *mbtiles.DB) handlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, err = w.Write(bytes)
-		if err != nil {
-			return 0, err
-		}
-		return 0, nil
+		return http.StatusOK, err
 	}
 }
 
@@ -253,8 +249,13 @@ func (s *ServiceSet) executeTemplate(w http.ResponseWriter, name string, data in
 			return http.StatusInternalServerError, err
 		}
 	}
-	err = t.Execute(w, data)
-	return 0, err
+	buf := &bytes.Buffer{}
+	err = t.Execute(buf, data)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	_, err = io.Copy(w, buf)
+	return http.StatusOK, err
 }
 
 func (s *ServiceSet) serviceHTML(id string, db *mbtiles.DB) handlerFunc {
@@ -342,7 +343,7 @@ func tileNotFoundHandler(w http.ResponseWriter, f mbtiles.TileFormat) (int, erro
 		w.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(w, `{"message": "Tile does not exist"}`)
 	}
-	return 0, err
+	return http.StatusOK, err // http.StatusOK doesn't matter, code was written by w.WriteHeader already
 }
 
 func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
@@ -398,7 +399,7 @@ func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 			}
 		}
 		_, err = w.Write(data)
-		return 0, err
+		return http.StatusOK, err
 	}
 }
 
