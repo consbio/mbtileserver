@@ -15,18 +15,18 @@ func TemplatesFromAssets() (*template.Template, error) {
 	if err != nil {
 		return t, err
 	}
-	fis, err := d.Readdir(0)
+	files, err := d.Readdir(0)
 	if err != nil {
 		return t, err
 	}
-	for _, fi := range fis {
-		n := fi.Name()
-		e := strings.ToLower(path.Ext(n))
-		if e != ".html" || fi.IsDir() {
+	for _, file := range files {
+		name := file.Name()
+		ext := strings.ToLower(path.Ext(name))
+		if ext != ".html" || file.IsDir() {
 			continue
 		}
-		n = n[:len(n)-len(e)]
-		if _, err := tmplFromAssets(t, n); err != nil {
+		name = name[:len(name)-len(ext)]
+		if _, err := tmplFromAssets(t, name); err != nil {
 			return t, err
 		}
 	}
@@ -44,9 +44,9 @@ func tmplFromAssets(t *template.Template, name string) (*template.Template, erro
 	if err != nil {
 		return nil, err
 	}
-	n, err := t.New(name).Parse(string(buf))
+	t, err = t.New(name).Parse(string(buf))
 	if err != nil {
 		return nil, err
 	}
-	return n, nil
+	return t, nil
 }
