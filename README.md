@@ -34,10 +34,14 @@ virtual machine without any issues.
 
 
 ## Installation
-Currently, this project is not `go get`-able because static assets and 
-templates are not downloaded via `go get`.  We're working toward this.
+You can install this project with 
 
-In the meantime, clone this repository using your `git` tool of choice.
+```sh
+go get github.com/consbio/mbtileserver
+```
+
+This will create and install an executable called `mbtileserver`.
+
 
 This uses `Govendor` tool, so dependencies ship with the repo for easier builds.
 
@@ -49,15 +53,11 @@ Dependencies:
 * [github.com/Sirupsen/logrus](https://github.com/Sirupsen/logrus)
 * [golang.org/x/crypto/acme/autocert](https://golang.org/x/crypto/acme/autocert)
 
+Development Dependencies (only needed when modifying the code):
+* [github.com/shurcooL/vfsgen](https://github.com/shurcooL/vfsgen)
+
 On Windows, it is necessary to install `gcc` in order to compile `mattn/go-sqlite3`.  
 MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
-
-Then build it:
-```
-go build .
-```
-
-This will create an executable called `mbtileserver`.
 
 
 If you experience very slow builds each time, it may be that you need to first run
@@ -69,9 +69,9 @@ to make subsequent builds much faster.
 
 
 ## Usage
-From within the repository root:
+From within the repository root ($GOPATH/bin needs to be in in your $PATH):
 ```
-$  ./mbtileserver --help
+$  mbtileserver --help
 Serve tiles from mbtiles files.
 
 Usage:
@@ -203,7 +203,6 @@ See the issues tagged to the [0.5 version](https://github.com/consbio/mbtileserv
 for our near term features and improvements.
 
 In short, we are planning to:
-* make this project `go get`-able
 * add tests and benchmarks
 * get things production ready
 
@@ -212,7 +211,7 @@ In short, we are planning to:
 Development of the templates and static assets likely requires using
 `node` and `npm`.  Install these tools in the normal way.
 
-From the `templates/static` folder, run
+From the `handlers/templates/static` folder, run
 ```
 $npm install
 ```
@@ -225,7 +224,21 @@ Then to build the minified version, run:
 $gulp build
 ```
 
+Modifying the `.go` files always requires re-running `go build`.
 
-Modifying the `go` files requires re-running `go build`.
+In case you have modified the templates and static assets, you need to run `go
+generate` from the `handlers` sub-directory to ensure that your modifications
+are embedded into the executable. For this to work, you must have
+[github.com/shurcooL/vfsgen)[https://github.com/shurcooL/vfsgen) installed.
+This will rewrite the `assets_vfsdata.go` which you must commit along with your
+modification. Also you should run `go build` after `go generate`.
+
+During the development cycle you may use `go build -tags dev` to build the
+binary, in which case it will always take the assets from the relative file
+path `handlers/templates/` directly and you can omit the `go generate` step.
+But do not forget to perform it in the end.
+
+
+
 
 
