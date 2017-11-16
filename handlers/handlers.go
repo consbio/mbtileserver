@@ -3,8 +3,11 @@ package handlers
 //go:generate go run -tags=dev assets_generate.go
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"html/template"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -81,16 +84,20 @@ type ServiceInfo struct {
 // ServiceSet is the base type for the HTTP handlers which combines multiple
 // mbtiles.DB tilesets.
 type ServiceSet struct {
-	tilesets map[string]*mbtiles.DB
-	Domain   string
-	Path     string
+	tilesets  map[string]*mbtiles.DB
+	templates *template.Template
+	Domain    string
+	Path      string
 }
 
 // New returns a new ServiceSet. Use AddDBOnPath to add a mbtiles file.
 func New() *ServiceSet {
-	return &ServiceSet{
-		tilesets: make(map[string]*mbtiles.DB),
+	s := &ServiceSet{
+		tilesets:  make(map[string]*mbtiles.DB),
+		templates: template.New("_base_"),
 	}
+	return s
+
 }
 
 // AddDBOnPath interprets filename as mbtiles file which is opened and which will be
@@ -177,10 +184,7 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(bytes)
-	if err != nil {
-		return 0, err
-	}
-	return 0, nil
+	return http.StatusOK, err
 }
 
 func (s *ServiceSet) serviceInfo(id string, db *mbtiles.DB) handlerFunc {
@@ -227,17 +231,50 @@ func (s *ServiceSet) serviceInfo(id string, db *mbtiles.DB) handlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, err = w.Write(bytes)
-		if err != nil {
-			return 0, err
-		}
-		return 0, nil
+		return http.StatusOK, err
 	}
 }
 
-func (s *ServiceSet) serviceHTML(db *mbtiles.DB) handlerFunc {
+// executeTemplates first tries to find the template with the given name for
+// the ServiceSet. If that fails, it tries to instantiate it from the assets.
+// If a valid template is obtained it is used to render a response, otherwise
+// the HTTP status Internal Server Error is returned.
+func (s *ServiceSet) executeTemplate(w http.ResponseWriter, name string, data interface{}) (int, error) {
+	t := s.templates.Lookup(name)
+	var err error
+	if t == nil {
+		t, err = tmplFromAssets(s.templates, name)
+		if err != nil {
+			err = fmt.Errorf("could not parse template asset %q: %v", name, err)
+			return http.StatusInternalServerError, err
+		}
+	}
+	buf := &bytes.Buffer{}
+	err = t.Execute(buf, data)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	_, err = io.Copy(w, buf)
+	return http.StatusOK, err
+}
+
+func (s *ServiceSet) serviceHTML(id string, db *mbtiles.DB) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
-		// TODO implement this
-		return http.StatusNotImplemented, nil
+		p := struct {
+			URL string
+			ID  string
+		}{
+			fmt.Sprintf("%s%s", s.RootURL(r), strings.TrimSuffix(r.URL.Path, "/map")),
+			id,
+		}
+
+		switch db.TileFormat() {
+		default:
+			return s.executeTemplate(w, "map", p)
+		case mbtiles.PBF:
+			return s.executeTemplate(w, "map_gl", p)
+
+		}
 	}
 }
 
@@ -306,7 +343,7 @@ func tileNotFoundHandler(w http.ResponseWriter, f mbtiles.TileFormat) (int, erro
 		w.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(w, `{"message": "Tile does not exist"}`)
 	}
-	return 0, err
+	return http.StatusOK, err // http.StatusOK doesn't matter, code was written by w.WriteHeader already
 }
 
 func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
@@ -362,7 +399,7 @@ func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 			}
 		}
 		_, err = w.Write(data)
-		return 0, err
+		return http.StatusOK, err
 	}
 }
 
@@ -375,7 +412,7 @@ func (s *ServiceSet) Handler(ef func(error)) http.Handler {
 	for id, db := range s.tilesets {
 		p := "/services/" + id
 		m.Handle(p, wrapGetWithErrors(ef, s.serviceInfo(id, db)))
-		m.Handle(p+"/map", wrapGetWithErrors(ef, s.serviceHTML(db)))
+		m.Handle(p+"/map", wrapGetWithErrors(ef, s.serviceHTML(id, db)))
 		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, s.tiles(db)))
 		// TODO arcgis handlers
 		// p = "//arcgis/rest/services/" + id + "/MapServer"
