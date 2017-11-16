@@ -403,17 +403,29 @@ func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 	}
 }
 
+// TileMux returns a pointer to a http.ServeMux that serves the TileJSON
+// information and the tiles for all DBs in the ServiceSet.
+// The function ef is called with any occuring error if it is non-nil, so it
+// can be used for e.g. logging with logging facitilies of the caller.
+func (s *ServiceSet) TileMux(ef func(error)) *http.ServeMux {
+	m := http.NewServeMux()
+	for id, db := range s.tilesets {
+		p := "/services/" + id
+		m.Handle(p, wrapGetWithErrors(ef, s.serviceInfo(id, db)))
+		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, s.tiles(db)))
+	}
+	return m
+}
+
 // Handler returns a http.Handler that serves all endpoints of the ServiceSet.
 // The function ef is called with any occuring error if it is non-nil, so it
 // can be used for e.g. logging with logging facitilies of the caller.
 func (s *ServiceSet) Handler(ef func(error)) http.Handler {
-	m := http.NewServeMux()
+	m := s.TileMux(ef)
 	m.Handle("/services", wrapGetWithErrors(ef, s.listServices))
 	for id, db := range s.tilesets {
 		p := "/services/" + id
-		m.Handle(p, wrapGetWithErrors(ef, s.serviceInfo(id, db)))
 		m.Handle(p+"/map", wrapGetWithErrors(ef, s.serviceHTML(id, db)))
-		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, s.tiles(db)))
 		// TODO arcgis handlers
 		// p = "//arcgis/rest/services/" + id + "/MapServer"
 		// m.Handle(p, wrapGetWithErrors(s.getArcGISService))
