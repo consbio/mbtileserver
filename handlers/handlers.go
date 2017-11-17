@@ -426,12 +426,6 @@ func (s *ServiceSet) Handler(ef func(error)) http.Handler {
 	for id, db := range s.tilesets {
 		p := "/services/" + id
 		m.Handle(p+"/map", wrapGetWithErrors(ef, s.serviceHTML(id, db)))
-		// TODO arcgis handlers
-		// p = "//arcgis/rest/services/" + id + "/MapServer"
-		// m.Handle(p, wrapGetWithErrors(s.getArcGISService))
-		// m.Handle(p + "/layers", wrapGetWithErrors(s.getArcGISLayers))
-		// m.Handle(p + "/legend", wrapGetWithErrors(s.getArcGISLegend))
-		// m.Handle(p + "/tile/", wrapGetWithErrors(s.getArcGISTile))
 	}
 	return m
 }
