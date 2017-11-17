@@ -21,7 +21,6 @@ import (
 
 	"github.com/evalphobia/logrus_sentry"
 	"github.com/labstack/echo/middleware"
-	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
