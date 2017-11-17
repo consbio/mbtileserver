@@ -405,29 +405,23 @@ func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 	}
 }
 
-// TileMux returns a pointer to a http.ServeMux that serves the TileJSON
-// information and the tiles for all DBs in the ServiceSet.
+// Handler returns a http.Handler that serves the endpoints of the ServiceSet.
 // The function ef is called with any occuring error if it is non-nil, so it
 // can be used for e.g. logging with logging facitilies of the caller.
-func (s *ServiceSet) TileMux(ef func(error)) *http.ServeMux {
+// When the publish parameter is true, a listing of all available services and
+// an endpoint with a HTML slippy map for each service are served by the Handler.
+func (s *ServiceSet) Handler(ef func(error), publish bool) http.Handler {
 	m := http.NewServeMux()
-	for id, db := range s.tilesets {
-		p := "/services/" + id
-		m.Handle(p, wrapGetWithErrors(ef, s.tileJSON(id, db, true)))
-		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, s.tiles(db)))
+	if publish {
+		m.Handle("/services", wrapGetWithErrors(ef, s.listServices))
 	}
-	return m
-}
-
-// Handler returns a http.Handler that serves all endpoints of the ServiceSet.
-// The function ef is called with any occuring error if it is non-nil, so it
-// can be used for e.g. logging with logging facitilies of the caller.
-func (s *ServiceSet) Handler(ef func(error)) http.Handler {
-	m := s.TileMux(ef)
-	m.Handle("/services", wrapGetWithErrors(ef, s.listServices))
 	for id, db := range s.tilesets {
 		p := "/services/" + id
-		m.Handle(p+"/map", wrapGetWithErrors(ef, s.serviceHTML(id, db)))
+		m.Handle(p, wrapGetWithErrors(ef, s.tileJSON(id, db, publish)))
+		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, s.tiles(db)))
+		if publish {
+			m.Handle(p+"/map", wrapGetWithErrors(ef, s.serviceHTML(id, db)))
+		}
 	}
 	return m
 }
