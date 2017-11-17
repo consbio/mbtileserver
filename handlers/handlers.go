@@ -187,7 +187,7 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 	return http.StatusOK, err
 }
 
-func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB) handlerFunc {
+func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB, mapURL bool) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		svcURL := fmt.Sprintf("%s%s", s.RootURL(r), r.URL.Path)
 		imgFormat := db.TileFormatString()
@@ -197,7 +197,9 @@ func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB) handlerFunc {
 			"scheme":   "xyz",
 			"format":   imgFormat,
 			"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s", svcURL, imgFormat)},
-			"map":      fmt.Sprintf("%s/map", svcURL),
+		}
+		if mapURL {
+			out["map"] = fmt.Sprintf("%s/map", svcURL)
 		}
 		metadata, err := db.ReadMetadata()
 		if err != nil {
@@ -411,7 +413,7 @@ func (s *ServiceSet) TileMux(ef func(error)) *http.ServeMux {
 	m := http.NewServeMux()
 	for id, db := range s.tilesets {
 		p := "/services/" + id
-		m.Handle(p, wrapGetWithErrors(ef, s.tileJSON(id, db)))
+		m.Handle(p, wrapGetWithErrors(ef, s.tileJSON(id, db, true)))
 		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, s.tiles(db)))
 	}
 	return m
