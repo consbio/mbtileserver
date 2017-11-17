@@ -187,7 +187,7 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 	return http.StatusOK, err
 }
 
-func (s *ServiceSet) serviceInfo(id string, db *mbtiles.DB) handlerFunc {
+func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		svcURL := fmt.Sprintf("%s%s", s.RootURL(r), r.URL.Path)
 		imgFormat := db.TileFormatString()
@@ -411,7 +411,7 @@ func (s *ServiceSet) TileMux(ef func(error)) *http.ServeMux {
 	m := http.NewServeMux()
 	for id, db := range s.tilesets {
 		p := "/services/" + id
-		m.Handle(p, wrapGetWithErrors(ef, s.serviceInfo(id, db)))
+		m.Handle(p, wrapGetWithErrors(ef, s.tileJSON(id, db)))
 		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, s.tiles(db)))
 	}
 	return m
