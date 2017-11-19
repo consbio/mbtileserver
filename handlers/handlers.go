@@ -187,7 +187,7 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 	return http.StatusOK, err
 }
 
-func (s *ServiceSet) serviceInfo(id string, db *mbtiles.DB) handlerFunc {
+func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB, mapURL bool) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		svcURL := fmt.Sprintf("%s%s", s.RootURL(r), r.URL.Path)
 		imgFormat := db.TileFormatString()
@@ -197,7 +197,9 @@ func (s *ServiceSet) serviceInfo(id string, db *mbtiles.DB) handlerFunc {
 			"scheme":   "xyz",
 			"format":   imgFormat,
 			"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s", svcURL, imgFormat)},
-			"map":      fmt.Sprintf("%s/map", svcURL),
+		}
+		if mapURL {
+			out["map"] = fmt.Sprintf("%s/map", svcURL)
 		}
 		metadata, err := db.ReadMetadata()
 		if err != nil {
@@ -403,23 +405,23 @@ func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 	}
 }
 
-// Handler returns a http.Handler that serves all endpoints of the ServiceSet.
+// Handler returns a http.Handler that serves the endpoints of the ServiceSet.
 // The function ef is called with any occuring error if it is non-nil, so it
 // can be used for e.g. logging with logging facitilies of the caller.
-func (s *ServiceSet) Handler(ef func(error)) http.Handler {
+// When the publish parameter is true, a listing of all available services and
+// an endpoint with a HTML slippy map for each service are served by the Handler.
+func (s *ServiceSet) Handler(ef func(error), publish bool) http.Handler {
 	m := http.NewServeMux()
-	m.Handle("/services", wrapGetWithErrors(ef, s.listServices))
+	if publish {
+		m.Handle("/services", wrapGetWithErrors(ef, s.listServices))
+	}
 	for id, db := range s.tilesets {
 		p := "/services/" + id
-		m.Handle(p, wrapGetWithErrors(ef, s.serviceInfo(id, db)))
-		m.Handle(p+"/map", wrapGetWithErrors(ef, s.serviceHTML(id, db)))
+		m.Handle(p, wrapGetWithErrors(ef, s.tileJSON(id, db, publish)))
 		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, s.tiles(db)))
-		// TODO arcgis handlers
-		// p = "//arcgis/rest/services/" + id + "/MapServer"
-		// m.Handle(p, wrapGetWithErrors(s.getArcGISService))
-		// m.Handle(p + "/layers", wrapGetWithErrors(s.getArcGISLayers))
-		// m.Handle(p + "/legend", wrapGetWithErrors(s.getArcGISLegend))
-		// m.Handle(p + "/tile/", wrapGetWithErrors(s.getArcGISTile))
+		if publish {
+			m.Handle(p+"/map", wrapGetWithErrors(ef, s.serviceHTML(id, db)))
+		}
 	}
 	return m
 }
