@@ -17,26 +17,8 @@ import (
 	"github.com/consbio/mbtileserver/mbtiles"
 )
 
-// RootURL returns the root URL of the HTTP request. Optionally, a domain and a
-// base path may be provided which will be used to construct the root URL if
-// they are not empty. Otherwise the hostname will be determined from the
-// request and the path will be empty.
-func RootURL(r *http.Request, domain, path string) string {
-	host := r.Host
-	if len(domain) > 0 {
-		host = domain
-	}
-
-	root := fmt.Sprintf("%s://%s", Scheme(r), host)
-	if len(path) > 0 {
-		root = fmt.Sprintf("%s/%s", root, path)
-	}
-
-	return root
-}
-
-// Scheme returns the underlying URL scheme of the original request.
-func Scheme(r *http.Request) string {
+// scheme returns the underlying URL scheme of the original request.
+func scheme(r *http.Request) string {
 	if r.TLS != nil {
 		return "https"
 	}
@@ -162,15 +144,25 @@ func (s *ServiceSet) Size() int {
 	return len(s.tilesets)
 }
 
-// RootURL returns the root URL of the service. If s.Domain is non-empty, it
+// rootURL returns the root URL of the service. If s.Domain is non-empty, it
 // will be used as the hostname. If s.Path is non-empty, it will be used as a
 // prefix.
-func (s *ServiceSet) RootURL(r *http.Request) string {
-	return RootURL(r, s.Domain, s.Path)
+func (s *ServiceSet) rootURL(r *http.Request) string {
+	host := r.Host
+	if len(s.Domain) > 0 {
+		host = s.Domain
+	}
+
+	root := fmt.Sprintf("%s://%s", scheme(r), host)
+	if len(s.Path) > 0 {
+		root = fmt.Sprintf("%s/%s", root, s.Path)
+	}
+
+	return root
 }
 
 func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, error) {
-	rootURL := fmt.Sprintf("%s%s", s.RootURL(r), r.URL)
+	rootURL := fmt.Sprintf("%s%s", s.rootURL(r), r.URL)
 	services := []ServiceInfo{}
 	for id, tileset := range s.tilesets {
 		services = append(services, ServiceInfo{
@@ -189,7 +181,7 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 
 func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB, mapURL bool) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
-		svcURL := fmt.Sprintf("%s%s", s.RootURL(r), r.URL.Path)
+		svcURL := fmt.Sprintf("%s%s", s.rootURL(r), r.URL.Path)
 		imgFormat := db.TileFormatString()
 		out := map[string]interface{}{
 			"tilejson": "2.1.0",
@@ -266,7 +258,7 @@ func (s *ServiceSet) serviceHTML(id string, db *mbtiles.DB) handlerFunc {
 			URL string
 			ID  string
 		}{
-			fmt.Sprintf("%s%s", s.RootURL(r), strings.TrimSuffix(r.URL.Path, "/map")),
+			fmt.Sprintf("%s%s", s.rootURL(r), strings.TrimSuffix(r.URL.Path, "/map")),
 			id,
 		}
 
