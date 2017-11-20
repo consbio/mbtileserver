@@ -5,8 +5,6 @@ import (
 
 	"golang.org/x/crypto/acme/autocert"
 
-	"html/template"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,19 +27,6 @@ import (
 type ServiceInfo struct {
 	ImageType string `json:"imageType"`
 	URL       string `json:"url"`
-}
-
-type Template struct {
-	templates *template.Template
-}
-
-func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
-	return t.templates.ExecuteTemplate(w, name, data)
-}
-
-type TemplateParams struct {
-	URL string
-	ID  string
 }
 
 var (
@@ -174,11 +159,6 @@ func serve() {
 	}
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
-
-	t := &Template{
-		templates: template.Must(handlers.TemplatesFromAssets()),
-	}
-	e.Renderer = t
 
 	gzip := middleware.Gzip()
 
