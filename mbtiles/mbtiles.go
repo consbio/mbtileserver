@@ -16,8 +16,6 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type TileFormat uint8
@@ -86,8 +84,7 @@ func NewDB(filename string) (*DB, error) {
 	//Saves last modified mbtiles time for setting Last-Modified header
 	fileStat, err := os.Stat(filename)
 	if err != nil {
-		log.Errorf("could not read file stats for mbtiles file: %s\n", filename)
-		return nil, err
+		return nil, fmt.Errorf("could not read file stats for mbtiles file: %s\n", filename)
 	}
 
 	//query a sample tile to determine format
@@ -114,7 +111,6 @@ func NewDB(filename string) (*DB, error) {
 	var count int
 	err = db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='view' AND name = 'grids'").Scan(&count)
 	if err != nil {
-		log.Error(err)
 		return nil, err
 	}
 	if count == 1 {
@@ -123,15 +119,13 @@ func NewDB(filename string) (*DB, error) {
 		err = db.QueryRow("select grid from grids where grid is not null LIMIT 1").Scan(&gridData)
 		if err != nil {
 			if err != sql.ErrNoRows {
-				log.Error("Could not read sample grid to determine type")
-				return nil, err
+				return nil, fmt.Errorf("could not read sample grid to determine type: %v", err)
 			}
 		} else {
 			out.hasUTFGrid = true
 			out.utfgridCompression, err = detectTileFormat(&gridData)
 			if err != nil {
-				log.Error("Could not determine UTF Grid compression type")
-				return nil, err
+				return nil, fmt.Errorf("could not determine UTF Grid compression type: %v", err)
 			}
 
 			// Check to see if grid_data view exists
@@ -189,15 +183,13 @@ func (tileset *DB) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) error {
 
 		rows, err := tileset.db.Query("select key_name, key_json FROM grid_data where zoom_level = ? and tile_column = ? and tile_row = ?", z, x, y)
 		if err != nil {
-			log.Error("Error fetching grid data")
-			return err
+			return fmt.Errorf("cannot fetch grid data: %v", err)
 		}
 		defer rows.Close()
 		for rows.Next() {
 			err := rows.Scan(&key, &value)
 			if err != nil {
-				log.Error("Error scanning grid key data")
-				return err
+				return fmt.Errorf("could not fetch grid data: %v", err)
 			}
 			valuejson := make(map[string]interface{})
 			json.Unmarshal(value, &valuejson)
@@ -297,7 +289,6 @@ func (tileset *DB) ReadMetadata() (map[string]interface{}, error) {
 		var minZoom, maxZoom int
 		err := tileset.db.QueryRow("select min(zoom_level), max(zoom_level) from tiles").Scan(&minZoom, &maxZoom)
 		if err != nil {
-			log.Errorf("Error retrieving min and max zoom for tileset: %v", err)
 			return metadata, nil
 		}
 		metadata["minzoom"] = minZoom
