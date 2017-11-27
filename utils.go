@@ -1,3 +1,5 @@
+// No longer needed once arcgis.go is completely replaced by handlers/arcgis.go
+
 package main
 
 import (
