@@ -179,6 +179,9 @@ func serve() {
 	}
 	h := echo.WrapHandler(svcSet.Handler(ef, true))
 	e.GET("/*", h, NotModifiedMiddleware)
+	// TODO uncomment these after #54 is merged
+	// a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
+	// e.GET("/arcgis/rest/*", a, NotModifiedMiddleware)
 
 	e.GET("/admin/cache", CacheInfo, gzip)
 
@@ -261,22 +264,6 @@ func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error
 
 	dest.SetBytes(data)
 	return nil
-}
-
-// Verifies that service exists and return 404 otherwise
-func getServiceOr404(c echo.Context) (string, error) {
-	requestPath := strings.ToLower(c.Request().URL.Path)
-	idPos := strings.Index(c.Path(), ":id")
-	if idPos != -1 {
-		// remove trailing part of path after :id
-		requestPath = fmt.Sprintf("%s/%s", requestPath[:idPos-1], strings.ToLower(c.Param("id")))
-	}
-	id := strings.Split(requestPath, "/services/")[1]
-	if _, exists := tilesets[id]; !exists {
-		log.Warnf("Service not found: %s\n", id)
-		return "", echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("Service not found: %s", id))
-	}
-	return id, nil
 }
 
 func CacheInfo(c echo.Context) error {
