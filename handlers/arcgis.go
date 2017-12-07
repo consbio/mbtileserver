@@ -11,7 +11,7 @@ import (
 )
 
 type arcGISLOD struct {
-	Level      int     `json:"level"`
+	Level      uint8   `json:"level"`
 	Resolution float64 `json:"resolution"`
 	Scale      float64 `json:"scale"`
 }
@@ -63,20 +63,24 @@ type arcGISLayer struct {
 	CurrentVersion    float32           `json:"currentVersion"`
 }
 
+const (
+	earthRadius              = 6378137.0
+	earthCircumference       = math.Pi * earthRadius
+	initialResolution        = 2 * earthCircumference / 256
+	dpi                uint8 = 96
+)
+
 var webMercatorSR = arcGISSpatialReference{Wkid: 3857}
 var geographicSR = arcGISSpatialReference{Wkid: 4326}
 
+// wrapJSONP writes b (JSON marshalled to bytes) as a JSONP response to
+// w if the callback query parameter is present, and writes b as a JSON
+// response otherwise. Any error that occurs during writing is returned.
 func wrapJSONP(w http.ResponseWriter, r *http.Request, b []byte) (err error) {
 	callback := r.URL.Query().Get("callback")
 	if callback == "" {
 		w.Header().Set("Content-Type", "application/javascript")
-		if _, err = w.Write([]byte(callback + "(")); err != nil {
-			return
-		}
-		if _, err = w.Write(b); err != nil {
-			return
-		}
-		_, err = w.Write([]byte(");"))
+		_, err = w.Write([]byte(fmt.Sprintf("%s(%s);", callback, b)))
 		return
 	}
 
@@ -92,14 +96,16 @@ func (s *ServiceSet) arcgisService(id string, db *mbtiles.DB) handlerFunc {
 		if err != nil {
 			return http.StatusInternalServerError, fmt.Errorf("Could not read metadata for tileset %v", id)
 		}
-		name := toString(metadata["name"])
-		description := toString(metadata["description"])
-		attribution := toString(metadata["attribution"])
+		name, _ := metadata["name"].(string)
+		description, _ := metadata["description"].(string)
+		attribution, _ := metadata["attribution"].(string)
+		tags, _ := metadata["tags"].(string)
+		credits, _ := metadata["credits"].(string)
 
 		// TODO: make sure that min and max zoom always populated
-		minZoom := metadata["minzoom"].(int)
-		maxZoom := metadata["maxzoom"].(int)
-		dpi := 96 // TODO: extract dpi from the image instead
+		minZoom, _ := metadata["minzoom"].(uint8)
+		maxZoom, _ := metadata["maxzoom"].(uint8)
+		// TODO: extract dpi from the image instead
 		var lods []arcGISLOD
 		for i := minZoom; i <= maxZoom; i++ {
 			scale, resolution := calcScaleResolution(i, dpi)
@@ -113,7 +119,10 @@ func (s *ServiceSet) arcgisService(id string, db *mbtiles.DB) handlerFunc {
 		minScale := lods[0].Scale
 		maxScale := lods[len(lods)-1].Scale
 
-		bounds := metadata["bounds"].([]float32) // TODO: make sure this is always present
+		bounds, ok := metadata["bounds"].([]float32)
+		if !ok {
+			bounds = []float32{-180, -85, 180, 85} // default to world bounds
+		}
 		extent := geoBoundsToWMExtent(bounds)
 
 		tileInfo := map[string]interface{}{
@@ -134,8 +143,8 @@ func (s *ServiceSet) arcgisService(id string, db *mbtiles.DB) handlerFunc {
 			"Comments": "",
 			"Subject":  "",
 			"Category": "",
-			"Keywords": toString(metadata["tags"]),
-			"Credits":  toString(metadata["credits"]),
+			"Keywords": tags,
+			"Credits":  credits,
 		}
 
 		out := map[string]interface{}{
@@ -190,13 +199,20 @@ func (s *ServiceSet) arcgisLayers(id string, db *mbtiles.DB) handlerFunc {
 			return http.StatusInternalServerError, fmt.Errorf("Could not read metadata for tileset %v", id)
 		}
 
-		bounds := metadata["bounds"].([]float32) // TODO: make sure this is always present
+		name, _ := metadata["name"].(string)
+		description, _ := metadata["description"].(string)
+		attribution, _ := metadata["attribution"].(string)
+
+		bounds, ok := metadata["bounds"].([]float32)
+		if !ok {
+			bounds = []float32{-180, -85, 180, 85} // default to world bounds
+		}
 		extent := geoBoundsToWMExtent(bounds)
 
-		minZoom := metadata["minzoom"].(int)
-		maxZoom := metadata["maxzoom"].(int)
-		minScale, _ := calcScaleResolution(minZoom, 96)
-		maxScale, _ := calcScaleResolution(maxZoom, 96)
+		minZoom, _ := metadata["minzoom"].(uint8)
+		maxZoom, _ := metadata["maxzoom"].(uint8)
+		minScale, _ := calcScaleResolution(minZoom, dpi)
+		maxScale, _ := calcScaleResolution(maxZoom, dpi)
 
 		// for now, just create a placeholder root layer
 		emptyArray := []interface{}{}
@@ -207,12 +223,12 @@ func (s *ServiceSet) arcgisLayers(id string, db *mbtiles.DB) handlerFunc {
 			ID:                0,
 			DefaultVisibility: true,
 			ParentLayer:       nil,
-			Name:              toString(metadata["name"]),
-			Description:       toString(metadata["description"]),
+			Name:              name,
+			Description:       description,
 			Extent:            extent,
 			MinScale:          minScale,
 			MaxScale:          maxScale,
-			CopyrightText:     toString(metadata["attribution"]),
+			CopyrightText:     attribution,
 			HTMLPopupType:     "esriServerHTMLPopupTypeAsHTMLText",
 			Fields:            emptyArray,
 			Relationships:     emptyArray,
@@ -242,13 +258,15 @@ func (s *ServiceSet) arcgisLegend(id string, db *mbtiles.DB) handlerFunc {
 			return http.StatusInternalServerError, fmt.Errorf("Could not read metadata for tileset %v", id)
 		}
 
+		name, _ := metadata["name"].(string)
+
 		// TODO: pull the legend from ArcGIS specific metadata tables
 		var elements [0]interface{}
 		var layers [1]map[string]interface{}
 
 		layers[0] = map[string]interface{}{
 			"layerId":   0,
-			"layerName": toString(metadata["name"]),
+			"layerName": name,
 			"layerType": "",
 			"minScale":  0,
 			"maxScale":  0,
@@ -318,8 +336,9 @@ func geoBoundsToWMExtent(bounds []float32) arcGISExtent {
 	}
 }
 
-func calcScaleResolution(zoomLevel int, dpi int) (float64, float64) {
-	resolution := 156543.033928 / math.Pow(2, float64(zoomLevel))
+func calcScaleResolution(zoomLevel uint8, dpi uint8) (float64, float64) {
+	var denom = 1 << zoomLevel
+	resolution := initialResolution / float64(denom)
 	scale := float64(dpi) * 39.37 * resolution // 39.37 in/m
 	return scale, resolution
 }
@@ -335,15 +354,14 @@ func toString(s interface{}) string {
 // Convert a latitude and longitude to mercator coordinates, bounded to world domain.
 func geoToMercator(longitude, latitude float64) (float64, float64) {
 	// bound to world coordinates
-	if latitude > 80 {
-		latitude = 80
-	} else if latitude < -80 {
-		latitude = -80
+	if latitude > 85 {
+		latitude = 85
+	} else if latitude < -85 {
+		latitude = -85
 	}
 
-	origin := 6378137 * math.Pi // 6378137 is WGS84 semi-major axis
-	x := longitude * origin / 180
-	y := math.Log(math.Tan((90+latitude)*math.Pi/360)) / (math.Pi / 180) * (origin / 180)
+	x := longitude * earthCircumference / 180
+	y := math.Log(math.Tan((90+latitude)*math.Pi/360)) / (math.Pi / 180) * (earthCircumference / 180)
 
 	return x, y
 }
