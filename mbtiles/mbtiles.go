@@ -20,13 +20,13 @@ import (
 
 // TileFormat is an enum that defines the tile format of a tile
 // in the mbtiles file.  Supported image formats:
-// * PNG
-// * JPG
-// * WEBP
-// * PBF  (vector tile protocol buffers)
+//   * PNG
+//   * JPG
+//   * WEBP
+//   * PBF  (vector tile protocol buffers)
 // Tiles may be compressed, in which case the type is one of:
-// * GZIP
-// * ZLIB
+//   * GZIP
+//   * ZLIB
 // Compressed tiles may be PBF or UTFGrids
 type TileFormat uint8
 
