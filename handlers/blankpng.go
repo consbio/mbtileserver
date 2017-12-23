@@ -1,5 +1,7 @@
 package handlers
 
+// BlankPNG returns bytes of a blank PNG, for the request handlers to return
+// when an image tile is not available.
 func BlankPNG() []byte {
 	return []byte{
 		0x89, 0x50, 0x4e, 0x47, 0xd, 0xa, 0x1a, 0xa, 0x0, 0x0, 0x0, 0xd, 0x49,
