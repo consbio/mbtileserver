@@ -79,7 +79,6 @@ func New() *ServiceSet {
 		templates: template.New("_base_"),
 	}
 	return s
-
 }
 
 // AddDBOnPath interprets filename as mbtiles file which is opened and which will be

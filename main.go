@@ -159,9 +159,9 @@ func serve() {
 		log.Errorf("%v", err)
 	}
 	h := echo.WrapHandler(svcSet.Handler(ef, true))
-	e.GET("/*", h, notModifiedMiddleware)
+	e.GET("/*", h)
 	a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
-	e.GET("/arcgis/rest/services/*", a, notModifiedMiddleware)
+	e.GET("/arcgis/rest/services/*", a)
 
 	// Start the server
 	fmt.Println("\n--------------------------------------")
@@ -210,6 +210,7 @@ func serve() {
 
 }
 
+/*
 func notModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var lastModified time.Time
@@ -230,3 +231,4 @@ func notModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		return next(c)
 	}
 }
+*/

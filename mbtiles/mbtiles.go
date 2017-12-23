@@ -15,21 +15,33 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // import sqlite3 driver
 )
 
+// TileFormat is an enum that defines the tile format of a tile
+// in the mbtiles file.  Supported image formats:
+// * PNG
+// * JPG
+// * WEBP
+// * PBF  (vector tile protocol buffers)
+// Tiles may be compressed, in which case the type is one of:
+// * GZIP
+// * ZLIB
+// Compressed tiles may be PBF or UTFGrids
 type TileFormat uint8
 
+// Constants representing TileFormat types
 const (
-	UNKNOWN TileFormat = iota
-	GZIP               // encoding = gzip
-	ZLIB               // encoding = deflate
+	UNKNOWN TileFormat = iota // UNKNOWN TileFormat cannot be determined from first few bytes of tile
+	GZIP                      // encoding = gzip
+	ZLIB                      // encoding = deflate
 	PNG
 	JPG
 	PBF
 	WEBP
 )
 
+// String returns a string representing the TileFormat
 func (t TileFormat) String() string {
 	switch t {
 	case PNG:
@@ -45,6 +57,7 @@ func (t TileFormat) String() string {
 	}
 }
 
+// ContentType returns the MIME content type of the tile
 func (t TileFormat) ContentType() string {
 	switch t {
 	case PNG:
@@ -60,18 +73,20 @@ func (t TileFormat) ContentType() string {
 	}
 }
 
+// DB represents an mbtiles file connection.
 type DB struct {
-	filename           string
-	db                 *sql.DB
-	tileformat         TileFormat // tile format: PNG, JPG, PBF
+	filename           string     // name of tile mbtiles file
+	db                 *sql.DB    // database connection for mbtiles file
+	tileformat         TileFormat // tile format: PNG, JPG, PBF, WEBP
 	timestamp          time.Time  // timestamp of file, for cache control headers
-	hasUTFGrid         bool
-	utfgridCompression TileFormat
-	hasUTFGridData     bool
+	hasUTFGrid         bool       // true if mbtiles file contains additional tables with UTFGrid data
+	utfgridCompression TileFormat // compression (GZIP or ZLIB) of UTFGrids
+	hasUTFGridData     bool       // true if UTFGrids have corresponding key / value data that need to be joined and returned with the UTFGrid
 }
 
-// Creates a new DB instance.
-// Connection is closed by runtime on application termination or by calling .Close() method.
+// NewDB creates a new DB instance.
+// Connection is closed by runtime on application termination or by calling
+// its Close() method.
 func NewDB(filename string) (*DB, error) {
 	_, id := filepath.Split(filename)
 	id = strings.Split(id, ".")[0]
@@ -144,12 +159,13 @@ func NewDB(filename string) (*DB, error) {
 
 }
 
-// Reads a grid at z, x, y into provided *[]byte.
+// ReadTile reads a tile with tile identifiers z, x, y into provided *[]byte.
+// data will be nil if the tile does not exist in the database
 func (tileset *DB) ReadTile(z uint8, x uint64, y uint64, data *[]byte) error {
 	err := tileset.db.QueryRow("select tile_data from tiles where zoom_level = ? and tile_column = ? and tile_row = ?", z, x, y).Scan(data)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			*data = nil // not a problem, just return empty bytes
+			*data = nil // If this tile does not exist in the database, return empty bytes
 			return nil
 		}
 		return err
@@ -157,9 +173,10 @@ func (tileset *DB) ReadTile(z uint8, x uint64, y uint64, data *[]byte) error {
 	return nil
 }
 
-// Reads a grid at z, x, y into provided *[]byte.
-// This merges in grid key data, if any exist
-// The data is returned in the original compression encoding (zlib or gzip)
+// ReadGrid reads a UTFGrid with identifiers z, x, y into provided *[]byte. data
+// will be nil if the grid does not exist in the database, and an error will be
+// raised. This merges in grid key data, if any exist The data is returned in
+// the original compression encoding (zlib or gzip)
 func (tileset *DB) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) error {
 	if !tileset.hasUTFGrid {
 		return errors.New("Tileset does not contain UTFgrids")
@@ -168,7 +185,7 @@ func (tileset *DB) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) error {
 	err := tileset.db.QueryRow("select grid from grids where zoom_level = ? and tile_column = ? and tile_row = ?", z, x, y).Scan(data)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			*data = nil // not a problem, just return empty bytes
+			*data = nil // If this tile does not exist in the database, return empty bytes
 			return nil
 		}
 		return err
@@ -244,7 +261,8 @@ func (tileset *DB) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) error {
 	return nil
 }
 
-// Read the metadata table into a map, casting their values into the appropriate type
+// ReadMetadata reads the metadata table into a map, casting their values into
+// the appropriate type
 func (tileset *DB) ReadMetadata() (map[string]interface{}, error) {
 	var (
 		key   string
@@ -297,50 +315,50 @@ func (tileset *DB) ReadMetadata() (map[string]interface{}, error) {
 	return metadata, nil
 }
 
-// TileFormatreturns the TileFormat of the DB.
-func (d DB) TileFormat() TileFormat {
-	return d.tileformat
+// TileFormat returns the TileFormat of the DB.
+func (tileset *DB) TileFormat() TileFormat {
+	return tileset.tileformat
 }
 
 // TileFormatString returns the string representation of the TileFormat of the DB.
-func (d DB) TileFormatString() string {
-	return d.tileformat.String()
+func (tileset *DB) TileFormatString() string {
+	return tileset.tileformat.String()
 }
 
 // ContentType returns the content-type string of the TileFormat of the DB.
-func (d DB) ContentType() string {
-	return d.tileformat.ContentType()
+func (tileset *DB) ContentType() string {
+	return tileset.tileformat.ContentType()
 }
 
 // HasUTFGrid returns whether the DB has a UTF grid.
-func (d DB) HasUTFGrid() bool {
-	return d.hasUTFGrid
+func (tileset *DB) HasUTFGrid() bool {
+	return tileset.hasUTFGrid
 }
 
 // HasUTFGridData returns whether the DB has UTF grid data.
-func (d DB) HasUTFGridData() bool {
-	return d.hasUTFGridData
+func (tileset *DB) HasUTFGridData() bool {
+	return tileset.hasUTFGridData
 }
 
 // UTFGridCompression returns the compression type of the UTFGrid in the DB:
 // ZLIB or GZIP
-func (d DB) UTFGridCompression() TileFormat {
-	return d.utfgridCompression
+func (tileset *DB) UTFGridCompression() TileFormat {
+	return tileset.utfgridCompression
 }
 
 // TimeStamp returns the time stamp of the DB.
-func (d DB) TimeStamp() time.Time {
-	return d.timestamp
+func (tileset *DB) TimeStamp() time.Time {
+	return tileset.timestamp
 }
 
-// Close closes the DB database connection
+// Close closes the database connection
 func (tileset *DB) Close() error {
 	return tileset.db.Close()
 }
 
-// Inpsect first few bytes of byte array to determine tile format
-// PBF tile format does not have a distinct signature, it will be returned
-// as GZIP, and it is up to caller to determine that it is a PBF format
+// detectFileFormat inspects the first few bytes of byte array to determine tile
+// format PBF tile format does not have a distinct signature, it will be
+// returned as GZIP, and it is up to caller to determine that it is a PBF format
 func detectTileFormat(data *[]byte) (TileFormat, error) {
 	patterns := map[TileFormat][]byte{
 		GZIP: []byte("\x1f\x8b"), // this masks PBF format too
@@ -357,4 +375,20 @@ func detectTileFormat(data *[]byte) (TileFormat, error) {
 	}
 
 	return UNKNOWN, errors.New("Could not detect tile format")
+}
+
+// stringToFloats converts a commma-delimited string of floats to a slice of
+// float64 and returns it and the first error that was encountered.
+// Example: "1.5,2.1" => [1.5, 2.1]
+func stringToFloats(str string) ([]float64, error) {
+	split := strings.Split(str, ",")
+	var out []float64
+	for _, v := range split {
+		value, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+		if err != nil {
+			return out, fmt.Errorf("could not parse %q to floats: %v", str, err)
+		}
+		out = append(out, value)
+	}
+	return out, nil
 }
