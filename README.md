@@ -1,4 +1,9 @@
 mbtileserver
+[![Build Status](https://travis-ci.org/consbio/mbtileserver.svg?branch=master)](https://travis-ci.org/consbio/mbtileserver)
+[![Coverage Status](https://coveralls.io/repos/github/consbio/mbtileserver/badge.svg?branch=master)](https://coveralls.io/github/consbio/mbtileserver?branch=master)
+[![GoDoc](https://godoc.org/github.com/consbio/mbtileserver?status.svg)](http://godoc.org/github.com/consbio/mbtileserver)
+[![Go Report Card](https://goreportcard.com/badge/github.com/consbio/mbtileserver)](https://goreportcard.com/report/github.com/consbio/mbtileserver)
+
 ============
 
 A simple Go-based server for map tiles stored in [mbtiles](https://github.com/mapbox/mbtiles-spec) 
