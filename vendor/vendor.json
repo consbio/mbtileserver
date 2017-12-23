@@ -27,12 +27,6 @@
 			"revisionTime": "2017-03-30T19:40:04Z"
 		},
 		{
-			"checksumSHA1": "92ebnITjgiMHDu6xEXaanEnGsgU=",
-			"path": "github.com/golang/groupcache",
-			"revision": "b710c8433bd175204919eb38776e944233235d03",
-			"revisionTime": "2017-04-21T00:56:42Z"
-		},
-		{
 			"checksumSHA1": "3KR3qbG0izQxxsSgDon+RNTS0eg=",
 			"path": "github.com/golang/groupcache/consistenthash",
 			"revision": "b710c8433bd175204919eb38776e944233235d03",

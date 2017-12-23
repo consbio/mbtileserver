@@ -8,11 +8,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/golang/groupcache"
 	"github.com/labstack/echo"
 
 	"github.com/evalphobia/logrus_sentry"
@@ -24,18 +22,12 @@ import (
 	"github.com/consbio/mbtileserver/mbtiles"
 )
 
-type ServiceInfo struct {
-	ImageType string `json:"imageType"`
-	URL       string `json:"url"`
-}
-
 var (
-	cache       *groupcache.Group
 	tilesets    map[string]mbtiles.DB
 	startuptime = time.Now()
 )
 
-var RootCmd = &cobra.Command{
+var rootCmd = &cobra.Command{
 	Use:   "mbtileserver",
 	Short: "Serve tiles from mbtiles files",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -51,14 +43,14 @@ var (
 	privateKey  string
 	pathPrefix  string
 	domain      string
-	sentry_DSN  string
+	sentryDSN   string
 	verbose     bool
 	autotls     bool
 	redirect    bool
 )
 
 func init() {
-	flags := RootCmd.Flags()
+	flags := rootCmd.Flags()
 	flags.IntVarP(&port, "port", "p", 8000, "Server port.")
 	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
@@ -66,14 +58,14 @@ func init() {
 	flags.Int64Var(&cacheSize, "cachesize", 250, "Size of cache in MB.")
 	flags.StringVar(&pathPrefix, "path", "", "URL root path of this server (if behind a proxy)")
 	flags.StringVar(&domain, "domain", "", "Domain name of this server")
-	flags.StringVar(&sentry_DSN, "dsn", "", "Sentry DSN")
+	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 }
 
 func main() {
-	if err := RootCmd.Execute(); err != nil {
+	if err := rootCmd.Execute(); err != nil {
 		log.Fatalln(err)
 	}
 }
@@ -83,8 +75,8 @@ func serve() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	if len(sentry_DSN) > 0 {
-		hook, err := logrus_sentry.NewSentryHook(sentry_DSN, []log.Level{
+	if len(sentryDSN) > 0 {
+		hook, err := logrus_sentry.NewSentryHook(sentryDSN, []log.Level{
 			log.PanicLevel,
 			log.FatalLevel,
 			log.ErrorLevel,
@@ -149,8 +141,6 @@ func serve() {
 
 	log.Debugf("Cache size: %v MB\n", cacheSize)
 
-	cache = groupcache.NewGroup("TileCache", cacheSize*1048576, groupcache.GetterFunc(cacheGetter))
-
 	e := echo.New()
 	e.HideBanner = true
 	e.Pre(middleware.RemoveTrailingSlash())
@@ -178,12 +168,9 @@ func serve() {
 		log.Errorf("%v", err)
 	}
 	h := echo.WrapHandler(svcSet.Handler(ef, true))
-	e.GET("/*", h, NotModifiedMiddleware)
-	// TODO uncomment these after #54 is merged
-	// a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
-	// e.GET("/arcgis/rest/*", a, NotModifiedMiddleware)
-
-	e.GET("/admin/cache", CacheInfo, gzip)
+	e.GET("/*", h, notModifiedMiddleware)
+	a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
+	e.GET("/arcgis/rest/services/*", a, notModifiedMiddleware)
 
 	// Start the server
 	fmt.Println("\n--------------------------------------")
@@ -195,7 +182,7 @@ func serve() {
 		e.Pre(middleware.HTTPSRedirect())
 		if port == 443 {
 			go func(c *echo.Echo) {
-				fmt.Println("HTTP server with redirect started on port 80\n")
+				fmt.Println("HTTP server with redirect started on port 80")
 				log.Fatal(e.Start(":80"))
 			}(e)
 		}
@@ -232,52 +219,7 @@ func serve() {
 
 }
 
-func cacheGetter(ctx groupcache.Context, key string, dest groupcache.Sink) error {
-	pathParams := strings.Split(key, "|")
-	id := pathParams[0]
-	tileType := pathParams[1]
-	z64, _ := strconv.ParseUint(pathParams[2], 0, 8)
-	z := uint8(z64)
-	x, _ := strconv.ParseUint(pathParams[3], 0, 64)
-	y, _ := strconv.ParseUint(pathParams[4], 0, 64)
-	//flip y to match the spec
-	y = (1 << z) - 1 - y
-
-	// TODO: if y is a very large number, e.g., 18446744073709551615, then it is an overflow and not a valid y value
-
-	var data []byte
-	tileset := tilesets[id]
-
-	if tileType == "tile" {
-		err := tileset.ReadTile(z, x, y, &data)
-		if err != nil {
-			log.Errorf("Error encountered reading tile for z=%v, x=%v, y=%v, \n%v", z, x, y, err)
-			return err
-		}
-	} else if tileType == "grid" && tileset.HasUTFGrid() {
-		err := tileset.ReadGrid(z, x, y, &data)
-		if err != nil {
-			log.Errorf("Error encountered reading grid for z=%v, x=%v, y=%v, \n%v", z, x, y, err)
-			return err
-		}
-	}
-
-	dest.SetBytes(data)
-	return nil
-}
-
-func CacheInfo(c echo.Context) error {
-	hotStats := cache.CacheStats(groupcache.HotCache)
-	mainStats := cache.CacheStats(groupcache.MainCache)
-
-	out := map[string]interface{}{
-		"hot":  hotStats,
-		"main": mainStats,
-	}
-	return c.JSON(http.StatusOK, out)
-}
-
-func NotModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+func notModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var lastModified time.Time
 		id := c.Param("id")
