@@ -38,7 +38,6 @@ var rootCmd = &cobra.Command{
 var (
 	port        int
 	tilePath    string
-	cacheSize   int64
 	certificate string
 	privateKey  string
 	pathPrefix  string
@@ -55,7 +54,6 @@ func init() {
 	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
-	flags.Int64Var(&cacheSize, "cachesize", 250, "Size of cache in MB.")
 	flags.StringVar(&pathPrefix, "path", "", "URL root path of this server (if behind a proxy)")
 	flags.StringVar(&domain, "domain", "", "Domain name of this server")
 	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
@@ -138,8 +136,6 @@ func serve() {
 	if err != nil {
 		log.Errorf("Unable to create service set: %v", err)
 	}
-
-	log.Debugf("Cache size: %v MB\n", cacheSize)
 
 	e := echo.New()
 	e.HideBanner = true
