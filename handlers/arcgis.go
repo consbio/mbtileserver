@@ -78,7 +78,8 @@ var geographicSR = arcGISSpatialReference{Wkid: 4326}
 // response otherwise. Any error that occurs during writing is returned.
 func wrapJSONP(w http.ResponseWriter, r *http.Request, b []byte) (err error) {
 	callback := r.URL.Query().Get("callback")
-	if callback == "" {
+
+	if callback != "" {
 		w.Header().Set("Content-Type", "application/javascript")
 		_, err = w.Write([]byte(fmt.Sprintf("%s(%s);", callback, b)))
 		return
@@ -371,7 +372,7 @@ func geoToMercator(longitude, latitude float64) (float64, float64) {
 // can be used for e.g. logging with logging facitilies of the caller.
 func (s *ServiceSet) ArcGISHandler(ef func(error)) http.Handler {
 	m := http.NewServeMux()
-	rootPath := "/arcgis/rest/services"
+	rootPath := "/arcgis/rest/services/"
 
 	for id, db := range s.tilesets {
 		p := rootPath + id + "/MapServer"
