@@ -17,10 +17,6 @@ from the mbtiles file.
 * a preview map for exploring each tileset.
 * a minimal ArcGIS tile map service API (work in progress)
 
-
-It uses `golang/groupcache` to provide caching of tiles for even faster
-performance.
-
 We have been able to host a bunch of tilesets on an 
 [AWS t2.nano](https://aws.amazon.com/about-aws/whats-new/2015/12/introducing-t2-nano-the-smallest-lowest-cost-amazon-ec2-instance/)
 virtual machine without any issues.
@@ -49,7 +45,6 @@ Dependencies:
 * [github.com/labstack/echo](https://github.com/labstack/echo)
 * [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
 * [github.com/spf13/cobra](https://github.com/spf13/cobra)
-* [github.com/golang/groupcache](https://github.com/golang/groupcache)
 * [github.com/Sirupsen/logrus](https://github.com/Sirupsen/logrus)
 * [golang.org/x/crypto/acme/autocert](https://golang.org/x/crypto/acme/autocert)
 
@@ -78,7 +73,6 @@ Usage:
   mbtileserver [flags]
 
 Flags:
-      --cachesize int   Size of cache in MB. (default 250)
   -c, --cert string     X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
   -d, --dir string      Directory containing mbtiles files. (default "./tilesets")
       --domain string   Domain name of this server
