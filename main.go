@@ -152,11 +152,6 @@ func serve() {
 
 	gzip := middleware.Gzip()
 
-	// Setup routing
-	e.File("/favicon.ico", "favicon.ico")
-	e.File("/favicon.png", "favicon.png")
-
-	// TODO: can use more caching here
 	staticPrefix := "/static"
 	if pathPrefix != "" {
 		staticPrefix = "/" + pathPrefix + staticPrefix
