@@ -139,7 +139,7 @@ func NewFromBaseDir(baseDir string) (*ServiceSet, error) {
 	return s, nil
 }
 
-// Len returns the number of tilesets in this ServiceSet
+// Size returns the number of tilesets in this ServiceSet
 func (s *ServiceSet) Size() int {
 	return len(s.tilesets)
 }
