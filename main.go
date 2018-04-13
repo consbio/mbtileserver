@@ -127,10 +127,10 @@ func serve() {
 	}
 
 	if len(filenames) == 0 {
-		log.Fatal("No tilesets found in tileset directory")
+		log.Warnf("No tilesets found in %s!\n", tilePath)
+	} else {
+		log.Infof("Found %v mbtiles files in %s", len(filenames), tilePath)
 	}
-
-	log.Infof("Found %v mbtiles files in %s", len(filenames), tilePath)
 
 	svcSet, err := handlers.NewFromBaseDir(tilePath)
 	if err != nil {

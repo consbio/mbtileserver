@@ -116,10 +116,6 @@ func NewFromBaseDir(baseDir string) (*ServiceSet, error) {
 		return nil, fmt.Errorf("unable to scan tilesets: %v", err)
 	}
 
-	if len(filenames) == 0 {
-		return nil, fmt.Errorf("no tilesets found in %q", baseDir)
-	}
-
 	s := New()
 
 	for _, filename := range filenames {

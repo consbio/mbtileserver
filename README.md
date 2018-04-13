@@ -62,7 +62,7 @@ MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
 
 If you experience very slow builds each time, it may be that you need to first run
 ```
-go build . -a
+go build -a .
 ```
 
 to make subsequent builds much faster.
