@@ -223,18 +223,18 @@ Then to build the minified version, run:
 $gulp build
 ```
 
-Modifying the `.go` files always requires re-running `go build`.
+Modifying the `.go` files always requires re-running `go build .`.
 
 In case you have modified the templates and static assets, you need to run `go
-generate` from the `handlers` sub-directory to ensure that your modifications
+generate ./handlers` to ensure that your modifications
 are embedded into the executable. For this to work, you must have
 [github.com/shurcooL/vfsgen)[https://github.com/shurcooL/vfsgen) installed.
 This will rewrite the `assets_vfsdata.go` which you must commit along with your
 modification. Also you should run `go build` after `go generate`.
 
-During the development cycle you may use `go build -tags dev` to build the
+During the development cycle you may use `go build -tags dev .` to build the
 binary, in which case it will always take the assets from the relative file
-path `handlers/templates/` directly and you can omit the `go generate` step.
+path `handlers/templates/` directly and you can omit the `go generate` step.  (note: this is currently not working properly)
 But do not forget to perform it in the end.
 
 

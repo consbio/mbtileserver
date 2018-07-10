@@ -1,6 +1,7 @@
 {{ define "map_gl" }}
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset='utf-8' />
     <title>{{.ID}} Preview</title>
@@ -8,16 +9,26 @@
     <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.23.0/mapbox-gl.js'></script>
     <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.23.0/mapbox-gl.css' rel='stylesheet' />
     <style>
-        body { margin:0; padding:0; }
-        #map { position:absolute; top:0; bottom:0; width:100%; }
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
     </style>
 </head>
+
 <body>
     <div id='map'></div>
     <script>
         var basemapSource = {
             type: 'raster',
-            tiles: ['http://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}'],
+            tiles: ['http://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'],
             tileSize: 256,
             attribution: 'Tiles &copy; Esri &mdash; Source: USGS, Esri, TANA, DeLorme, and NPS'
         }
@@ -26,15 +37,15 @@
             type: 'raster',
             source: 'basemap',
             minzoom: 0,
-            maxzoom: 12
+            maxzoom: 22
         }
 
 
         var map;
-        mapboxgl.util.getJSON('{{.URL}}', function(e, tilejson){
-            
+        mapboxgl.util.getJSON('{{.URL}}', function (e, tilejson) {
+
             var layers = [];
-            tilejson.vector_layers.forEach(function(srcLyr, i){
+            tilejson.vector_layers.forEach(function (srcLyr, i) {
                 layers.push({
                     id: 'overlay-poly-' + i,
                     source: 'overlay',
@@ -69,7 +80,22 @@
                     }
                 });
 
-                //TODO: symbols
+                layers.push({
+                    id: 'overlay-point-' + i,
+                    source: 'overlay',
+                    'source-layer': srcLyr.id,
+                    "filter": [
+                        "==",
+                        "$type",
+                        "Point"
+                    ],
+                    type: 'circle',
+                    paint: {
+                        'circle-radius': 6,
+                        'circle-color': '#F00',
+                        'circle-opacity': 1
+                    }
+                });
             });
 
 
@@ -88,19 +114,20 @@
                     },
                     layers: [basemapStyle].concat(layers)
                 },
-                maxZoom: Math.min(tilejson.maxzoom, basemapStyle.maxzoom),
-                zoom: (tilejson.bounds)? 0: tilejson.center[2],
+                maxZoom: basemapStyle.maxzoom,
+                zoom: (tilejson.bounds) ? 0 : tilejson.center[2],
                 center: tilejson.center.slice(0, 2)
             });
-            
-            if (tilejson.bounds){
-                var bounds = [tilejson.bounds.slice(0,2), tilejson.bounds.slice(2, tilejson.bounds.length)];
+
+            if (tilejson.bounds) {
+                var bounds = [tilejson.bounds.slice(0, 2), tilejson.bounds.slice(2, tilejson.bounds.length)];
                 map.fitBounds(bounds);
             }
-            
+
             map.addControl(new mapboxgl.Navigation());
         });
     </script>
 </body>
+
 </html>
 {{ end }}
