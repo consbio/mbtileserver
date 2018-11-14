@@ -81,7 +81,6 @@ type DB struct {
 	timestamp          time.Time  // timestamp of file, for cache control headers
 	hasUTFGrid         bool       // true if mbtiles file contains additional tables with UTFGrid data
 	utfgridCompression TileFormat // compression (GZIP or ZLIB) of UTFGrids
-	hasUTFGridData     bool       // true if UTFGrids have corresponding key / value data that need to be joined and returned with the UTFGrid
 }
 
 // NewDB creates a new DB instance.
@@ -122,16 +121,24 @@ func NewDB(filename string) (*DB, error) {
 	}
 
 	// UTFGrids
-	// first check to see if requisite tables exist
+	// first check to see if requisite views exist: grids, grid_data
+	// by convention, these views are queries against: grid_utfgrid, keymap, grid_key
+	// for some mbtiles files, all tables and views will be present, but not have any UTFGrids
+	// since the grids view is a join against 'map' table on 'grid_id', querying this view for any grids
+	// may take a very long time for large tilesets if there are not actually any grids.
+	// For this reason, we query data directly from 'grid_utfgrid' to determine if any grids are present.
+	// NOTE: this assumption may not be valid for all mbtiles files, since grid_utfgrid is used by convention
+	// rather than specification.
 	var count int
-	err = db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='view' AND name = 'grids'").Scan(&count)
+	err = db.QueryRow("select count(*) from sqlite_master where name in ('grids', 'grid_data', 'grid_utfgrid', 'keymap', 'grid_key')").Scan(&count)
 	if err != nil {
 		return nil, err
 	}
-	if count == 1 {
+
+	if count == 5 {
 		// query a sample grid to detect type
 		var gridData []byte
-		err = db.QueryRow("select grid from grids where grid is not null LIMIT 1").Scan(&gridData)
+		err = db.QueryRow("select grid_utfgrid from grid_utfgrid limit 1").Scan(&gridData)
 		if err != nil {
 			if err != sql.ErrNoRows {
 				return nil, fmt.Errorf("could not read sample grid to determine type: %v", err)
@@ -141,16 +148,6 @@ func NewDB(filename string) (*DB, error) {
 			out.utfgridCompression, err = detectTileFormat(&gridData)
 			if err != nil {
 				return nil, fmt.Errorf("could not determine UTF Grid compression type: %v", err)
-			}
-
-			// Check to see if grid_data view exists
-			count = 0 // prevent use of prior value
-			err = db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='view' AND name = 'grid_data'").Scan(&count)
-			if err != nil {
-				return nil, err
-			}
-			if count == 1 {
-				out.hasUTFGridData = true
 			}
 		}
 	}
@@ -175,7 +172,7 @@ func (tileset *DB) ReadTile(z uint8, x uint64, y uint64, data *[]byte) error {
 
 // ReadGrid reads a UTFGrid with identifiers z, x, y into provided *[]byte. data
 // will be nil if the grid does not exist in the database, and an error will be
-// raised. This merges in grid key data, if any exist The data is returned in
+// raised. This merges in grid key data.  The data is returned in
 // the original compression encoding (zlib or gzip)
 func (tileset *DB) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) error {
 	if !tileset.hasUTFGrid {
@@ -191,73 +188,72 @@ func (tileset *DB) ReadGrid(z uint8, x uint64, y uint64, data *[]byte) error {
 		return err
 	}
 
-	if tileset.hasUTFGridData {
-		keydata := make(map[string]interface{})
-		var (
-			key   string
-			value []byte
-		)
+	keydata := make(map[string]interface{})
+	var (
+		key   string
+		value []byte
+	)
 
-		rows, err := tileset.db.Query("select key_name, key_json FROM grid_data where zoom_level = ? and tile_column = ? and tile_row = ?", z, x, y)
-		if err != nil {
-			return fmt.Errorf("cannot fetch grid data: %v", err)
-		}
-		defer rows.Close()
-		for rows.Next() {
-			err := rows.Scan(&key, &value)
-			if err != nil {
-				return fmt.Errorf("could not fetch grid data: %v", err)
-			}
-			valuejson := make(map[string]interface{})
-			json.Unmarshal(value, &valuejson)
-			keydata[key] = valuejson
-		}
-
-		if len(keydata) == 0 {
-			return nil // there is no key data for this tile, return
-		}
-
-		var (
-			zreader io.ReadCloser  // instance of zlib or gzip reader
-			zwriter io.WriteCloser // instance of zlip or gzip writer
-			buf     bytes.Buffer
-		)
-		reader := bytes.NewReader(*data)
-
-		if tileset.utfgridCompression == ZLIB {
-			zreader, err = zlib.NewReader(reader)
-			if err != nil {
-				return err
-			}
-			zwriter = zlib.NewWriter(&buf)
-		} else {
-			zreader, err = gzip.NewReader(reader)
-			if err != nil {
-				return err
-			}
-			zwriter = gzip.NewWriter(&buf)
-		}
-
-		var utfjson map[string]interface{}
-		jsonDecoder := json.NewDecoder(zreader)
-		jsonDecoder.Decode(&utfjson)
-		zreader.Close()
-
-		// splice the key data into the UTF json
-		utfjson["data"] = keydata
-		if err != nil {
-			return err
-		}
-
-		// now re-encode to original zip encoding
-		jsonEncoder := json.NewEncoder(zwriter)
-		err = jsonEncoder.Encode(utfjson)
-		if err != nil {
-			return err
-		}
-		zwriter.Close()
-		*data = buf.Bytes()
+	rows, err := tileset.db.Query("select key_name, key_json FROM grid_data where zoom_level = ? and tile_column = ? and tile_row = ?", z, x, y)
+	if err != nil {
+		return fmt.Errorf("cannot fetch grid data: %v", err)
 	}
+	defer rows.Close()
+	for rows.Next() {
+		err := rows.Scan(&key, &value)
+		if err != nil {
+			return fmt.Errorf("could not fetch grid data: %v", err)
+		}
+		valuejson := make(map[string]interface{})
+		json.Unmarshal(value, &valuejson)
+		keydata[key] = valuejson
+	}
+
+	if len(keydata) == 0 {
+		return nil // there is no key data for this tile, return
+	}
+
+	var (
+		zreader io.ReadCloser  // instance of zlib or gzip reader
+		zwriter io.WriteCloser // instance of zlip or gzip writer
+		buf     bytes.Buffer
+	)
+	reader := bytes.NewReader(*data)
+
+	if tileset.utfgridCompression == ZLIB {
+		zreader, err = zlib.NewReader(reader)
+		if err != nil {
+			return err
+		}
+		zwriter = zlib.NewWriter(&buf)
+	} else {
+		zreader, err = gzip.NewReader(reader)
+		if err != nil {
+			return err
+		}
+		zwriter = gzip.NewWriter(&buf)
+	}
+
+	var utfjson map[string]interface{}
+	jsonDecoder := json.NewDecoder(zreader)
+	jsonDecoder.Decode(&utfjson)
+	zreader.Close()
+
+	// splice the key data into the UTF json
+	utfjson["data"] = keydata
+	if err != nil {
+		return err
+	}
+
+	// now re-encode to original zip encoding
+	jsonEncoder := json.NewEncoder(zwriter)
+	err = jsonEncoder.Encode(utfjson)
+	if err != nil {
+		return err
+	}
+	zwriter.Close()
+	*data = buf.Bytes()
+
 	return nil
 }
 
@@ -333,11 +329,6 @@ func (tileset *DB) ContentType() string {
 // HasUTFGrid returns whether the DB has a UTF grid.
 func (tileset *DB) HasUTFGrid() bool {
 	return tileset.hasUTFGrid
-}
-
-// HasUTFGridData returns whether the DB has UTF grid data.
-func (tileset *DB) HasUTFGridData() bool {
-	return tileset.hasUTFGridData
 }
 
 // UTFGridCompression returns the compression type of the UTFGrid in the DB:
