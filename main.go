@@ -42,6 +42,7 @@ var (
 	privateKey  string
 	pathPrefix  string
 	domain      string
+	secretKey   string
 	sentryDSN   string
 	verbose     bool
 	autotls     bool
@@ -56,10 +57,15 @@ func init() {
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
 	flags.StringVar(&pathPrefix, "path", "", "URL root path of this server (if behind a proxy)")
 	flags.StringVar(&domain, "domain", "", "Domain name of this server")
+	flags.StringVarP(&secretKey, "secret-key", "s", "", "Shared secret key used for HMAC authentication")
 	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
+
+	if secretKey == "" {
+		secretKey = os.Getenv("MBTILESERVER_SECRET_KEY")
+	}
 }
 
 func main() {
@@ -132,7 +138,7 @@ func serve() {
 		log.Infof("Found %v mbtiles files in %s", len(filenames), tilePath)
 	}
 
-	svcSet, err := handlers.NewFromBaseDir(tilePath)
+	svcSet, err := handlers.NewFromBaseDir(tilePath, secretKey)
 	if err != nil {
 		log.Errorf("Unable to create service set: %v", err)
 	}

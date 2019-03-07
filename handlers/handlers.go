@@ -4,7 +4,12 @@ package handlers
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha1"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -13,9 +18,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/consbio/mbtileserver/mbtiles"
 )
+
+const maxSignatureAge = time.Duration(5) * time.Minute
 
 // scheme returns the underlying URL scheme of the original request.
 func scheme(r *http.Request) string {
@@ -57,6 +65,59 @@ func wrapGetWithErrors(ef func(error), hf handlerFunc) http.Handler {
 	})
 }
 
+func hmacAuth(hf handlerFunc, secretKey string, serviceId string) handlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) (int, error) {
+		// If secret key isn't set, allow all requests
+		if secretKey == "" {
+			return hf(w, r)
+		}
+
+		var rawSignature, rawSignDate string
+
+		query := r.URL.Query()
+
+		if signature := query.Get("signature"); signature != "" {
+			rawSignature = signature
+		} else if signature := r.Header.Get("X-Signature"); signature != "" {
+			rawSignature = signature
+		} else {
+			return 400, errors.New("No signature provided")
+		}
+
+		if date := query.Get("date"); date != "" {
+			rawSignDate = date
+		} else if date := r.Header.Get("X-Signature-Date"); date != "" {
+			rawSignDate = date
+		} else {
+			return 400, errors.New("No signature date provided")
+		}
+
+		signDate, err := time.Parse(time.RFC3339Nano, rawSignDate)
+		if err != nil || time.Now().Sub(signDate) > maxSignatureAge {
+			return 400, errors.New("Signature date it not valid RFC3339")
+		}
+
+		signatureParts := strings.SplitN(rawSignature, ":", 2)
+		if len(signatureParts) != 2 {
+			return 400, errors.New("Signature does not contain salt")
+		}
+		salt, signature := signatureParts[0], signatureParts[1]
+
+		key := sha1.New()
+		key.Write([]byte(salt + secretKey))
+		hash := hmac.New(sha1.New, key.Sum(nil))
+		message := fmt.Sprintf("%s:%s", rawSignDate, serviceId)
+		hash.Write([]byte(message))
+		checkSignature := base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
+
+		if subtle.ConstantTimeCompare([]byte(signature), []byte(checkSignature)) == 1 {
+			return hf(w, r)
+		}
+
+		return 400, errors.New("Invalid signature")
+	}
+}
+
 // ServiceInfo consists of two strings that contain the image type and a URL.
 type ServiceInfo struct {
 	ImageType string `json:"imageType"`
@@ -70,6 +131,7 @@ type ServiceSet struct {
 	templates *template.Template
 	Domain    string
 	Path      string
+	secretKey string
 }
 
 // New returns a new ServiceSet. Use AddDBOnPath to add a mbtiles file.
@@ -101,7 +163,7 @@ func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 // NewFromBaseDir returns a ServiceSet that combines all .mbtiles files under
 // the directory at baseDir. The DBs will all be served under their relative paths
 // to baseDir.
-func NewFromBaseDir(baseDir string) (*ServiceSet, error) {
+func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
 	var filenames []string
 	err := filepath.Walk(baseDir, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -117,6 +179,7 @@ func NewFromBaseDir(baseDir string) (*ServiceSet, error) {
 	}
 
 	s := New()
+	s.secretKey = secretKey
 
 	for _, filename := range filenames {
 		subpath, err := filepath.Rel(baseDir, filename)
@@ -400,14 +463,14 @@ func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 func (s *ServiceSet) Handler(ef func(error), publish bool) http.Handler {
 	m := http.NewServeMux()
 	if publish {
-		m.Handle("/services", wrapGetWithErrors(ef, s.listServices))
+		m.Handle("/services", wrapGetWithErrors(ef, hmacAuth(s.listServices, s.secretKey, "")))
 	}
 	for id, db := range s.tilesets {
 		p := "/services/" + id
-		m.Handle(p, wrapGetWithErrors(ef, s.tileJSON(id, db, publish)))
-		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, s.tiles(db)))
+		m.Handle(p, wrapGetWithErrors(ef, hmacAuth(s.tileJSON(id, db, publish), s.secretKey, id)))
+		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, hmacAuth(s.tiles(db), s.secretKey, id)))
 		if publish {
-			m.Handle(p+"/map", wrapGetWithErrors(ef, s.serviceHTML(id, db)))
+			m.Handle(p+"/map", wrapGetWithErrors(ef, hmacAuth(s.serviceHTML(id, db), s.secretKey, id)))
 		}
 	}
 	return m
