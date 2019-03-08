@@ -23,7 +23,7 @@ import (
 	"github.com/consbio/mbtileserver/mbtiles"
 )
 
-const maxSignatureAge = time.Duration(5) * time.Minute
+const maxSignatureAge = time.Duration(15) * time.Minute
 
 // scheme returns the underlying URL scheme of the original request.
 func scheme(r *http.Request) string {
@@ -94,7 +94,7 @@ func hmacAuth(hf handlerFunc, secretKey string, serviceId string) handlerFunc {
 
 		signDate, err := time.Parse(time.RFC3339Nano, rawSignDate)
 		if err != nil || time.Now().Sub(signDate) > maxSignatureAge {
-			return 400, errors.New("Signature date it not valid RFC3339")
+			return 400, errors.New("Signature date is not valid RFC3339")
 		}
 
 		signatureParts := strings.SplitN(rawSignature, ":", 2)
@@ -239,6 +239,11 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 
 func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB, mapURL bool) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
+		query := ""
+		if (r.URL.RawQuery != "") {
+			query = "?" + r.URL.RawQuery
+		}
+
 		svcURL := fmt.Sprintf("%s%s", s.rootURL(r), r.URL.Path)
 		imgFormat := db.TileFormatString()
 		out := map[string]interface{}{
@@ -246,7 +251,7 @@ func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB, mapURL bool) handlerFun
 			"id":       id,
 			"scheme":   "xyz",
 			"format":   imgFormat,
-			"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s", svcURL, imgFormat)},
+			"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s%s", svcURL, imgFormat, query)},
 		}
 		if mapURL {
 			out["map"] = fmt.Sprintf("%s/map", svcURL)
@@ -275,7 +280,7 @@ func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB, mapURL bool) handlerFun
 		}
 
 		if db.HasUTFGrid() {
-			out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.json", svcURL)}
+			out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.json%s", svcURL, query)}
 		}
 		bytes, err := json.Marshal(out)
 		if err != nil {
