@@ -80,17 +80,18 @@ Usage:
   mbtileserver [flags]
 
 Flags:
-  -c, --cert string     X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
-  -d, --dir string      Directory containing mbtiles files. (default "./tilesets")
-      --domain string   Domain name of this server
-      --dsn string      Sentry DSN
-  -h, --help            help for mbtileserver
-  -k, --key string      TLS private key
-      --path string     URL root path of this server (if behind a proxy)
-  -p, --port int        Server port. (default 8000)
-  -t, --tls				Auto TLS using Let's Encrypt
-  -r, --redirect		Redirect HTTP to HTTPS
-  -v, --verbose         Verbose logging
+  -c, --cert string       X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
+  -d, --dir string        Directory containing mbtiles files. (default "./tilesets")
+      --domain string     Domain name of this server
+      --dsn string        Sentry DSN
+  -h, --help              help for mbtileserver
+  -k, --key string        TLS private key
+      --path string       URL root path of this server (if behind a proxy)
+  -p, --port int          Server port. (default 8000)
+  -s, --secret-key string Shared secret key used for HMAC authentication
+  -t, --tls               Auto TLS using Let's Encrypt
+  -r, --redirect          Redirect HTTP to HTTPS
+  -v, --verbose           Verbose logging
 ```
 
 So hosting tiles is as easy as putting your mbtiles files in the `tilesets`
@@ -197,6 +198,69 @@ These are hosted on a free dyno by Heroku (thanks Heroku!), so there might be a 
 -   [TileJSON](http://frozen-island-41032.herokuapp.com/services/geography-class-png) for a PNG based tileset generated using TileMill.
 -   [Map Preview ](http://frozen-island-41032.herokuapp.com/services/geography-class-png/map) for a map preview of the above.
 -   [ArcGIS Map Service](http://frozen-island-41032.herokuapp.com/arcgis/rest/services/geography-class-png/MapServer)
+
+## Request authorization
+
+Provind a secret key with `-s/--secret-key` or by setting the `MBTILESERVER_SECRET_KEY` environment variable will 
+restrict access to all server endpoints and tile requests. Requests will only be served if they provide a cryptographic 
+signature created using the same secret key. This allows, for example, an application server to provide authorized 
+clients a short-lived token with which the clients can access tiles for a specific service.
+
+Signatures expire 15 minutes from their creation date to prevent exposed or leaked signatures from being useful past a 
+small time window.
+
+### Creating signatures
+
+A signatures is a URL-safe, base64 encoded HMAC hash using the `SHA1` algorithm. The hash key is an `SHA1` key created
+from a randomly generated salt, and the **secret key** string. The hash payload is a combination of the ISO-formatted 
+date when the hash was created, and the authorized service id.
+
+The following is an example signature, created in Go for the serivce id `test`, the date 
+`2019-03-08T19:31:12.213831+00:00`, the salt `0EvkK316T-sBLA`, and the secret key 
+`YMIVXikJWAiiR3q-JMz1v2Mfmx3gTXJVNqme5kyaqrY`
+
+Create the SHA1 key:
+
+```go
+serviceId := "test"
+date := "2019-03-08T19:31:12.213831+00:00"
+salt := "0EvkK316T-sBLA"
+secretKey := "YMIVXikJWAiiR3q-JMz1v2Mfmx3gTXJVNqme5kyaqrY"
+
+key := sha1.New()
+key.Write([]byte(salt + secretKey))
+```
+
+Create the signature hash:
+
+```go
+hash := hmac.New(sha1.New, key.Sum(nil))
+message := fmt.Sprintf("%s:%s", date, serviceId)
+hash.Write([]byte(message))
+```
+
+Finally, base64-encode the hash:
+
+```go
+b64hash := base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
+fmt.Println(b64hash) // Should output: 2y8vHb9xK6RSxN8EXMeAEUiYtZk
+```
+
+### Making request
+
+Authenticated requests must include the ISO-fromatted date, and a salt-signature combination in the form of: 
+`<salt>:<signature>`. These can be provided as query parameters:
+
+```text
+?date=2019-03-08T19:31:12.213831%2B00:00&signature=0EvkK316T-sBLA:YMIVXikJWAiiR3q-JMz1v2Mfmx3gTXJVNqme5kyaqrY
+```
+
+Or they can be provided as request headers:
+
+```text
+X-Signature-Date: 2019-03-08T19:31:12.213831+00:00
+X-Signature: 0EvkK316T-sBLA:YMIVXikJWAiiR3q-JMz1v2Mfmx3gTXJVNqme5kyaqrY
+```
 
 ## Roadmap
 
