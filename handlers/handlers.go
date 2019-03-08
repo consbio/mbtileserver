@@ -72,29 +72,30 @@ func hmacAuth(hf handlerFunc, secretKey string, serviceId string) handlerFunc {
 			return hf(w, r)
 		}
 
-		var rawSignature, rawSignDate string
-
 		query := r.URL.Query()
 
-		if signature := query.Get("signature"); signature != "" {
-			rawSignature = signature
-		} else if signature := r.Header.Get("X-Signature"); signature != "" {
-			rawSignature = signature
-		} else {
+		rawSignature := query.Get("signature")
+		if rawSignature == "" {
+			rawSignature = r.Header.Get("X-Signature")
+		}
+		if rawSignature == "" {
 			return 400, errors.New("No signature provided")
 		}
 
-		if date := query.Get("date"); date != "" {
-			rawSignDate = date
-		} else if date := r.Header.Get("X-Signature-Date"); date != "" {
-			rawSignDate = date
-		} else {
+		rawSignDate := query.Get("date")
+		if rawSignDate == "" {
+			rawSignDate = r.Header.Get("X-Signature-Date")
+		}
+		if rawSignDate == "" {
 			return 400, errors.New("No signature date provided")
 		}
 
 		signDate, err := time.Parse(time.RFC3339Nano, rawSignDate)
-		if err != nil || time.Now().Sub(signDate) > maxSignatureAge {
+		if err != nil {
 			return 400, errors.New("Signature date is not valid RFC3339")
+		}
+		if time.Now().Sub(signDate) > maxSignatureAge {
+			return 400, errors.New("Signature is expired")
 		}
 
 		signatureParts := strings.SplitN(rawSignature, ":", 2)
@@ -240,7 +241,7 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB, mapURL bool) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		query := ""
-		if (r.URL.RawQuery != "") {
+		if r.URL.RawQuery != "" {
 			query = "?" + r.URL.RawQuery
 		}
 
