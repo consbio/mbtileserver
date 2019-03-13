@@ -94,7 +94,7 @@ func hmacAuth(hf handlerFunc, secretKey string, serviceId string) handlerFunc {
 			return 400, errors.New("No signature date provided")
 		}
 
-		signDate, err := time.Parse(time.RFC3339Nano, date)
+		signDate, err := time.Parse(time.RFC3339Nano, rawSignDate)
 		if err != nil {
 			return 400, errors.New("Signature date is not valid RFC3339")
 		}
