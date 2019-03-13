@@ -65,6 +65,10 @@ func wrapGetWithErrors(ef func(error), hf handlerFunc) http.Handler {
 	})
 }
 
+// hmacAuth wraps handler functions to provide request authentication. If
+// -s/--secret-key is provided at startup, this function will enforce proper
+// request signing. Otherwise, it will simply pass requests through to the
+// handler.
 func hmacAuth(hf handlerFunc, secretKey string, serviceId string) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		// If secret key isn't set, allow all requests
@@ -90,7 +94,7 @@ func hmacAuth(hf handlerFunc, secretKey string, serviceId string) handlerFunc {
 			return 400, errors.New("No signature date provided")
 		}
 
-		signDate, err := time.Parse(time.RFC3339Nano, rawSignDate)
+		signDate, err := time.Parse(time.RFC3339Nano, date)
 		if err != nil {
 			return 400, errors.New("Signature date is not valid RFC3339")
 		}

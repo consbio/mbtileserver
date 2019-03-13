@@ -211,7 +211,7 @@ small time window.
 
 ### Creating signatures
 
-A signatures is a URL-safe, base64 encoded HMAC hash using the `SHA1` algorithm. The hash key is an `SHA1` key created
+A signature is a URL-safe, base64 encoded HMAC hash using the `SHA1` algorithm. The hash key is an `SHA1` key created
 from a randomly generated salt, and the **secret key** string. The hash payload is a combination of the ISO-formatted 
 date when the hash was created, and the authorized service id.
 
