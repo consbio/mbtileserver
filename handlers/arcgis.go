@@ -376,11 +376,11 @@ func (s *ServiceSet) ArcGISHandler(ef func(error)) http.Handler {
 
 	for id, db := range s.tilesets {
 		p := rootPath + id + "/MapServer"
-		m.Handle(p, wrapGetWithErrors(ef, s.arcgisService(id, db)))
-		m.Handle(p+"/layers", wrapGetWithErrors(ef, s.arcgisLayers(id, db)))
-		m.Handle(p+"/legend", wrapGetWithErrors(ef, s.arcgisLegend(id, db)))
+		m.Handle(p, wrapGetWithErrors(ef, hmacAuth(s.arcgisService(id, db), s.secretKey, id)))
+		m.Handle(p+"/layers", wrapGetWithErrors(ef, hmacAuth(s.arcgisLayers(id, db), s.secretKey, id)))
+		m.Handle(p+"/legend", wrapGetWithErrors(ef, hmacAuth(s.arcgisLegend(id, db), s.secretKey, id)))
 
-		m.Handle(p+"/tile/", wrapGetWithErrors(ef, s.arcgisTiles(db)))
+		m.Handle(p+"/tile/", wrapGetWithErrors(ef, hmacAuth(s.arcgisTiles(db), s.secretKey, id)))
 	}
 	return m
 }
