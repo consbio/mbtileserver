@@ -10,7 +10,7 @@ github.com/getsentry/raven-go
 github.com/inconshreveable/mousetrap
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
-# github.com/labstack/echo/v4 v4.0.0
+# github.com/labstack/echo/v4 v4.0.1-0.20190313005416-e3717be4beda
 github.com/labstack/echo/v4
 github.com/labstack/echo/v4/middleware
 # github.com/labstack/gommon v0.2.8
@@ -38,8 +38,8 @@ github.com/valyala/bytebufferpool
 github.com/valyala/fasttemplate
 # golang.org/x/crypto v0.0.0-20190320223903-b7391e95e576
 golang.org/x/crypto/acme/autocert
-golang.org/x/crypto/ssh/terminal
 golang.org/x/crypto/acme
+golang.org/x/crypto/ssh/terminal
 # golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223
 golang.org/x/sys/unix
 golang.org/x/sys/windows
