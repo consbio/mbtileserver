@@ -51,7 +51,8 @@ Dependencies:
 -   [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
 -   [github.com/spf13/cobra](https://github.com/spf13/cobra)
 -   [github.com/Sirupsen/logrus](https://github.com/Sirupsen/logrus)
--   [golang.org/x/crypto/acme/autocert](https://golang.org/x/crypto/acme/autocert)
+-   [golang.org/x/crypto/acme/autocert](https://godoc.org/golang.org/x/crypto/acme/autocert)
+-   [golang.org/x/crypto/acme](https://godoc.org/golang.org/x/crypto/acme)
 
 Development Dependencies (only needed when modifying the code):
 
@@ -106,6 +107,8 @@ When you want to remove, modify, or add new tilesets, simply restart the server 
 If a valid Sentry DSN is provided, warnings, errors, fatal errors, and panics will be reported to Sentry.
 
 If `redirect` option is provided, the server also listens on port 80 and redirects to port 443.
+
+If the `--tls` option is provided, the Let's Encrypt Terms of Service are accepted automatically on your behalf. Please review them [here](https://letsencrypt.org/repository/). Certificates are cached in a `.certs` folder created where you are executing `mbtileserver`. Please make sure this folder can be written by the `mbtileserver` process or you will get errors.
 
 ## Specifications
 
@@ -201,22 +204,22 @@ These are hosted on a free dyno by Heroku (thanks Heroku!), so there might be a 
 
 ## Request authorization
 
-Provind a secret key with `-s/--secret-key` or by setting the `MBTILESERVER_SECRET_KEY` environment variable will 
-restrict access to all server endpoints and tile requests. Requests will only be served if they provide a cryptographic 
-signature created using the same secret key. This allows, for example, an application server to provide authorized 
+Provind a secret key with `-s/--secret-key` or by setting the `MBTILESERVER_SECRET_KEY` environment variable will
+restrict access to all server endpoints and tile requests. Requests will only be served if they provide a cryptographic
+signature created using the same secret key. This allows, for example, an application server to provide authorized
 clients a short-lived token with which the clients can access tiles for a specific service.
 
-Signatures expire 15 minutes from their creation date to prevent exposed or leaked signatures from being useful past a 
+Signatures expire 15 minutes from their creation date to prevent exposed or leaked signatures from being useful past a
 small time window.
 
 ### Creating signatures
 
 A signature is a URL-safe, base64 encoded HMAC hash using the `SHA1` algorithm. The hash key is an `SHA1` key created
-from a randomly generated salt, and the **secret key** string. The hash payload is a combination of the ISO-formatted 
+from a randomly generated salt, and the **secret key** string. The hash payload is a combination of the ISO-formatted
 date when the hash was created, and the authorized service id.
 
-The following is an example signature, created in Go for the serivce id `test`, the date 
-`2019-03-08T19:31:12.213831+00:00`, the salt `0EvkK316T-sBLA`, and the secret key 
+The following is an example signature, created in Go for the serivce id `test`, the date
+`2019-03-08T19:31:12.213831+00:00`, the salt `0EvkK316T-sBLA`, and the secret key
 `YMIVXikJWAiiR3q-JMz1v2Mfmx3gTXJVNqme5kyaqrY`
 
 Create the SHA1 key:
@@ -248,7 +251,7 @@ fmt.Println(b64hash) // Should output: 2y8vHb9xK6RSxN8EXMeAEUiYtZk
 
 ### Making request
 
-Authenticated requests must include the ISO-fromatted date, and a salt-signature combination in the form of: 
+Authenticated requests must include the ISO-fromatted date, and a salt-signature combination in the form of:
 `<salt>:<signature>`. These can be provided as query parameters:
 
 ```text
