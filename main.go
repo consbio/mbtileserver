@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 
 	"github.com/evalphobia/logrus_sentry"
-	"github.com/labstack/echo/middleware"
+	"github.com/labstack/echo/v4/middleware"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 

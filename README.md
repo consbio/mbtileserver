@@ -8,7 +8,7 @@ format.
 [![GoDoc](https://godoc.org/github.com/consbio/mbtileserver?status.svg)](http://godoc.org/github.com/consbio/mbtileserver)
 [![Go Report Card](https://goreportcard.com/badge/github.com/consbio/mbtileserver)](https://goreportcard.com/report/github.com/consbio/mbtileserver)
 
-Requires Go 1.8+.
+_Requires Go 1.10+._
 
 It currently provides support for `png`, `jpg`, and `pbf` (vector tile)
 tilesets according to version 1.0 of the mbtiles specification. Tiles
@@ -42,32 +42,6 @@ go get github.com/consbio/mbtileserver
 ```
 
 This will create and install an executable called `mbtileserver`.
-
-This uses `Govendor` tool, so dependencies ship with the repo for easier builds.
-
-Dependencies:
-
--   [github.com/labstack/echo](https://github.com/labstack/echo)
--   [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
--   [github.com/spf13/cobra](https://github.com/spf13/cobra)
--   [github.com/Sirupsen/logrus](https://github.com/Sirupsen/logrus)
--   [golang.org/x/crypto/acme/autocert](https://godoc.org/golang.org/x/crypto/acme/autocert)
--   [golang.org/x/crypto/acme](https://godoc.org/golang.org/x/crypto/acme)
-
-Development Dependencies (only needed when modifying the code):
-
--   [github.com/shurcooL/vfsgen](https://github.com/shurcooL/vfsgen)
-
-On Windows, it is necessary to install `gcc` in order to compile `mattn/go-sqlite3`.  
-MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
-
-If you experience very slow builds each time, it may be that you need to first run
-
-```
-go build -a .
-```
-
-to make subsequent builds much faster.
 
 ## Usage
 
@@ -276,6 +250,19 @@ In short, we are planning to:
 -   get things production ready
 
 ## Development
+
+Dependencies are managed using go modules. Vendored dependencies are stored in `vendor` folder by using `go mod vendor`.
+
+On Windows, it is necessary to install `gcc` in order to compile `mattn/go-sqlite3`.  
+MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
+
+If you experience very slow builds each time, it may be that you need to first run
+
+```
+go build -a .
+```
+
+to make subsequent builds much faster.
 
 Development of the templates and static assets likely requires using
 `node` and `npm`. Install these tools in the normal way.

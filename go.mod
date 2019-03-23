@@ -1,0 +1,18 @@
+module github.com/consbio/mbtileserver
+
+require (
+	github.com/certifi/gocertifi v0.0.0-20190105021004-abcd57078448 // indirect
+	github.com/evalphobia/logrus_sentry v0.8.2
+	github.com/getsentry/raven-go v0.2.0 // indirect
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/labstack/echo/v4 v4.0.0
+	github.com/mattn/go-colorable v0.1.1 // indirect
+	github.com/mattn/go-isatty v0.0.7 // indirect
+	github.com/mattn/go-sqlite3 v1.10.0
+	github.com/pkg/errors v0.8.1 // indirect
+	github.com/sirupsen/logrus v1.4.0
+	github.com/spf13/cobra v0.0.3
+	github.com/spf13/pflag v1.0.3 // indirect
+	github.com/valyala/fasttemplate v1.0.1 // indirect
+	golang.org/x/crypto v0.0.0-20190320223903-b7391e95e576
+)
