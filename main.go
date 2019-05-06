@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 
 	"golang.org/x/crypto/acme/autocert"
 
@@ -62,6 +63,18 @@ func init() {
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
+
+	if env := os.Getenv("TILE_PATH"); env != "" {
+		tilePath = env
+	}
+
+	if env := os.Getenv("PORT"); env != "" {
+		p, err := strconv.Atoi(env)
+		if err != nil {
+			log.Fatalln("PORT must be a number")
+		}
+		port = p
+	}
 
 	if secretKey == "" {
 		secretKey = os.Getenv("MBTILESERVER_SECRET_KEY")
