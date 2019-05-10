@@ -361,6 +361,7 @@ func supervise() {
 	}
 
 	var child *exec.Cmd = nil
+	shutdown := false
 
 	// Graceful shutdown on Ctrl + C
 	go func() {
@@ -369,6 +370,7 @@ func supervise() {
 
 		<-interrupt
 
+		shutdown = true
 		fmt.Println("\nShutting down...")
 
 		if child != nil {
@@ -378,6 +380,10 @@ func supervise() {
 	}()
 
 	for {
+		if shutdown {
+			break
+		}
+
 		hup := make(chan os.Signal, 1)
 		signal.Notify(hup, syscall.SIGHUP)
 
