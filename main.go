@@ -386,6 +386,8 @@ func supervise() {
 		go func(cmd *exec.Cmd) {
 			if err := cmd.Wait(); err != nil { // Quit if child exits with abnormal status
 				os.Exit(1)
+			} else if cmd == child {
+				hup <- syscall.SIGHUP
 			}
 		}(cmd)
 
