@@ -84,6 +84,38 @@ If `redirect` option is provided, the server also listens on port 80 and redirec
 
 If the `--tls` option is provided, the Let's Encrypt Terms of Service are accepted automatically on your behalf. Please review them [here](https://letsencrypt.org/repository/). Certificates are cached in a `.certs` folder created where you are executing `mbtileserver`. Please make sure this folder can be written by the `mbtileserver` process or you will get errors.
 
+Also you can set up server config by environment variables. It may be helpful, when you deploying it in docker image. Just now exists next variables:
+-   PORT
+-   TILE_PATH
+-   PRIVATE_KEY
+-   PATH_PREFIX
+-   DOMAIN
+-   SENTRY_DSN
+-   VERBOSE
+-   AUTO_TLS
+-   REDIRECT
+
+Simple example:
+
+```
+$ PORT=7777 TILE_PATH=./path/to/your/tiles VERBOSE=true mbtileserver
+```
+
+In docker-compose.yml file it will be look like:
+
+```
+mbtileserver:
+  ...
+
+  environment:
+    PORT: 7777
+    TYLE_PATH: "./path/to/your/tiles"
+    VERBOSE: true
+  entrypoint: mbtileserver
+
+  ...
+```
+
 ## Specifications
 
 -   expects mbtiles files to follow version 1.0 of the [mbtiles specification](https://github.com/mapbox/mbtiles-spec). Version 1.1 is preferred.
