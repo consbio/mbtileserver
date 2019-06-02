@@ -72,11 +72,15 @@ func init() {
 		port = p
 	}
 
-	if env := os.Getenv("TILE_PATH"); env != "" {
+	if env := os.Getenv("TILE_DIR"); env != "" {
 		tilePath = env
 	}
 
-	if env := os.Getenv("PRIVATE_KEY"); env != "" {
+	if env := os.Getenv("TLS_CERT"); env != "" {
+		certificate = env
+	}
+
+	if env := os.Getenv("TLS_PRIVATE_KEY"); env != "" {
 		privateKey = env
 	}
 
@@ -88,7 +92,7 @@ func init() {
 		domain = env
 	}
 
-	if env := os.Getenv("SENTRY_DSN"); env != "" {
+	if env := os.Getenv("DSN"); env != "" {
 		sentryDSN = env
 	}
 
@@ -117,7 +121,7 @@ func init() {
 	}
 
 	if secretKey == "" {
-		secretKey = os.Getenv("MBTILESERVER_SECRET_KEY")
+		secretKey = os.Getenv("HMAC_SECRET_KEY")
 	}
 }
 

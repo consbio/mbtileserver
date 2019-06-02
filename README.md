@@ -84,24 +84,27 @@ If `redirect` option is provided, the server also listens on port 80 and redirec
 
 If the `--tls` option is provided, the Let's Encrypt Terms of Service are accepted automatically on your behalf. Please review them [here](https://letsencrypt.org/repository/). Certificates are cached in a `.certs` folder created where you are executing `mbtileserver`. Please make sure this folder can be written by the `mbtileserver` process or you will get errors.
 
-Also you can set up server config by environment variables. It may be helpful, when you deploying it in docker image. Just now exists next variables:
--   PORT
--   TILE_PATH
--   PRIVATE_KEY
--   PATH_PREFIX
--   DOMAIN
--   SENTRY_DSN
--   VERBOSE
--   AUTO_TLS
--   REDIRECT
+You can also set up server config using environment variables instead of flags, which may be more helpful when deploying in a docker image. Use the associated flag to determine usage. The following variables are available:
 
-Simple example:
+-   `PORT` (`--port`)
+-   `TILE_DIR` (`--dir`)
+-   `PATH_PREFIX` (`--path`)
+-   `DOMAIN` (`--domain`)
+-   `TLS_CERT` (`--cert`)
+-   `TLS_PRIVATE_KEY` (`--key`)
+-   `AUTO_TLS` (`--tls`)
+-   `REDIRECT` (`--redirect`)
+-   `DSN` (`--dsn`)
+-   `VERBOSE` (`--verbose`)
+-   `HMAC_SECRET_KEY` (`--secret-key`)
+
+Example:
 
 ```
-$ PORT=7777 TILE_PATH=./path/to/your/tiles VERBOSE=true mbtileserver
+$ PORT=7777 TILE_DIR=./path/to/your/tiles VERBOSE=true mbtileserver
 ```
 
-In docker-compose.yml file it will be look like:
+In a docker-compose.yml file it will look like:
 
 ```
 mbtileserver:
@@ -109,7 +112,7 @@ mbtileserver:
 
   environment:
     PORT: 7777
-    TYLE_PATH: "./path/to/your/tiles"
+    TILE_DIR: "./path/to/your/tiles"
     VERBOSE: true
   entrypoint: mbtileserver
 
@@ -210,7 +213,7 @@ These are hosted on a free dyno by Heroku (thanks Heroku!), so there might be a 
 
 ## Request authorization
 
-Provind a secret key with `-s/--secret-key` or by setting the `MBTILESERVER_SECRET_KEY` environment variable will
+Provind a secret key with `-s/--secret-key` or by setting the `HMAC_SECRET_KEY` environment variable will
 restrict access to all server endpoints and tile requests. Requests will only be served if they provide a cryptographic
 signature created using the same secret key. This allows, for example, an application server to provide authorized
 clients a short-lived token with which the clients can access tiles for a specific service.
