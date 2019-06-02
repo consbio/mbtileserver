@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 
 	"golang.org/x/crypto/acme/autocert"
 
@@ -62,6 +63,58 @@ func init() {
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
+
+	if env := os.Getenv("PORT"); env != "" {
+		p, err := strconv.Atoi(env)
+		if err != nil {
+			log.Fatalln("PORT must be a number")
+		}
+		port = p
+	}
+
+	if env := os.Getenv("TILE_PATH"); env != "" {
+		tilePath = env
+	}
+
+	if env := os.Getenv("PRIVATE_KEY"); env != "" {
+		privateKey = env
+	}
+
+	if env := os.Getenv("PATH_PREFIX"); env != "" {
+		pathPrefix = env
+	}
+
+	if env := os.Getenv("DOMAIN"); env != "" {
+		domain = env
+	}
+
+	if env := os.Getenv("SENTRY_DSN"); env != "" {
+		sentryDSN = env
+	}
+
+	if env := os.Getenv("VERBOSE"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("VERBOSE must be a bool(true/false)")
+		}
+		verbose = p
+	}
+
+	if env := os.Getenv("AUTO_TLS"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("AUTO_TLS must be a bool(true/false)")
+		}
+		autotls = p
+	}
+
+	if env := os.Getenv("REDIRECT"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("REDIRECT must be a bool(true/false)")
+		}
+		redirect = p
+	}
 
 	if secretKey == "" {
 		secretKey = os.Getenv("MBTILESERVER_SECRET_KEY")
