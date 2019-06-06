@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os/exec"
+	"os/signal"
 	"strconv"
+	"syscall"
 
+	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,7 +38,11 @@ var rootCmd = &cobra.Command{
 	Use:   "mbtileserver",
 	Short: "Serve tiles from mbtiles files",
 	Run: func(cmd *cobra.Command, args []string) {
-		serve()
+		if isChild := os.Getenv("MBTS_IS_CHILD"); isChild != "" {
+			serve()
+		} else {
+			supervise()
+		}
 	},
 }
 
@@ -242,6 +252,29 @@ func serve() {
 		}
 	}
 
+	f := os.NewFile(3, "")
+	listener, err := net.FileListener(f)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	server := &http.Server{Handler: e}
+
+	// Listen for SIGHUP (graceful shutdown)
+	go func(e *echo.Echo) {
+		hup := make(chan os.Signal, 1)
+		signal.Notify(hup, syscall.SIGHUP)
+
+		<-hup
+
+		context, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		e.Shutdown(context)
+
+		os.Exit(0)
+	}(e)
+
 	switch {
 	case certExists:
 		{
@@ -254,23 +287,127 @@ func serve() {
 			}
 
 			fmt.Printf("HTTPS server started on port %v\n", port)
-			log.Fatal(e.StartTLS(fmt.Sprintf(":%v", port), certificate, privateKey))
+			log.Fatal(server.ServeTLS(listener, certificate, privateKey))
 		}
 	case autotls:
 		{
 			log.Debug("Starting HTTPS using Let's Encrypt")
 			e.AutoTLSManager.Cache = autocert.DirCache(".certs")
 			e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(domain)
+
 			fmt.Printf("HTTPS server started on port %v\n", port)
-			log.Fatal(e.StartAutoTLS(fmt.Sprintf(":%v", port)))
+
+			server.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
+			server.TLSConfig.NextProtos = append(server.TLSConfig.NextProtos, acme.ALPNProto)
+			if !e.DisableHTTP2 {
+				server.TLSConfig.NextProtos = append(server.TLSConfig.NextProtos, "h2")
+			}
+
+			log.Fatal(server.Serve(listener))
 		}
 	default:
 		{
 			fmt.Printf("HTTP server started on port %v\n", port)
-			log.Fatal(e.Start(fmt.Sprintf(":%v", port)))
+			log.Fatal(server.Serve(listener))
+		}
+	}
+}
+
+// The main process forks and manages a sub-process for graceful reloading
+func supervise() {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%v", port))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	createFork := func() *exec.Cmd {
+		environment := append(os.Environ(), "MBTS_IS_CHILD=true")
+		path, err := os.Executable()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		listenerFile, err := listener.(*net.TCPListener).File()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		cmd := exec.Command(path, os.Args...)
+		cmd.Env = environment
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.ExtraFiles = []*os.File{listenerFile}
+
+		cmd.Start()
+
+		return cmd
+	}
+
+	killFork := func(cmd *exec.Cmd) {
+		done := make(chan error, 1)
+		go func() {
+			done <- cmd.Wait()
+		}()
+		cmd.Process.Signal(syscall.SIGHUP) // Signal fork to shut down gracefully
+
+		select {
+		case <-time.After(30 * time.Second): // Give fork 30 seconds to shut down gracefully
+			if err := cmd.Process.Kill(); err != nil {
+				log.Errorf("Could not kill child process: %v", err)
+			}
+		case <-done:
+			return
 		}
 	}
 
+	var child *exec.Cmd = nil
+	shutdown := false
+
+	// Graceful shutdown on Ctrl + C
+	go func() {
+		interrupt := make(chan os.Signal, 1)
+		signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+
+		<-interrupt
+
+		shutdown = true
+		fmt.Println("\nShutting down...")
+
+		if child != nil {
+			killFork(child)
+			os.Exit(0)
+		}
+	}()
+
+	for {
+		if shutdown {
+			break
+		}
+
+		hup := make(chan os.Signal, 1)
+		signal.Notify(hup, syscall.SIGHUP)
+
+		cmd := createFork()
+
+		go func(cmd *exec.Cmd) {
+			if err := cmd.Wait(); err != nil { // Quit if child exits with abnormal status
+				os.Exit(1)
+			} else if cmd == child {
+				hup <- syscall.SIGHUP
+			}
+		}(cmd)
+
+		if child != nil {
+			killFork(child)
+		}
+
+		child = cmd
+
+		<-hup
+
+		fmt.Println("\nReloading...")
+		fmt.Println("")
+	}
 }
 
 /*
