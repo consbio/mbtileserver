@@ -119,6 +119,18 @@ mbtileserver:
   ...
 ```
 
+### Reload
+
+mbtileserver supports graceful reload (without interrupting any in-progress requests). Reload the server by sending it a
+`HUP` signal:
+
+```
+$ kill -HUP <pid>
+```
+
+Reloading the server will cause it to pick up changes to the tiles directory, adding new tilesets and removing any that
+are no longer present.
+
 ## Specifications
 
 -   expects mbtiles files to follow version 1.0 of the [mbtiles specification](https://github.com/mapbox/mbtiles-spec). Version 1.1 is preferred.
