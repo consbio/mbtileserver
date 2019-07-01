@@ -38,10 +38,14 @@ var rootCmd = &cobra.Command{
 	Use:   "mbtileserver",
 	Short: "Serve tiles from mbtiles files",
 	Run: func(cmd *cobra.Command, args []string) {
-		if isChild := os.Getenv("MBTS_IS_CHILD"); isChild != "" {
-			serve()
+		if reload {
+			if isChild := os.Getenv("MBTS_IS_CHILD"); isChild != "" {
+				serve()
+			} else {
+				supervise()
+			}
 		} else {
-			supervise()
+			serve()
 		}
 	},
 }
@@ -58,6 +62,7 @@ var (
 	verbose     bool
 	autotls     bool
 	redirect    bool
+	reload      bool
 )
 
 func init() {
@@ -73,6 +78,7 @@ func init() {
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
+	flags.BoolVarP(&reload, "enable-reload", "", false, "Enable graceful reload")
 
 	if env := os.Getenv("PORT"); env != "" {
 		p, err := strconv.Atoi(env)
@@ -252,8 +258,14 @@ func serve() {
 		}
 	}
 
-	f := os.NewFile(3, "")
-	listener, err := net.FileListener(f)
+	var listener net.Listener
+
+	if reload {
+		f := os.NewFile(3, "")
+		listener, err = net.FileListener(f)
+	} else {
+		listener, err = net.Listen("tcp", fmt.Sprintf(":%v", port))
+	}
 
 	if err != nil {
 		log.Fatal(err)
@@ -263,6 +275,10 @@ func serve() {
 
 	// Listen for SIGHUP (graceful shutdown)
 	go func(e *echo.Echo) {
+		if !reload {
+			return
+		}
+
 		hup := make(chan os.Signal, 1)
 		signal.Notify(hup, syscall.SIGHUP)
 
@@ -360,7 +376,7 @@ func supervise() {
 		}
 	}
 
-	var child *exec.Cmd = nil
+	var child *exec.Cmd
 	shutdown := false
 
 	// Graceful shutdown on Ctrl + C
