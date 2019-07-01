@@ -379,29 +379,33 @@ func supervise() {
 		}
 	}()
 
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+
 	for {
+		if child != nil {
+			killFork(child)
+		}
+
 		if shutdown {
 			break
 		}
-
-		hup := make(chan os.Signal, 1)
-		signal.Notify(hup, syscall.SIGHUP)
 
 		cmd := createFork()
 
 		go func(cmd *exec.Cmd) {
 			if err := cmd.Wait(); err != nil { // Quit if child exits with abnormal status
+				fmt.Printf("EXITING (abnormal child exit: %v)", err)
 				os.Exit(1)
 			} else if cmd == child {
 				hup <- syscall.SIGHUP
 			}
 		}(cmd)
 
-		if child != nil {
-			killFork(child)
-		}
-
 		child = cmd
+
+		// Prevent another reload from immediately following the previous one
+		time.Sleep(500 * time.Millisecond)
 
 		<-hup
 
