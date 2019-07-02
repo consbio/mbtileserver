@@ -66,7 +66,7 @@ Flags:
   -s, --secret-key string Shared secret key used for HMAC authentication
   -t, --tls               Auto TLS using Let's Encrypt
   -r, --redirect          Redirect HTTP to HTTPS
-      --enable-reload     Enalbe graceful reload
+      --enable-reload     Enable graceful reload
   -v, --verbose           Verbose logging
 ```
 
