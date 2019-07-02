@@ -196,6 +196,10 @@ func serve() {
 		if err != nil {
 			return err
 		}
+		if _, err := os.Stat(path + "-journal"); err == nil {
+			// Don't try to load .mbtiles files that are being written
+			return nil
+		}
 		if strings.HasSuffix(strings.ToLower(path), ".mbtiles") {
 			filenames = append(filenames, path)
 		}
