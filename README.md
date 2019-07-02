@@ -66,6 +66,7 @@ Flags:
   -s, --secret-key string Shared secret key used for HMAC authentication
   -t, --tls               Auto TLS using Let's Encrypt
   -r, --redirect          Redirect HTTP to HTTPS
+      --enable-reload     Enable graceful reload
   -v, --verbose           Verbose logging
 ```
 
@@ -121,8 +122,8 @@ mbtileserver:
 
 ### Reload
 
-mbtileserver supports graceful reload (without interrupting any in-progress requests). Reload the server by sending it a
-`HUP` signal:
+mbtileserver optionally supports graceful reload (without interrupting any in-progress requests). This functionality
+must be enabled with the `--enable-reload` flag. When enabled, the server can be reloaded by sending it a `HUP` signal:
 
 ```
 $ kill -HUP <pid>
