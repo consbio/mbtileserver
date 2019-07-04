@@ -174,6 +174,10 @@ func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
 		if err != nil {
 			return err
 		}
+		if _, err := os.Stat(p + "-journal"); err == nil {
+			// Don't try to load .mbtiles files that are being written
+			return nil
+		}
 		if ext := filepath.Ext(p); ext == ".mbtiles" {
 			filenames = append(filenames, p)
 		}
