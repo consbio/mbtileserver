@@ -132,6 +132,35 @@ $ kill -HUP <pid>
 Reloading the server will cause it to pick up changes to the tiles directory, adding new tilesets and removing any that
 are no longer present.
 
+## Docker
+
+Pull the latest image from [Docker Hub](https://hub.docker.com/r/consbio/mbtileserver):
+
+```
+docker pull consbio/mbtileserver:latest
+```
+
+To build the Docker image locally (named `mbtileserver`):
+
+```
+docker build -t mbtileserver -f Dockerfile .
+```
+
+To run the Docker container on port 8080 with your tilesets in `<host tile dir>`.
+Note that by default, `mbtileserver` runs on port 8000 in the container.
+
+```
+docker run --rm -p 8080:8000 -v <host tile dir>:/tilesets -t mbtileserver
+```
+
+You can pass in additional command-line arguments to `mbtilesever`, for example, to use
+certificates and files in `<host cert dir>` so that you can access the server via HTTPS. The example below uses self-signed certificates generated using
+[`mkcert`](https://github.com/FiloSottile/mkcert). This example uses automatic redirects, which causes `mbtileserver` to also listen on port 80 and automatically redirect to 443.
+
+```
+docker run  --rm -p 80:80 443:443 -v <host tile dir>:/tilesets -v <host cert dir>:/certs/ -t mbtileserver -c /certs/localhost.pem -k /certs/localhost-key.pem -p 443 --redirect
+```
+
 ## Specifications
 
 -   expects mbtiles files to follow version 1.0 of the [mbtiles specification](https://github.com/mapbox/mbtiles-spec). Version 1.1 is preferred.
