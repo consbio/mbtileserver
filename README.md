@@ -134,11 +134,13 @@ are no longer present.
 
 ## Docker
 
-Pull the latest image from [Docker Hub](https://hub.docker.com/r/consbio/mbtileserver):
+Integration with Docker hub is under development (see #76).
+
+<!-- Pull the latest image from [Docker Hub](https://hub.docker.com/r/consbio/mbtileserver):
 
 ```
 docker pull consbio/mbtileserver:latest
-```
+``` -->
 
 To build the Docker image locally (named `mbtileserver`):
 
@@ -371,3 +373,13 @@ During the development cycle you may use `go build -tags dev .` to build the
 binary, in which case it will always take the assets from the relative file
 path `handlers/templates/` directly and you can omit the `go generate` step. (note: this is currently not working properly)
 But do not forget to perform it in the end.
+
+## Changes
+
+### 0.5.0 (in progress)
+
+-   Added Docker support (#74, #75)
+-   Fix case-sensitive mbtiles URLs (#77)
+-   Add support for graceful reloading (#69, #72, #73)
+-   Add support for environment args (#70)
+-   All changes prior to 6/1/2019
