@@ -197,7 +197,7 @@ func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
 		}
 		e := filepath.Ext(filename)
 		p := filepath.ToSlash(subpath)
-		id := strings.ToLower(p[:len(p)-len(e)])
+		id := p[:len(p)-len(e)]
 		err = s.AddDBOnPath(filename, id)
 		if err != nil {
 			return nil, err
