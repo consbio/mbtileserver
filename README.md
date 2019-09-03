@@ -136,11 +136,11 @@ are no longer present.
 
 Integration with Docker hub is under development (see #76).
 
-<!-- Pull the latest image from [Docker Hub](https://hub.docker.com/r/consbio/mbtileserver):
+Pull the latest image from [Docker Hub](https://hub.docker.com/r/consbio/mbtileserver):
 
 ```
 docker pull consbio/mbtileserver:latest
-``` -->
+```
 
 To build the Docker image locally (named `mbtileserver`):
 
@@ -152,15 +152,15 @@ To run the Docker container on port 8080 with your tilesets in `<host tile dir>`
 Note that by default, `mbtileserver` runs on port 8000 in the container.
 
 ```
-docker run --rm -p 8080:8000 -v <host tile dir>:/tilesets -t mbtileserver
+docker run --rm -p 8080:8000 -v <host tile dir>:/tilesets  consbio/mbtileserver
 ```
 
-You can pass in additional command-line arguments to `mbtilesever`, for example, to use
+You can pass in additional command-line arguments to `mbtileserver`, for example, to use
 certificates and files in `<host cert dir>` so that you can access the server via HTTPS. The example below uses self-signed certificates generated using
 [`mkcert`](https://github.com/FiloSottile/mkcert). This example uses automatic redirects, which causes `mbtileserver` to also listen on port 80 and automatically redirect to 443.
 
 ```
-docker run  --rm -p 80:80 443:443 -v <host tile dir>:/tilesets -v <host cert dir>:/certs/ -t mbtileserver -c /certs/localhost.pem -k /certs/localhost-key.pem -p 443 --redirect
+docker run  --rm -p 80:80 443:443 -v <host tile dir>:/tilesets -v <host cert dir>:/certs/ consbio/mbtileserver -c /certs/localhost.pem -k /certs/localhost-key.pem -p 443 --redirect
 ```
 
 ## Specifications
