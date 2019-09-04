@@ -134,8 +134,6 @@ are no longer present.
 
 ## Docker
 
-Integration with Docker hub is under development (see #76).
-
 Pull the latest image from [Docker Hub](https://hub.docker.com/r/consbio/mbtileserver):
 
 ```
