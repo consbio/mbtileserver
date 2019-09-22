@@ -3,20 +3,20 @@ package main
 import (
 	"context"
 	"fmt"
-	"os/exec"
-	"os/signal"
-	"strconv"
-	"syscall"
-
-	"golang.org/x/crypto/acme"
-	"golang.org/x/crypto/acme/autocert"
-
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"golang.org/x/crypto/acme"
+	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/labstack/echo/v4"
 
@@ -63,6 +63,7 @@ var (
 	autotls     bool
 	redirect    bool
 	reload      bool
+	watchReload bool
 )
 
 func init() {
@@ -79,6 +80,7 @@ func init() {
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 	flags.BoolVarP(&reload, "enable-reload", "", false, "Enable graceful reload")
+	flags.BoolVarP(&watchReload, "enable-reload-watch", "", false, "Enable fs-watch reload")
 
 	if env := os.Getenv("PORT"); env != "" {
 		p, err := strconv.Atoi(env)
@@ -245,6 +247,63 @@ func serve() {
 	e.GET("/*", h)
 	a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
 	e.GET("/arcgis/rest/services/*", a)
+
+	if watchReload {
+		// Watch tile path for changes and update tileset handler (db conn's too) accordingly.
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer watcher.Close()
+		go func() {
+			log.Println("watching events", tilePath)
+			for {
+				select {
+				case event, ok := <-watcher.Events:
+					if !ok {
+						log.Warnln("watcher event not ok, quitting watcher")
+						return
+					}
+					log.Println("event:", event)
+
+					if !strings.Contains(filepath.Ext(event.Name), "mbtiles") {
+						continue
+					}
+
+					if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Create == fsnotify.Create) {
+						log.Println("modified file:", event.Name)
+
+						log.Println("adding", event.Name)
+						if err := svcSet.AddOrUpdateDBOnPath(tilePath, event.Name); err != nil {
+							log.Println("error:", err)
+						}
+					}
+
+					if (event.Op&fsnotify.Remove == fsnotify.Remove) || (event.Op&fsnotify.Rename == fsnotify.Rename ) {
+						log.Println("created file:", event.Name)
+
+						log.Println("removing", event.Name)
+						if err := svcSet.RemoveDBOnPath(tilePath, event.Name); err != nil {
+							log.Println("error:", err)
+						}
+					}
+
+					h = echo.WrapHandler(svcSet.Handler(ef, true))
+					e.GET("/*", h)
+
+				case err, ok := <-watcher.Errors:
+					if !ok {
+						return
+					}
+					log.Println("error:", err)
+				}
+			}
+		}()
+		err = watcher.Add(tilePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	// Start the server
 	fmt.Println("\n--------------------------------------")
