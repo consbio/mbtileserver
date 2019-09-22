@@ -18,7 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -135,7 +135,7 @@ type ServiceInfo struct {
 // ServiceSet is the base type for the HTTP handlers which combines multiple
 // mbtiles.DB tilesets.
 type ServiceSet struct {
-	busysets  map[string]*int32
+	busysets  map[string]*sync.WaitGroup
 	tilesets  map[string]*mbtiles.DB
 	templates *template.Template
 	Domain    string
@@ -146,37 +146,11 @@ type ServiceSet struct {
 // New returns a new ServiceSet. Use AddOrUpdateDBOnPath to add a mbtiles file.
 func New() *ServiceSet {
 	s := &ServiceSet{
-		busysets:  make(map[string]*int32),
+		busysets:  make(map[string]*sync.WaitGroup),
 		tilesets:  make(map[string]*mbtiles.DB),
 		templates: template.New("_base_"),
 	}
 	return s
-}
-
-func (s *ServiceSet) busy(id string) {
-	if l, ok := s.busysets[id]; ok {
-		atomic.AddInt32(l, 1)
-	} else {
-		one := int32(1)
-		s.busysets[id] = &one
-	}
-}
-
-func (s *ServiceSet) isBusy(id string) bool {
-	if l, ok := s.busysets[id]; !ok {
-		return false
-	} else {
-		return atomic.LoadInt32(l) > int32(0)
-	}
-}
-
-func (s *ServiceSet) idle(id string) {
-	if l, ok := s.busysets[id]; ok {
-		atomic.AddInt32(l, -1)
-	} else {
-		zero := int32(0)
-		s.busysets[id] = &zero
-	}
 }
 
 func serviceIDFromFilename(basedir, filename string) (string, error) {
@@ -204,10 +178,14 @@ func (s *ServiceSet) AddOrUpdateDBOnPath(basedir, filename string) error {
 	}
 	isUpdate := false
 
-	for s.isBusy(urlPath) {}
-
-	s.busy(urlPath)
-	defer s.idle(urlPath)
+	 w, ok := s.busysets[urlPath]
+	 if !ok {
+	 	w = new(sync.WaitGroup)
+		s.busysets[urlPath] = w
+	}
+	w.Wait()
+	w.Add(1)
+	defer w.Done()
 
 	// If the file exists already, then we'll remove it before adding it back again.
 	if db, ok := s.tilesets[urlPath]; ok {
@@ -238,10 +216,10 @@ func (s *ServiceSet) RemoveDBOnPath(basedir, filename string) error {
 		return fmt.Errorf("path parameter may not be empty")
 	}
 
-	for s.isBusy(urlPath) {}
-
-	s.busy(urlPath)
+	w := s.busysets[urlPath]
+	w.Wait()
 	defer func() {
+		w.Done()
 		delete(s.busysets, urlPath)
 	}()
 
@@ -331,8 +309,8 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 }
 
 func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB, mapURL bool) handlerFunc {
-	s.busy(id)
-	defer s.idle(id)
+	s.busysets[id].Add(1)
+	defer s.busysets[id].Done()
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		query := ""
 		if r.URL.RawQuery != "" {
@@ -411,8 +389,8 @@ func (s *ServiceSet) executeTemplate(w http.ResponseWriter, name string, data in
 }
 
 func (s *ServiceSet) serviceHTML(id string, db *mbtiles.DB) handlerFunc {
-	s.busy(id)
-	defer s.idle(id)
+	s.busysets[id].Add(1)
+	defer s.busysets[id].Done()
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		p := struct {
 			URL string
@@ -501,8 +479,8 @@ func tileNotFoundHandler(w http.ResponseWriter, f mbtiles.TileFormat) (int, erro
 }
 
 func (s *ServiceSet) tiles(id string, db *mbtiles.DB) handlerFunc {
-	s.busy(id)
-	defer s.idle(id)
+	s.busysets[id].Add(1)
+	defer s.busysets[id].Done()
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		// split path components to extract tile coordinates x, y and z
 		pcs := strings.Split(r.URL.Path[1:], "/")
