@@ -166,7 +166,7 @@ func (s *ServiceSet) isBusy(id string) bool {
 	if l, ok := s.busysets[id]; !ok {
 		return false
 	} else {
-		return atomic.LoadInt32(l) == int32(0)
+		return atomic.LoadInt32(l) > int32(0)
 	}
 }
 
