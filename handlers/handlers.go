@@ -18,7 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -135,7 +135,7 @@ type ServiceInfo struct {
 // ServiceSet is the base type for the HTTP handlers which combines multiple
 // mbtiles.DB tilesets.
 type ServiceSet struct {
-	busysets  map[string]*sync.Mutex
+	busysets  map[string]*int32
 	tilesets  map[string]*mbtiles.DB
 	templates *template.Template
 	Domain    string
@@ -146,7 +146,7 @@ type ServiceSet struct {
 // New returns a new ServiceSet. Use AddOrUpdateDBOnPath to add a mbtiles file.
 func New() *ServiceSet {
 	s := &ServiceSet{
-		busysets:  make(map[string]*sync.Mutex),
+		busysets:  make(map[string]*int32),
 		tilesets:  make(map[string]*mbtiles.DB),
 		templates: template.New("_base_"),
 	}
@@ -155,19 +155,27 @@ func New() *ServiceSet {
 
 func (s *ServiceSet) busy(id string) {
 	if l, ok := s.busysets[id]; ok {
-		l.Lock()
+		atomic.AddInt32(l, 1)
 	} else {
-		s.busysets[id] = new(sync.Mutex)
-		s.busysets[id].Lock()
+		one := int32(1)
+		s.busysets[id] = &one
+	}
+}
+
+func (s *ServiceSet) isBusy(id string) bool {
+	if l, ok := s.busysets[id]; !ok {
+		return false
+	} else {
+		return atomic.LoadInt32(l) == int32(0)
 	}
 }
 
 func (s *ServiceSet) idle(id string) {
 	if l, ok := s.busysets[id]; ok {
-		l.Unlock()
+		atomic.AddInt32(l, -1)
 	} else {
-		s.busysets[id] = new(sync.Mutex)
-		// no l.Unlock needed since initialized mutex is already free
+		zero := int32(0)
+		s.busysets[id] = &zero
 	}
 }
 
@@ -195,6 +203,8 @@ func (s *ServiceSet) AddOrUpdateDBOnPath(basedir, filename string) error {
 		return fmt.Errorf("path parameter may not be empty")
 	}
 	isUpdate := false
+
+	for s.isBusy(urlPath) {}
 
 	s.busy(urlPath)
 	defer s.idle(urlPath)
@@ -228,9 +238,10 @@ func (s *ServiceSet) RemoveDBOnPath(basedir, filename string) error {
 		return fmt.Errorf("path parameter may not be empty")
 	}
 
+	for s.isBusy(urlPath) {}
+
 	s.busy(urlPath)
 	defer func() {
-		s.busysets[urlPath].Unlock()
 		delete(s.busysets, urlPath)
 	}()
 
