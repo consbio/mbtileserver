@@ -161,6 +161,18 @@ certificates and files in `<host cert dir>` so that you can access the server vi
 docker run  --rm -p 80:80 443:443 -v <host tile dir>:/tilesets -v <host cert dir>:/certs/ consbio/mbtileserver -c /certs/localhost.pem -k /certs/localhost-key.pem -p 443 --redirect
 ```
 
+Alternately, use `docker-compose` to run:
+
+```
+docker-compose up -d
+```
+
+To reload the server:
+
+```
+docker exec -it mbtileserver sh -c "kill -HUP 1"
+```
+
 ## Specifications
 
 -   expects mbtiles files to follow version 1.0 of the [mbtiles specification](https://github.com/mapbox/mbtiles-spec). Version 1.1 is preferred.
