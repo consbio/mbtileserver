@@ -167,6 +167,8 @@ Alternately, use `docker-compose` to run:
 docker-compose up -d
 ```
 
+The default `docker-compose.yml` configures `mbtileserver` to connect to port 8080 on the host, and uses the `./mbtiles/testdata` folder for tilesets. You can use your own `docker-compose.override.yml` or [environment specific files](https://docs.docker.com/compose/extends/) to set these how you like.
+
 To reload the server:
 
 ```
