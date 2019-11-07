@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -200,7 +201,7 @@ func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
 		id := p[:len(p)-len(e)]
 		err = s.AddDBOnPath(filename, id)
 		if err != nil {
-			return nil, err
+			log.Warnf("Skipping corrupt mbtiles '%s': %s", filename, err.Error())
 		}
 	}
 	return s, nil
