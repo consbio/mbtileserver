@@ -45,3 +45,17 @@ func Test_TileFormat_ContentType(t *testing.T) {
 		}
 	}
 }
+
+func Test_NewDB(t *testing.T) {
+	// valid tileset should not raise error
+	_, err := mbtiles.NewDB("./testdata/geography-class-png.mbtiles")
+	if err != nil {
+		t.Errorf("Valid tileset could not be opened: %q", err)
+	}
+
+	// invalid tileset should raise error
+	_, err = mbtiles.NewDB("./testdata/invalid.mbtiles")
+	if err == nil {
+		t.Error("Invalid tileset did not raise validation error")
+	}
+}
