@@ -58,4 +58,10 @@ func Test_NewDB(t *testing.T) {
 	if err == nil {
 		t.Error("Invalid tileset did not raise validation error")
 	}
+
+	// invalid tile image format should raise error
+	_, err = mbtiles.NewDB("./testdata/invalid-tile-format.mbtiles")
+	if err == nil {
+		t.Error("Invalid tileset did not raise validation error")
+	}
 }
