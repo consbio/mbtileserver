@@ -13,13 +13,14 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/consbio/mbtileserver/mbtiles"
 )
@@ -160,7 +161,7 @@ func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 	}
 	ts, err := mbtiles.NewDB(filename)
 	if err != nil {
-		return fmt.Errorf("could not open mbtiles file %q: %v", filename, err)
+		return fmt.Errorf("Invalid mbtiles file %q: %v", filename, err)
 	}
 	s.tilesets[urlPath] = ts
 	return nil
@@ -201,7 +202,7 @@ func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
 		id := p[:len(p)-len(e)]
 		err = s.AddDBOnPath(filename, id)
 		if err != nil {
-			log.Warnf("Skipping corrupt mbtiles '%s': %s", filename, err.Error())
+			log.Warnf("%s\nThis tileset will not be available from the API", err.Error())
 		}
 	}
 	return s, nil

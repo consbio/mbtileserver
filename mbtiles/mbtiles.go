@@ -90,15 +90,27 @@ func NewDB(filename string) (*DB, error) {
 	_, id := filepath.Split(filename)
 	id = strings.Split(id, ".")[0]
 
+	//Saves last modified mbtiles time for setting Last-Modified header
+	fileStat, err := os.Stat(filename)
+	if err != nil {
+		return nil, fmt.Errorf("could not read file stats for mbtiles file: %s\n", filename)
+	}
+
 	db, err := sql.Open("sqlite3", filename)
 	if err != nil {
 		return nil, err
 	}
 
-	//Saves last modified mbtiles time for setting Last-Modified header
-	fileStat, err := os.Stat(filename)
+	//Validate the mbtiles file
+	//'tiles', 'metadata' tables or views must be present
+	var tableCount int
+	err = db.QueryRow("SELECT count(*) FROM sqlite_master WHERE name in ('tiles', 'metadata')").Scan(&tableCount)
 	if err != nil {
-		return nil, fmt.Errorf("could not read file stats for mbtiles file: %s\n", filename)
+		return nil, err
+	}
+
+	if tableCount < 2 {
+		return nil, fmt.Errorf("Missing required table: 'tiles' or 'metadata'")
 	}
 
 	//query a sample tile to determine format
