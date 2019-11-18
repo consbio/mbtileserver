@@ -84,10 +84,13 @@
 
         var layer = null;
         d3.json('./', function(tileJSON) {
-            var b = tileJSON.bounds;
+            if (tileJSON.bounds) {
+                var b = tileJSON.bounds;
 
-            // TODO: optimize and prevent jitter
-            map.fitBounds([[b[1], b[0]], [b[3], b[2]]]);
+                // TODO: optimize and prevent jitter
+                map.fitBounds([[b[1], b[0]], [b[3], b[2]]]);
+            }
+
             if (tileJSON.maxzoom && tileJSON.maxzoom < map.getZoom()){
                 map.setZoom(tileJSON.maxzoom);
             }
