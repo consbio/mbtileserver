@@ -344,7 +344,7 @@ In short, we are planning to:
 
 Dependencies are managed using go modules. Vendored dependencies are stored in `vendor` folder by using `go mod vendor`.
 
-On Windows, it is necessary to install `gcc` in order to compile `mattn/go-sqlite3`.  
+On Windows, it is necessary to install `gcc` in order to compile `mattn/go-sqlite3`.
 MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
 
 If you experience very slow builds each time, it may be that you need to first run
@@ -388,7 +388,11 @@ But do not forget to perform it in the end.
 
 ## Changes
 
-### 0.5.0 (in progress)
+### 0.5.1 (in progress)
+
+-   fixed bug in map preview when bounds is not defined for a tileset (#84)
+
+### 0.5.0
 
 -   Added Docker support (#74, #75)
 -   Fix case-sensitive mbtiles URLs (#77)

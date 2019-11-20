@@ -1,168 +1,192 @@
 {{ define "map" }}
 <!DOCTYPE html>
 <html>
-<head lang="en">
-    <meta charset="UTF-8">
-    <title>{{.ID}} Preview</title>
-    <script src="/static/core.min.js"></script>
-    <link href="/static/core.min.css" rel="stylesheet" />
-    <style>
-        html {
-            height: 100%;
-        }
-        body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-        }
-        h4 {
-            margin: 0;
-        }
-        #Map {
-            position: absolute;
-            top:0;
-            left:0;
-            bottom:0;
-            right:0;
-            border-top: 2px solid #AAA;
-        }
-        .basemap img {
-            width: 36px;
-        }
-        .info {
-			padding: 6px 8px;
-			font: 14px/16px Arial, Helvetica, sans-serif;
-			background: white;
-			background: rgba(255,255,255,0.8);
-			box-shadow: 0 0 15px rgba(0,0,0,0.2);
-			border-radius: 5px;
-            position: absolute;
-            z-index: 2000;
-            top: 10px;
-            right: 10px;
-		}
-        .info h3 {
-            margin: 0;
-        }
-
-    </style>
-</head>
-<body>
-    <div id="Map"></div>
-    <script>
-        var basemaps = [
-            L.tileLayer('//{s}.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community',
-                subdomains: ['server', 'services'],
-                label: 'ESRI Topo'
-            }),
-            L.tileLayer('//server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-                label: 'ESRI Imagery'
-            }),
-            L.tileLayer('//{s}.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
-                maxZoom: 16,
-                subdomains: ['server', 'services'],
-                label: 'ESRI Gray'
-            }),
-            L.tileLayer('//{s}.arcgisonline.com/arcgis/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Esri, USGS, NGA, NASA, CGIAR, N Robinson, NCEAS, NLS, OS, NMA, Geodatastyrelsen, Rijkswaterstaat, GSA, Geoland, FEMA, Intermap and the GIS user community',
-                maxZoom: 23,
-                subdomains: ['server', 'services'],
-                label: 'ESRI Elevation'
-            })
-        ];
-
-        /*var layer = L.mapbox.tileLayer('{{.URL}}')
-            .on('ready', function() {
-                var b = this.getTileJSON().bounds;  // have to shuffle these to match leaflet format
-                map.fitBounds([[b[1], b[0]], [b[3], b[2]]]);
-            });
-        */
-        var map = L.map('Map', {});
-
-        var layer = null;
-        d3.json('./', function(tileJSON) {
-            if (tileJSON.bounds) {
-                var b = tileJSON.bounds;
-
-                // TODO: optimize and prevent jitter
-                map.fitBounds([[b[1], b[0]], [b[3], b[2]]]);
+    <head lang="en">
+        <meta charset="UTF-8" />
+        <title>{{.ID}} Preview</title>
+        <script src="/static/core.min.js"></script>
+        <link href="/static/core.min.css" rel="stylesheet" />
+        <style>
+            html {
+                height: 100%;
             }
-
-            if (tileJSON.maxzoom && tileJSON.maxzoom < map.getZoom()){
-                map.setZoom(tileJSON.maxzoom);
+            body {
+                margin: 0;
+                padding: 0;
+                height: 100%;
             }
+            h4 {
+                margin: 0;
+            }
+            #Map {
+                position: absolute;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                right: 0;
+                border-top: 2px solid #aaa;
+            }
+            .basemap img {
+                width: 36px;
+            }
+            .info {
+                padding: 6px 8px;
+                font: 14px/16px Arial, Helvetica, sans-serif;
+                background: white;
+                background: rgba(255, 255, 255, 0.8);
+                box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+                border-radius: 5px;
+                position: absolute;
+                z-index: 2000;
+                top: 10px;
+                right: 10px;
+            }
+            .info h3 {
+                margin: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="Map"></div>
+        <script>
+            var basemaps = [
+                L.tileLayer(
+                    "//{s}.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+                    {
+                        attribution:
+                            "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community",
+                        subdomains: ["server", "services"],
+                        label: "ESRI Topo"
+                    }
+                ),
+                L.tileLayer(
+                    "//server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                    {
+                        attribution:
+                            "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+                        label: "ESRI Imagery"
+                    }
+                ),
+                L.tileLayer(
+                    "//{s}.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+                    {
+                        attribution:
+                            "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ",
+                        maxZoom: 16,
+                        subdomains: ["server", "services"],
+                        label: "ESRI Gray"
+                    }
+                ),
+                L.tileLayer(
+                    "//{s}.arcgisonline.com/arcgis/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}",
+                    {
+                        attribution:
+                            "Esri, USGS, NGA, NASA, CGIAR, N Robinson, NCEAS, NLS, OS, NMA, Geodatastyrelsen, Rijkswaterstaat, GSA, Geoland, FEMA, Intermap and the GIS user community",
+                        maxZoom: 23,
+                        subdomains: ["server", "services"],
+                        label: "ESRI Elevation"
+                    }
+                )
+            ];
 
-            layer = L.tileLayer(tileJSON.tiles[0], {
-                minZoom: tileJSON.minzoom || 0,
-                maxZoom: tileJSON.maxzoom || 23
-            });
+            var map = L.map("Map", {});
 
-            map.addLayer(layer);
+            var layer = null;
+            d3.json("./", function(tileJSON) {
+                if (tileJSON.bounds) {
+                    var b = tileJSON.bounds;
 
-            var legendJSON = tileJSON.legend;
-            if (legendJSON && legendJSON.search(/\{/) === 0) {
-                legendJSON = JSON.parse(legendJSON);
-                // Make sure this is the legend JSON structure we expect
-                if (legendJSON.length && legendJSON[0].elements) {
-                    map.addControl(L.control.base64legend({
-                        position: 'topright',
-                        legends: legendJSON,
-                        collapseSimple: true,
-                        detectStretched: true
-                    }));
+                    // TODO: optimize and prevent jitter
+                    map.fitBounds([
+                        [b[1], b[0]],
+                        [b[3], b[2]]
+                    ]);
+                } else {
+                    map.fitWorld();
                 }
-            }
 
-            if (tileJSON.grids && tileJSON.grids.length > 0) {
-                var gridURL = tileJSON.grids[0];
-                var utfgrid = L.utfGrid(gridURL, {
-                    resolution: 4,
-                    pointerCursor: true,
-                    mouseInterval: 66  // Delay for mousemove events
+                if (tileJSON.maxzoom && tileJSON.maxzoom < map.getZoom()) {
+                    map.setZoom(tileJSON.maxzoom);
+                }
+
+                layer = L.tileLayer(tileJSON.tiles[0], {
+                    minZoom: tileJSON.minzoom || 0,
+                    maxZoom: tileJSON.maxzoom || 23
                 });
-                utfgrid.addTo(map);
 
-                var infoContainer = L.DomUtil.create('div', 'info', L.DomUtil.get('Map'));
-                var textNode = L.DomUtil.create('h3', '', infoContainer);
-                textNode.innerHTML = 'This service has UTF-8 Grids; see console for grid data.';
+                map.addLayer(layer);
 
+                var legendJSON = tileJSON.legend;
+                if (legendJSON && legendJSON.search(/\{/) === 0) {
+                    legendJSON = JSON.parse(legendJSON);
+                    // Make sure this is the legend JSON structure we expect
+                    if (legendJSON.length && legendJSON[0].elements) {
+                        map.addControl(
+                            L.control.base64legend({
+                                position: "topright",
+                                legends: legendJSON,
+                                collapseSimple: true,
+                                detectStretched: true
+                            })
+                        );
+                    }
+                }
 
-                utfgrid.on("mouseover", function(e){
-                    console.log('UTF grid data:', e.data);
-                });
-            }
-        });
+                if (tileJSON.grids && tileJSON.grids.length > 0) {
+                    var gridURL = tileJSON.grids[0];
+                    var utfgrid = L.utfGrid(gridURL, {
+                        resolution: 4,
+                        pointerCursor: true,
+                        mouseInterval: 66 // Delay for mousemove events
+                    });
+                    utfgrid.addTo(map);
 
-        map.zoomControl.setPosition('topleft');
-        map.addControl(L.control.zoomBox({modal: true, position:'topleft'}));
+                    var infoContainer = L.DomUtil.create(
+                        "div",
+                        "info",
+                        L.DomUtil.get("Map")
+                    );
+                    var textNode = L.DomUtil.create("h3", "", infoContainer);
+                    textNode.innerHTML =
+                        "This service has UTF-8 Grids; see console for grid data.";
 
-        var slider = L.control.range({
-            position: 'topleft',
-            min: 0,
-            max: 1,
-            value: 1,
-            step: 0.01,
-            orient: 'vertical',
-            iconClass: 'leaflet-range-icon'
-        });
+                    utfgrid.on("mouseover", function(e) {
+                        console.log("UTF grid data:", e.data);
+                    });
+                }
+            });
 
-        slider.on('input change', function(e) {
-            layer.setOpacity(e.value);
-        });
+            map.zoomControl.setPosition("topleft");
+            map.addControl(
+                L.control.zoomBox({ modal: true, position: "topleft" })
+            );
 
-        map.addControl(slider);
+            var slider = L.control.range({
+                position: "topleft",
+                min: 0,
+                max: 1,
+                value: 1,
+                step: 0.01,
+                orient: "vertical",
+                iconClass: "leaflet-range-icon"
+            });
 
-        map.addControl(L.control.basemaps({
-            position: 'bottomright',
-            basemaps: basemaps,
-            tileX: 0,
-            tileY: 0,
-            tileZ: 1
-        }));
-    </script>
-</body>
+            slider.on("input change", function(e) {
+                layer.setOpacity(e.value);
+            });
+
+            map.addControl(slider);
+
+            map.addControl(
+                L.control.basemaps({
+                    position: "bottomright",
+                    basemaps: basemaps,
+                    tileX: 0,
+                    tileY: 0,
+                    tileZ: 1
+                })
+            );
+        </script>
+    </body>
 </html>
 {{ end }}
