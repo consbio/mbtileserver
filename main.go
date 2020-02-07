@@ -72,7 +72,7 @@ func init() {
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
 	flags.StringVar(&pathPrefix, "path", "", "URL root path of this server (if behind a proxy)")
-	flags.StringVar(&domain, "domain", "", "Domain name of this server")
+	flags.StringVar(&domain, "domain", "", "Domain name of this server.  NOTE: only used for AutoTLS.")
 	flags.StringVarP(&secretKey, "secret-key", "s", "", "Shared secret key used for HMAC authentication")
 	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")

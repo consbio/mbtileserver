@@ -57,7 +57,7 @@ Usage:
 Flags:
   -c, --cert string       X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
   -d, --dir string        Directory containing mbtiles files. (default "./tilesets")
-      --domain string     Domain name of this server
+      --domain string     Domain name of this server.    NOTE: only used for AutoTLS.
       --dsn string        Sentry DSN
   -h, --help              help for mbtileserver
   -k, --key string        TLS private key
@@ -428,6 +428,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
 
 <!-- markdownlint-enable -->
 <!-- prettier-ignore-end -->
+
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
