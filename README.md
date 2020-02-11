@@ -45,7 +45,7 @@ This will create and install an executable called `mbtileserver`.
 
 ## Usage
 
-From within the repository root ($GOPATH/bin needs to be in in your $PATH):
+From within the repository root ($GOPATH/bin needs to be in your $PATH):
 
 ```
 $  mbtileserver --help
@@ -75,9 +75,9 @@ directory and starting the server. Woo hoo!
 
 You can have multiple directories in your `tilesets` directory; these will be converted into appropriate URLs:
 
-`mytiles/foo/bar/baz.mbtiles` will be available at `/services/foo/bar/baz`.
+`<tile_dir>/foo/bar/baz.mbtiles` will be available at `/services/foo/bar/baz`.
 
-When you want to remove, modify, or add new tilesets, simply restart the server process.
+When you want to remove, modify, or add new tilesets, simply restart the server process or use the reloading process below.
 
 If a valid Sentry DSN is provided, warnings, errors, fatal errors, and panics will be reported to Sentry.
 
@@ -131,6 +131,55 @@ $ kill -HUP <pid>
 
 Reloading the server will cause it to pick up changes to the tiles directory, adding new tilesets and removing any that
 are no longer present.
+
+### Using with a reverse proxy
+
+You can use a reverse proxy in front of `mbtileserver` to intercept incoming requests, provide TLS, etc.
+
+We have used both [`Caddy`](https://caddyserver.com/) and [`NGINX`](https://www.nginx.com/) for our production setups in various projects,
+usually when we need to proxy to additional backend services.
+
+To make sure that the correct request URL is passed to `mbtileserver` so that TileJSON and map preview endpoints work correctly,
+make sure to have your reverse proxy send the following headers:
+
+Scheme (HTTP vs HTTPS):
+one of `X-Forwarded-Proto`, `X-Forwarded-Protocol`, `X-Url-Scheme` to set the scheme of the request.
+OR
+`X-Forwarded-Ssl` to automatically set the scheme to HTTPS.
+
+Host:
+Set `Host` and `X-Forwarded-Host`.
+
+#### Caddy Example:
+
+For `mbtileserver` running on port 8000 locally, add the following to the block for your domain name:
+
+```
+<domain_name> {
+    proxy /services localhost:8000 {
+        transparent
+    }
+}
+```
+
+Using `transparent` [preset](https://caddyserver.com/v1/docs/proxy) for the `proxy` settings instructs `Caddy` to automatically set appropriate headers.
+
+#### NGINX Example:
+
+For `mbtileserver` running on port 8000 locally, add the following to your `server` block:
+
+```
+server {
+   <other config options>
+
+    location /services {
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Host $server_name;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_pass http://localhost:8000;
+    }
+}
+```
 
 ## Docker
 
@@ -190,12 +239,38 @@ tiles for use with mbtileserver using:
 -   [pymbtiles](https://github.com/consbio/pymbtiles) (tiles created using Python)
 -   [tpkutils](https://github.com/consbio/tpkutils) (image tiles from ArcGIS tile packages)
 
-## Examples
+The root name of each mbtiles file becomes the "tileset_id" as used below.
 
-TileJSON API for each tileset:
+## XYZ Tile API
+
+The primary use of `mbtileserver` is as a host for XYZ tiles.
+
+These are provided at:
+`/services/<tileset_id>/tiles/{z}/{x}/{y}.<format>`
+
+where `<format>` is one of `png`, `jpg`, `pbf` depending on the type of data in the tileset.
+
+If UTF-8 Grid data are present in the mbtiles file, they will be served up over the
+grid endpoint:
+`http://localhost/services/states_outline/tiles/{z}/{x}/{y}.json`
+
+Grids are assumed to be gzip or zlib compressed in the mbtiles file. These grids
+are automatically spliced with any grid key/value data if such exists in the mbtiles
+file.
+
+## TileJSON API
+
+`mbtileserver` automatically creates a TileJSON endpoint for each service at `/services/<tileset_id>`.
+The TileJSON uses the same scheme and domain name as is used for the incoming request; the `--domain` setting does not
+have an affect on auto-generated URLs.
+
+This API provides most elements of the `metadata` table in the mbtiles file as well as others that are
+automatically inferred from tile data.
+
+For example,
 `http://localhost/services/states_outline`
 
-returns something like this;
+returns something like this:
 
 ```
 {
@@ -230,26 +305,11 @@ returns something like this;
 }
 ```
 
-It provides most elements of the `metadata` table in the mbtiles file.
+## Map preview
 
-XYZ tile endpoint for individual tiles:
-`http://localhost/services/states_outline/tiles/{z}/{x}/{y}.png`
+`mbtileserver` automatically creates a map preview page for each tileset at `/services/<tileset_id>/map`.
 
-If UTF-8 Grid data are present in the mbtiles file, they will be served up over the
-grid endpoint:
-`http://localhost/services/states_outline/tiles/{z}/{x}/{y}.json`
-
-Grids are assumed to be gzip or zlib compressed in the mbtiles file. These grids
-are automatically spliced with any grid key/value data if such exists in the mbtiles
-file.
-
-The map endpoint:
-`http://localhost/services/states_outline/map`
-
-provides an interactive Leaflet map for image tiles, including a few
-helpful plugins like a legend (if compatible legend elements found in
-TileJSON) and a transparency slider. Vector tiles are previewed using
-Mapbox GL.
+This currently uses `Leaflet` for image tiles and `Mapbox GL JS` for vector tiles.
 
 ## ArcGIS API
 
@@ -269,7 +329,7 @@ These are hosted on a free dyno by Heroku (thanks Heroku!), so there might be a 
 
 ## Request authorization
 
-Provind a secret key with `-s/--secret-key` or by setting the `HMAC_SECRET_KEY` environment variable will
+Providing a secret key with `-s/--secret-key` or by setting the `HMAC_SECRET_KEY` environment variable will
 restrict access to all server endpoints and tile requests. Requests will only be served if they provide a cryptographic
 signature created using the same secret key. This allows, for example, an application server to provide authorized
 clients a short-lived token with which the clients can access tiles for a specific service.
@@ -330,16 +390,6 @@ X-Signature-Date: 2019-03-08T19:31:12.213831+00:00
 X-Signature: 0EvkK316T-sBLA:YMIVXikJWAiiR3q-JMz1v2Mfmx3gTXJVNqme5kyaqrY
 ```
 
-## Roadmap
-
-See the issues tagged to the [0.5 version](https://github.com/consbio/mbtileserver/milestone/1)
-for our near term features and improvements.
-
-In short, we are planning to:
-
--   add tests and benchmarks
--   get things production ready
-
 ## Development
 
 Dependencies are managed using go modules. Vendored dependencies are stored in `vendor` folder by using `go mod vendor`.
@@ -360,7 +410,7 @@ Development of the templates and static assets likely requires using
 
 From the `handlers/templates/static` folder, run
 
-```
+```bash
 $npm install
 ```
 
@@ -369,7 +419,7 @@ to pull in the static dependencies. These are referenced in the
 
 Then to build the minified version, run:
 
-```
+```bash
 $gulp build
 ```
 
@@ -391,6 +441,7 @@ But do not forget to perform it in the end.
 ### 0.5.1 (in progress)
 
 -   fixed bug in map preview when bounds is not defined for a tileset (#84)
+-   updated Leaflet to 1.6.0 and Mapbox GL to 0.32.0 (larger upgrades contingent on #65)
 
 ### 0.5.0
 

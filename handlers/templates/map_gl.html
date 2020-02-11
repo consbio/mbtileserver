@@ -8,9 +8,9 @@
             name="viewport"
             content="initial-scale=1,maximum-scale=1,user-scalable=no"
         />
-        <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v0.23.0/mapbox-gl.js"></script>
+        <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v0.32.0/mapbox-gl.js"></script>
         <link
-            href="https://api.tiles.mapbox.com/mapbox-gl-js/v0.23.0/mapbox-gl.css"
+            href="https://api.tiles.mapbox.com/mapbox-gl-js/v0.32.0/mapbox-gl.css"
             rel="stylesheet"
         />
         <style>
@@ -34,7 +34,7 @@
             var basemapSource = {
                 type: "raster",
                 tiles: [
-                    "http://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+                    "//server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
                 ],
                 tileSize: 256,
                 attribution:
