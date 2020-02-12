@@ -169,8 +169,12 @@ func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 
 // NewFromBaseDir returns a ServiceSet that combines all .mbtiles files under
 // the directory at baseDir. The DBs will all be served under their relative paths
-// to baseDir.
+// to baseDir.  If baseDir does not exist, is not a valid path, or does not contain
+// any valid .mbtiles files, an empty ServiceSet will be returned along with the error.
 func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
+	s := New()
+	s.secretKey = secretKey
+
 	var filenames []string
 	err := filepath.Walk(baseDir, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -186,11 +190,12 @@ func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to scan tilesets: %v", err)
+		return s, err
 	}
 
-	s := New()
-	s.secretKey = secretKey
+	if len(filenames) == 0 {
+		return s, fmt.Errorf("no tilesets found in %s", baseDir)
+	}
 
 	for _, filename := range filenames {
 		subpath, err := filepath.Rel(baseDir, filename)

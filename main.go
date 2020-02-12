@@ -14,8 +14,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -191,34 +189,13 @@ func serve() {
 		log.Fatalln("Certificate or tls options are required to use redirect")
 	}
 
-	var filenames []string
-	err := filepath.Walk(tilePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if _, err := os.Stat(path + "-journal"); err == nil {
-			// Don't try to load .mbtiles files that are being written
-			return nil
-		}
-		if strings.HasSuffix(strings.ToLower(path), ".mbtiles") {
-			filenames = append(filenames, path)
-		}
-		return nil
-	})
-	if err != nil {
-		log.Fatalf("Unable to scan tileset directory for mbtiles files\n%v", err)
-	}
-
-	if len(filenames) == 0 {
-		log.Warnf("No tilesets found in %s!\n", tilePath)
-	} else {
-		log.Infof("Found %v mbtiles files in %s", len(filenames), tilePath)
-	}
-
 	svcSet, err := handlers.NewFromBaseDir(tilePath, secretKey)
 	if err != nil {
-		log.Errorf("Unable to create service set: %v", err)
+		log.Errorf("Unable to create services for mbtiles in '%v': %v\n", tilePath, err)
 	}
+
+	// print number of services
+	log.Infof("Published %v services", svcSet.Size())
 
 	e := echo.New()
 	e.HideBanner = true
@@ -433,26 +410,3 @@ func supervise() {
 		fmt.Println("")
 	}
 }
-
-/*
-func notModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		var lastModified time.Time
-		id := c.Param("id")
-		if _, exists := tilesets[id]; exists {
-			lastModified = tilesets[id].TimeStamp()
-		} else {
-			lastModified = startuptime // startup time of server
-		}
-
-		if t, err := time.Parse(http.TimeFormat, c.Request().Header.Get(echo.HeaderIfModifiedSince)); err == nil && lastModified.Before(t.Add(1*time.Second)) {
-			c.Response().Header().Del(echo.HeaderContentType)
-			c.Response().Header().Del(echo.HeaderContentLength)
-			return c.NoContent(http.StatusNotModified)
-		}
-
-		c.Response().Header().Set(echo.HeaderLastModified, lastModified.UTC().Format(http.TimeFormat))
-		return next(c)
-	}
-}
-*/
