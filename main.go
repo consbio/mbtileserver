@@ -218,7 +218,7 @@ func serve() {
 	if len(filenames) == 0 {
 		log.Warnf("No tilesets found in %s!\n", tilePath)
 	} else {
-		log.Infof("Found %v mbtiles files in [ %s ]", len(filenames), strings.ReplaceAll(tilePath, ":", ", "))
+		log.Infof("Found %v mbtiles files in [ %s ]", len(filenames), strings.Replace(tilePath, ":", ", ", -1))
 	}
 
 	svcSet, err := handlers.NewFromFilenames(filenames, secretKey)
