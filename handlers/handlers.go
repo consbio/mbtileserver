@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -134,6 +135,7 @@ type ServiceInfo struct {
 // ServiceSet is the base type for the HTTP handlers which combines multiple
 // mbtiles.DB tilesets.
 type ServiceSet struct {
+	busysets  map[string]*sync.WaitGroup
 	tilesets  map[string]*mbtiles.DB
 	templates *template.Template
 	Domain    string
@@ -141,29 +143,94 @@ type ServiceSet struct {
 	secretKey string
 }
 
-// New returns a new ServiceSet. Use AddDBOnPath to add a mbtiles file.
+// New returns a new ServiceSet. Use AddOrUpdateDBOnPath to add a mbtiles file.
 func New() *ServiceSet {
 	s := &ServiceSet{
+		busysets:  make(map[string]*sync.WaitGroup),
 		tilesets:  make(map[string]*mbtiles.DB),
 		templates: template.New("_base_"),
 	}
 	return s
 }
 
-// AddDBOnPath interprets filename as mbtiles file which is opened and which will be
+func serviceIDFromFilename(basedir, filename string) (string, error) {
+	subpath, err := filepath.Rel(basedir, filename)
+	if err != nil {
+		return "", fmt.Errorf("unable to extract URL path for %q: %v", filename, err)
+	}
+	e := filepath.Ext(filename)
+	p := filepath.ToSlash(subpath)
+	id := strings.ToLower(p[:len(p)-len(e)])
+	return id, nil
+}
+
+// AddOrUpdateDBOnPath interprets filename as mbtiles file which is opened and which will be
 // served under "/services/<urlPath>" by Handler(). The parameter urlPath may not be
 // nil, otherwise an error is returned. In case the DB cannot be opened the returned
 // error is non-nil.
-func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
-	var err error
+func (s *ServiceSet) AddOrUpdateDBOnPath(basedir, filename string) error {
+	urlPath, err := serviceIDFromFilename(basedir, filename)
+	if err != nil {
+		return err
+	}
 	if urlPath == "" {
 		return fmt.Errorf("path parameter may not be empty")
+	}
+	isUpdate := false
+
+	 w, ok := s.busysets[urlPath]
+	 if !ok {
+	 	w = new(sync.WaitGroup)
+		s.busysets[urlPath] = w
+	}
+	w.Wait()
+	w.Add(1)
+	defer w.Done()
+
+	// If the file exists already, then we'll remove it before adding it back again.
+	if db, ok := s.tilesets[urlPath]; ok {
+		if err := db.Close(); err != nil {
+			return err
+		}
+		isUpdate = true
 	}
 	ts, err := mbtiles.NewDB(filename)
 	if err != nil {
 		return fmt.Errorf("Invalid mbtiles file %q: %v", filename, err)
 	}
 	s.tilesets[urlPath] = ts
+	if isUpdate {
+		log.Println("Updated existing DB path", filename)
+	} else {
+		log.Println("Added DB path:", filename)
+	}
+	return nil
+}
+
+func (s *ServiceSet) RemoveDBOnPath(basedir, filename string) error {
+	urlPath, err := serviceIDFromFilename(basedir, filename)
+	if err != nil {
+		return err
+	}
+	if urlPath == "" {
+		return fmt.Errorf("path parameter may not be empty")
+	}
+
+	w := s.busysets[urlPath]
+	w.Wait()
+	defer func() {
+		w.Done()
+		delete(s.busysets, urlPath)
+	}()
+
+	err = s.tilesets[urlPath].Close()
+	if err != nil {
+		return err
+	}
+
+	delete(s.tilesets, urlPath)
+
+	log.Println("Removed DB path:", filename)
 	return nil
 }
 
@@ -193,14 +260,7 @@ func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
 	s.secretKey = secretKey
 
 	for _, filename := range filenames {
-		subpath, err := filepath.Rel(baseDir, filename)
-		if err != nil {
-			return nil, fmt.Errorf("unable to extract URL path for %q: %v", filename, err)
-		}
-		e := filepath.Ext(filename)
-		p := filepath.ToSlash(subpath)
-		id := p[:len(p)-len(e)]
-		err = s.AddDBOnPath(filename, id)
+		err = s.AddOrUpdateDBOnPath(baseDir, filename)
 		if err != nil {
 			log.Warnf("%s\nThis tileset will not be available from the API", err.Error())
 		}
@@ -249,6 +309,8 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 }
 
 func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB, mapURL bool) handlerFunc {
+	s.busysets[id].Add(1)
+	defer s.busysets[id].Done()
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		query := ""
 		if r.URL.RawQuery != "" {
@@ -327,6 +389,8 @@ func (s *ServiceSet) executeTemplate(w http.ResponseWriter, name string, data in
 }
 
 func (s *ServiceSet) serviceHTML(id string, db *mbtiles.DB) handlerFunc {
+	s.busysets[id].Add(1)
+	defer s.busysets[id].Done()
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		p := struct {
 			URL string
@@ -414,7 +478,9 @@ func tileNotFoundHandler(w http.ResponseWriter, f mbtiles.TileFormat) (int, erro
 	return http.StatusOK, err // http.StatusOK doesn't matter, code was written by w.WriteHeader already
 }
 
-func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
+func (s *ServiceSet) tiles(id string, db *mbtiles.DB) handlerFunc {
+	s.busysets[id].Add(1)
+	defer s.busysets[id].Done()
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
 		// split path components to extract tile coordinates x, y and z
 		pcs := strings.Split(r.URL.Path[1:], "/")
@@ -484,7 +550,7 @@ func (s *ServiceSet) Handler(ef func(error), publish bool) http.Handler {
 	for id, db := range s.tilesets {
 		p := "/services/" + id
 		m.Handle(p, wrapGetWithErrors(ef, hmacAuth(s.tileJSON(id, db, publish), s.secretKey, id)))
-		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, hmacAuth(s.tiles(db), s.secretKey, id)))
+		m.Handle(p+"/tiles/", wrapGetWithErrors(ef, hmacAuth(s.tiles(id, db), s.secretKey, id)))
 		if publish {
 			m.Handle(p+"/map", wrapGetWithErrors(ef, hmacAuth(s.serviceHTML(id, db), s.secretKey, id)))
 		}
