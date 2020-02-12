@@ -318,15 +318,6 @@ This should be sufficient for use with online platforms such as [Data Basin](htt
 
 This API is not intended for use with more full-featured ArcGIS applications such as ArcGIS Desktop.
 
-## Live Examples
-
-These are hosted on a free dyno by Heroku (thanks Heroku!), so there might be a small delay when you first access these.
-
--   [List of services](http://frozen-island-41032.herokuapp.com/services)
--   [TileJSON](http://frozen-island-41032.herokuapp.com/services/geography-class-png) for a PNG based tileset generated using TileMill.
--   [Map Preview ](http://frozen-island-41032.herokuapp.com/services/geography-class-png/map) for a map preview of the above.
--   [ArcGIS Map Service](http://frozen-island-41032.herokuapp.com/arcgis/rest/services/geography-class-png/MapServer)
-
 ## Request authorization
 
 Providing a secret key with `-s/--secret-key` or by setting the `HMAC_SECRET_KEY` environment variable will
