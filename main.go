@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"os/exec"
 	"os/signal"
@@ -14,8 +15,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -38,6 +37,15 @@ var rootCmd = &cobra.Command{
 	Use:   "mbtileserver",
 	Short: "Serve tiles from mbtiles files",
 	Run: func(cmd *cobra.Command, args []string) {
+		// if port is not provided by user (after parsing command line args), use defaults
+		if port == -1 {
+			if len(certificate) > 0 || autotls {
+				port = 443
+			} else {
+				port = 8000
+			}
+		}
+
 		if reload {
 			if isChild := os.Getenv("MBTS_IS_CHILD"); isChild != "" {
 				serve()
@@ -67,7 +75,7 @@ var (
 
 func init() {
 	flags := rootCmd.Flags()
-	flags.IntVarP(&port, "port", "p", 8000, "Server port.")
+	flags.IntVarP(&port, "port", "p", -1, "Server port. Default is 443 if --cert or --tls options are used, otherwise 8000.")
 	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
@@ -191,34 +199,13 @@ func serve() {
 		log.Fatalln("Certificate or tls options are required to use redirect")
 	}
 
-	var filenames []string
-	err := filepath.Walk(tilePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if _, err := os.Stat(path + "-journal"); err == nil {
-			// Don't try to load .mbtiles files that are being written
-			return nil
-		}
-		if strings.HasSuffix(strings.ToLower(path), ".mbtiles") {
-			filenames = append(filenames, path)
-		}
-		return nil
-	})
-	if err != nil {
-		log.Fatalf("Unable to scan tileset directory for mbtiles files\n%v", err)
-	}
-
-	if len(filenames) == 0 {
-		log.Warnf("No tilesets found in %s!\n", tilePath)
-	} else {
-		log.Infof("Found %v mbtiles files in %s", len(filenames), tilePath)
-	}
-
 	svcSet, err := handlers.NewFromBaseDir(tilePath, secretKey)
 	if err != nil {
-		log.Errorf("Unable to create service set: %v", err)
+		log.Errorf("Unable to create services for mbtiles in '%v': %v\n", tilePath, err)
 	}
+
+	// print number of services
+	log.Infof("Published %v services", svcSet.Size())
 
 	e := echo.New()
 	e.HideBanner = true
@@ -312,18 +299,22 @@ func serve() {
 	case autotls:
 		{
 			log.Debug("Starting HTTPS using Let's Encrypt")
+
+			// Setup certificate cache directory and TLS config
 			e.AutoTLSManager.Cache = autocert.DirCache(".certs")
 			e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(domain)
 
-			fmt.Printf("HTTPS server started on port %v\n", port)
-
+			server.TLSConfig = new(tls.Config)
 			server.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
 			server.TLSConfig.NextProtos = append(server.TLSConfig.NextProtos, acme.ALPNProto)
 			if !e.DisableHTTP2 {
 				server.TLSConfig.NextProtos = append(server.TLSConfig.NextProtos, "h2")
 			}
 
-			log.Fatal(server.Serve(listener))
+			tlsListener := tls.NewListener(listener, server.TLSConfig)
+
+			fmt.Printf("HTTPS server started on port %v\n", port)
+			log.Fatal(server.Serve(tlsListener))
 		}
 	default:
 		{
@@ -335,6 +326,7 @@ func serve() {
 
 // The main process forks and manages a sub-process for graceful reloading
 func supervise() {
+
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%v", port))
 	if err != nil {
 		log.Fatal(err)
@@ -433,26 +425,3 @@ func supervise() {
 		fmt.Println("")
 	}
 }
-
-/*
-func notModifiedMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		var lastModified time.Time
-		id := c.Param("id")
-		if _, exists := tilesets[id]; exists {
-			lastModified = tilesets[id].TimeStamp()
-		} else {
-			lastModified = startuptime // startup time of server
-		}
-
-		if t, err := time.Parse(http.TimeFormat, c.Request().Header.Get(echo.HeaderIfModifiedSince)); err == nil && lastModified.Before(t.Add(1*time.Second)) {
-			c.Response().Header().Del(echo.HeaderContentType)
-			c.Response().Header().Del(echo.HeaderContentLength)
-			return c.NoContent(http.StatusNotModified)
-		}
-
-		c.Response().Header().Set(echo.HeaderLastModified, lastModified.UTC().Format(http.TimeFormat))
-		return next(c)
-	}
-}
-*/

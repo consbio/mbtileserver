@@ -62,7 +62,7 @@ Flags:
   -h, --help              help for mbtileserver
   -k, --key string        TLS private key
       --path string       URL root path of this server (if behind a proxy)
-  -p, --port int          Server port. (default 8000)
+  -p, --port int          Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
   -s, --secret-key string Shared secret key used for HMAC authentication
   -t, --tls               Auto TLS using Let's Encrypt
   -r, --redirect          Redirect HTTP to HTTPS
@@ -83,7 +83,9 @@ If a valid Sentry DSN is provided, warnings, errors, fatal errors, and panics wi
 
 If `redirect` option is provided, the server also listens on port 80 and redirects to port 443.
 
-If the `--tls` option is provided, the Let's Encrypt Terms of Service are accepted automatically on your behalf. Please review them [here](https://letsencrypt.org/repository/). Certificates are cached in a `.certs` folder created where you are executing `mbtileserver`. Please make sure this folder can be written by the `mbtileserver` process or you will get errors.
+If the `--tls` option is provided, the Let's Encrypt Terms of Service are accepted automatically on your behalf. Please review them [here](https://letsencrypt.org/repository/). Certificates are cached in a `.certs` folder created where you are executing `mbtileserver`. Please make sure this folder can be written by the `mbtileserver` process or you will get errors. Certificates are not requested until the first request is made to the server. We recommend that you initialize these after startup by making a request against `https://<hostname>/services` and watching the logs from the server to make sure that certificates were processed correctly. Common errors include Let's Encrypt not being able to access your server at the domain you provided. `localhost` or internal-only domains will not work.
+
+If either `--cert` or `--tls` are provided, the default port is 443.
 
 You can also set up server config using environment variables instead of flags, which may be more helpful when deploying in a docker image. Use the associated flag to determine usage. The following variables are available:
 
@@ -318,15 +320,6 @@ This should be sufficient for use with online platforms such as [Data Basin](htt
 
 This API is not intended for use with more full-featured ArcGIS applications such as ArcGIS Desktop.
 
-## Live Examples
-
-These are hosted on a free dyno by Heroku (thanks Heroku!), so there might be a small delay when you first access these.
-
--   [List of services](http://frozen-island-41032.herokuapp.com/services)
--   [TileJSON](http://frozen-island-41032.herokuapp.com/services/geography-class-png) for a PNG based tileset generated using TileMill.
--   [Map Preview ](http://frozen-island-41032.herokuapp.com/services/geography-class-png/map) for a map preview of the above.
--   [ArcGIS Map Service](http://frozen-island-41032.herokuapp.com/arcgis/rest/services/geography-class-png/MapServer)
-
 ## Request authorization
 
 Providing a secret key with `-s/--secret-key` or by setting the `HMAC_SECRET_KEY` environment variable will
@@ -428,6 +421,11 @@ Modifying the `.go` files always requires re-running `go build .`.
 In case you have modified the templates and static assets, you need to run `go generate ./handlers` to ensure that your modifications
 are embedded into the executable. For this to work, you must have
 [github.com/shurcooL/vfsgen)[https://github.com/shurcooL/vfsgen) installed.
+
+```bash
+go generate ./handlers/handlers.go
+```
+
 This will rewrite the `assets_vfsdata.go` which you must commit along with your
 modification. Also you should run `go build` after `go generate`.
 
@@ -438,10 +436,16 @@ But do not forget to perform it in the end.
 
 ## Changes
 
-### 0.5.1 (in progress)
+### 0.6 (in progress)
 
 -   fixed bug in map preview when bounds is not defined for a tileset (#84)
 -   updated Leaflet to 1.6.0 and Mapbox GL to 0.32.0 (larger upgrades contingent on #65)
+-   fixed issues with `--tls` option (#89)
+-   added example proxy configuration for Caddy and NGINX (#91)
+-   fixed issues with map preview page using HTTP basemaps (#90)
+-   resolved template loading issues (#85)
+-   breaking changes:
+    -   Removed `TemplatesFromAssets` as it was not used internally, and unlikely used externally
 
 ### 0.5.0
 

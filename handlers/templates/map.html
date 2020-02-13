@@ -92,7 +92,7 @@
             var map = L.map("Map", {});
 
             var layer = null;
-            d3.json("./", function(tileJSON) {
+            d3.json("./").then(function(tileJSON) {
                 if (tileJSON.bounds) {
                     var b = tileJSON.bounds;
 

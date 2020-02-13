@@ -27,8 +27,7 @@
     },
     "dependencies": {
         "d3-collection": "^1.0.4",
-        "d3-dispatch": "^1.0.3",
-        "d3-request": "^1.0.5",
+        "d3-fetch": "^1.1.2",
         "leaflet": "^1.1.0",
         "leaflet-base64-legend": "^0.1.1",
         "leaflet-basemaps": "^0.2.0",
