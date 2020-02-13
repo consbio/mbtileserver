@@ -68,7 +68,7 @@ var (
 func init() {
 	flags := rootCmd.Flags()
 	flags.IntVarP(&port, "port", "p", 8000, "Server port.")
-	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files. Multiple directories must be a split with ':'")
+	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
 	flags.StringVar(&pathPrefix, "path", "", "URL root path of this server (if behind a proxy)")
@@ -192,36 +192,30 @@ func serve() {
 	}
 
 	var filenames []string
-
-	for _, baseDir := range strings.Split(tilePath, ":") {
-		if err := filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if _, err := os.Stat(path + "-journal"); err == nil {
-				// Don't try to load .mbtiles files that are being written
-				return nil
-			}
-			if strings.HasSuffix(strings.ToLower(path), ".mbtiles") {
-				filePath, err := filepath.Abs(path)
-				if err != nil {
-					return fmt.Errorf("unable to extract URL path for %q: %v", path, err)
-				}
-				filenames = append(filenames, filePath)
-			}
-			return nil
-		}); err != nil {
-			log.Errorf("Unable to scan tileset directory '%s' for mbtiles files\n%v", baseDir, err)
+	err := filepath.Walk(tilePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
 		}
+		if _, err := os.Stat(path + "-journal"); err == nil {
+			// Don't try to load .mbtiles files that are being written
+			return nil
+		}
+		if strings.HasSuffix(strings.ToLower(path), ".mbtiles") {
+			filenames = append(filenames, path)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatalf("Unable to scan tileset directory for mbtiles files\n%v", err)
 	}
 
 	if len(filenames) == 0 {
 		log.Warnf("No tilesets found in %s!\n", tilePath)
 	} else {
-		log.Infof("Found %v mbtiles files in [ %s ]", len(filenames), strings.ReplaceAll(tilePath, ":", ", "))
+		log.Infof("Found %v mbtiles files in %s", len(filenames), tilePath)
 	}
 
-	svcSet, err := handlers.NewFromFilenames(filenames, secretKey)
+	svcSet, err := handlers.NewFromBaseDir(tilePath, secretKey)
 	if err != nil {
 		log.Errorf("Unable to create service set: %v", err)
 	}

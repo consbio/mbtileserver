@@ -5,17 +5,17 @@ package handlers
 import (
 	"bytes"
 	"crypto/hmac"
-	"crypto/md5"
 	"crypto/sha1"
 	"crypto/subtle"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -167,17 +167,42 @@ func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 	return nil
 }
 
-// NewFromFilenames returns a ServiceSet that combines all .mbtiles files under
+// NewFromBaseDir returns a ServiceSet that combines all .mbtiles files under
 // the directory at baseDir. The DBs will all be served under their relative paths
 // to baseDir.
-func NewFromFilenames(filenames []string, secretKey string) (*ServiceSet, error) {
+func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
+	var filenames []string
+	err := filepath.Walk(baseDir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(p + "-journal"); err == nil {
+			// Don't try to load .mbtiles files that are being written
+			return nil
+		}
+		if ext := filepath.Ext(p); ext == ".mbtiles" {
+			filenames = append(filenames, p)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to scan tilesets: %v", err)
+	}
+
 	s := New()
 	s.secretKey = secretKey
 
 	for _, filename := range filenames {
-		id := md5.Sum([]byte(filename))
-		if err := s.AddDBOnPath(filename, hex.EncodeToString(id[:])); err != nil {
-			log.Warnf("tileset '%s' will not be available from the API: %s", filename, err.Error())
+		subpath, err := filepath.Rel(baseDir, filename)
+		if err != nil {
+			return nil, fmt.Errorf("unable to extract URL path for %q: %v", filename, err)
+		}
+		e := filepath.Ext(filename)
+		p := filepath.ToSlash(subpath)
+		id := p[:len(p)-len(e)]
+		err = s.AddDBOnPath(filename, id)
+		if err != nil {
+			log.Warnf("%s\nThis tileset will not be available from the API", err.Error())
 		}
 	}
 	return s, nil
