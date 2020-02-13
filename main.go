@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"os/exec"
 	"os/signal"
@@ -36,6 +37,15 @@ var rootCmd = &cobra.Command{
 	Use:   "mbtileserver",
 	Short: "Serve tiles from mbtiles files",
 	Run: func(cmd *cobra.Command, args []string) {
+		// if port is not provided by user (after parsing command line args), use defaults
+		if port == -1 {
+			if len(certificate) > 0 || autotls {
+				port = 443
+			} else {
+				port = 8000
+			}
+		}
+
 		if reload {
 			if isChild := os.Getenv("MBTS_IS_CHILD"); isChild != "" {
 				serve()
@@ -65,7 +75,7 @@ var (
 
 func init() {
 	flags := rootCmd.Flags()
-	flags.IntVarP(&port, "port", "p", 8000, "Server port.")
+	flags.IntVarP(&port, "port", "p", -1, "Server port. Default is 443 if --cert or --tls options are used, otherwise 8000.")
 	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
@@ -289,18 +299,22 @@ func serve() {
 	case autotls:
 		{
 			log.Debug("Starting HTTPS using Let's Encrypt")
+
+			// Setup certificate cache directory and TLS config
 			e.AutoTLSManager.Cache = autocert.DirCache(".certs")
 			e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(domain)
 
-			fmt.Printf("HTTPS server started on port %v\n", port)
-
+			server.TLSConfig = new(tls.Config)
 			server.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
 			server.TLSConfig.NextProtos = append(server.TLSConfig.NextProtos, acme.ALPNProto)
 			if !e.DisableHTTP2 {
 				server.TLSConfig.NextProtos = append(server.TLSConfig.NextProtos, "h2")
 			}
 
-			log.Fatal(server.Serve(listener))
+			tlsListener := tls.NewListener(listener, server.TLSConfig)
+
+			fmt.Printf("HTTPS server started on port %v\n", port)
+			log.Fatal(server.Serve(tlsListener))
 		}
 	default:
 		{
@@ -312,6 +326,7 @@ func serve() {
 
 // The main process forks and manages a sub-process for graceful reloading
 func supervise() {
+
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%v", port))
 	if err != nil {
 		log.Fatal(err)

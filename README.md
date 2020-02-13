@@ -62,7 +62,7 @@ Flags:
   -h, --help              help for mbtileserver
   -k, --key string        TLS private key
       --path string       URL root path of this server (if behind a proxy)
-  -p, --port int          Server port. (default 8000)
+  -p, --port int          Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
   -s, --secret-key string Shared secret key used for HMAC authentication
   -t, --tls               Auto TLS using Let's Encrypt
   -r, --redirect          Redirect HTTP to HTTPS
@@ -83,7 +83,9 @@ If a valid Sentry DSN is provided, warnings, errors, fatal errors, and panics wi
 
 If `redirect` option is provided, the server also listens on port 80 and redirects to port 443.
 
-If the `--tls` option is provided, the Let's Encrypt Terms of Service are accepted automatically on your behalf. Please review them [here](https://letsencrypt.org/repository/). Certificates are cached in a `.certs` folder created where you are executing `mbtileserver`. Please make sure this folder can be written by the `mbtileserver` process or you will get errors.
+If the `--tls` option is provided, the Let's Encrypt Terms of Service are accepted automatically on your behalf. Please review them [here](https://letsencrypt.org/repository/). Certificates are cached in a `.certs` folder created where you are executing `mbtileserver`. Please make sure this folder can be written by the `mbtileserver` process or you will get errors. Certificates are not requested until the first request is made to the server. We recommend that you initialize these after startup by making a request against `https://<hostname>/services` and watching the logs from the server to make sure that certificates were processed correctly. Common errors include Let's Encrypt not being able to access your server at the domain you provided. `localhost` or internal-only domains will not work.
+
+If either `--cert` or `--tls` are provided, the default port is 443.
 
 You can also set up server config using environment variables instead of flags, which may be more helpful when deploying in a docker image. Use the associated flag to determine usage. The following variables are available:
 
