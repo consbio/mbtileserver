@@ -16,7 +16,8 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/valyala/fasttemplate v1.0.1 // indirect
-	golang.org/x/crypto v0.0.0-20190320223903-b7391e95e576
+	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/tools v0.0.0-20200213023303-cbc0cc175f84 // indirect
 )
 
 go 1.13

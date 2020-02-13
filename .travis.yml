@@ -1,6 +1,5 @@
 language: go
 go:
-    - 1.9
     - "1.10"
     - "1.11"
     - "1.12"
@@ -11,6 +10,10 @@ matrix:
     allow_failures:
         - go: master
     fast_finish: true
+
+env:
+    global:
+        - GO111MODULE=on
 
 install: true
 
