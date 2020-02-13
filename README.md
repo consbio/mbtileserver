@@ -421,6 +421,11 @@ Modifying the `.go` files always requires re-running `go build .`.
 In case you have modified the templates and static assets, you need to run `go generate ./handlers` to ensure that your modifications
 are embedded into the executable. For this to work, you must have
 [github.com/shurcooL/vfsgen)[https://github.com/shurcooL/vfsgen) installed.
+
+```bash
+go generate ./handlers/handlers.go
+```
+
 This will rewrite the `assets_vfsdata.go` which you must commit along with your
 modification. Also you should run `go build` after `go generate`.
 
