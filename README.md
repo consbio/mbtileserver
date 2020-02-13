@@ -431,10 +431,16 @@ But do not forget to perform it in the end.
 
 ## Changes
 
-### 0.5.1 (in progress)
+### 0.6 (in progress)
 
 -   fixed bug in map preview when bounds is not defined for a tileset (#84)
 -   updated Leaflet to 1.6.0 and Mapbox GL to 0.32.0 (larger upgrades contingent on #65)
+-   fixed issues with `--tls` option (#89)
+-   added example proxy configuration for Caddy and NGINX (#91)
+-   fixed issues with map preview page using HTTP basemaps (#90)
+-   resolved template loading issues (#85)
+-   breaking changes:
+    -   Removed `TemplatesFromAssets` as it was not used internally, and unlikely used externally
 
 ### 0.5.0
 

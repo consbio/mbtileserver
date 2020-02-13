@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shurcooL/httpfs/html/vfstemplate"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/consbio/mbtileserver/mbtiles"
@@ -147,6 +148,10 @@ func New() *ServiceSet {
 		tilesets:  make(map[string]*mbtiles.DB),
 		templates: template.New("_base_"),
 	}
+
+	// load templates
+	vfstemplate.ParseFiles(Assets, s.templates, "map.html", "map_gl.html")
+
 	return s
 }
 
@@ -309,21 +314,15 @@ func (s *ServiceSet) tileJSON(id string, db *mbtiles.DB, mapURL bool) handlerFun
 }
 
 // executeTemplates first tries to find the template with the given name for
-// the ServiceSet. If that fails, it tries to instantiate it from the assets.
-// If a valid template is obtained it is used to render a response, otherwise
-// the HTTP status Internal Server Error is returned.
+// the ServiceSet. If that fails because it is not available, an HTTP status
+// Internal Server Error is returned.
 func (s *ServiceSet) executeTemplate(w http.ResponseWriter, name string, data interface{}) (int, error) {
 	t := s.templates.Lookup(name)
-	var err error
 	if t == nil {
-		t, err = tmplFromAssets(s.templates, name)
-		if err != nil {
-			err = fmt.Errorf("could not parse template asset %q: %v", name, err)
-			return http.StatusInternalServerError, err
-		}
+		return http.StatusInternalServerError, fmt.Errorf("template not found %q", name)
 	}
 	buf := &bytes.Buffer{}
-	err = t.Execute(buf, data)
+	err := t.Execute(buf, data)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
