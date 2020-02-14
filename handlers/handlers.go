@@ -173,47 +173,49 @@ func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 }
 
 func scanTilesets(path string) (filenames []string, err error) {
-	if err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			log.Errorf("scanTilesets: %s", err.Error())
-			return err
-		}
-		if info.Mode() & os.ModeSymlink != 0 {
-			symlink, err := os.Readlink(p)
+	for _, path := range strings.Split(path, ",") {
+		if err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
 			if err != nil {
-				log.Errorf("scanTilesets eval symlink: %s", err.Error())
+				log.Errorf("scanTilesets: %s", err.Error())
 				return err
 			}
-			symlinks, err := scanTilesets(path + string(filepath.Separator) + symlink)
-			if err != nil {
-				log.Errorf("scanTilesets eval symlink: %s", err.Error())
-				return err
-			}
-			for _, l := range symlinks {
-				filenames = append(
-					filenames,
-					strings.Join(
-						append(
-							[]string{p},
-							strings.Split(l, string(filepath.Separator))[1:]...,
+			if info.Mode() & os.ModeSymlink != 0 {
+				symlink, err := os.Readlink(p)
+				if err != nil {
+					log.Errorf("scanTilesets eval symlink: %s", err.Error())
+					return err
+				}
+				symlinks, err := scanTilesets(path + string(filepath.Separator) + symlink)
+				if err != nil {
+					log.Errorf("scanTilesets eval symlink: %s", err.Error())
+					return err
+				}
+				for _, l := range symlinks {
+					filenames = append(
+						filenames,
+						strings.Join(
+							append(
+								[]string{p},
+								strings.Split(l, string(filepath.Separator))[1:]...,
+							),
+							string(filepath.Separator),
 						),
-						string(filepath.Separator),
-					),
-				)
+					)
+				}
+				return nil
+			}
+			if _, err := os.Stat(path + "-journal"); err == nil {
+				// Don't try to load .mbtiles files that are being written
+				return nil
+			}
+			if ext := filepath.Ext(p); ext == ".mbtiles" {
+				filenames = append(filenames, p)
 			}
 			return nil
+		}); err != nil {
+			log.Errorf("scanTilesets stat: %s", err.Error())
+			return filenames, err
 		}
-		if _, err := os.Stat(path + "-journal"); err == nil {
-			// Don't try to load .mbtiles files that are being written
-			return nil
-		}
-		if ext := filepath.Ext(p); ext == ".mbtiles" {
-			filenames = append(filenames, p)
-		}
-		return nil
-	}); err != nil {
-		log.Errorf("scanTilesets stat: %s", err.Error())
-		return filenames, err
 	}
 	return filenames, nil
 }
