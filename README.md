@@ -74,7 +74,7 @@ Flags:
   -k, --key string        TLS private key
       --path string       URL root path of this server (if behind a proxy)
   -p, --port int          Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
-  -s, --secret-key string Shared secret key used for HMAC authentication
+  -s, --secret-key string Shared secret key used for HMAC request authentication
   -t, --tls               Auto TLS using Let's Encrypt
   -r, --redirect          Redirect HTTP to HTTPS
       --enable-reload     Enable graceful reload
@@ -438,7 +438,7 @@ go generate ./handlers/handlers.go
 ```
 
 This will rewrite the `assets_vfsdata.go` which you must commit along with your
-modification. Also you should run `go build` after `go generate`.
+modification. You should run `go build` after `go generate`.
 
 During the development cycle you may use `go build -tags dev .` to build the
 binary, in which case it will always take the assets from the relative file
@@ -449,14 +449,16 @@ But do not forget to perform it in the end.
 
 ### 0.6 (in progress)
 
--   fixed bug in map preview when bounds is not defined for a tileset (#84)
+-   fixed bug in map preview when bounds are not defined for a tileset (#84)
 -   updated Leaflet to 1.6.0 and Mapbox GL to 0.32.0 (larger upgrades contingent on #65)
 -   fixed issues with `--tls` option (#89)
 -   added example proxy configuration for Caddy and NGINX (#91)
 -   fixed issues with map preview page using HTTP basemaps (#90)
 -   resolved template loading issues (#85)
 -   breaking changes:
-    -   Removed `TemplatesFromAssets` as it was not used internally, and unlikely used externally
+    -   `handlers.go`:
+        -   Removed `TemplatesFromAssets` as it was not used internally, and unlikely used externally
+        -   Removed `secretKey` from `NewFromBaseDir` parameters; this is replaced by calling `SetRequestAuthKey` on a `ServiceSet`.
 
 ### 0.5.0
 

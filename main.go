@@ -81,7 +81,7 @@ func init() {
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
 	flags.StringVar(&pathPrefix, "path", "", "URL root path of this server (if behind a proxy)")
 	flags.StringVar(&domain, "domain", "", "Domain name of this server.  NOTE: only used for AutoTLS.")
-	flags.StringVarP(&secretKey, "secret-key", "s", "", "Shared secret key used for HMAC authentication")
+	flags.StringVarP(&secretKey, "secret-key", "s", "", "Shared secret key used for HMAC request authentication")
 	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
@@ -199,9 +199,14 @@ func serve() {
 		log.Fatalln("Certificate or tls options are required to use redirect")
 	}
 
-	svcSet, err := handlers.NewFromBaseDir(tilePath, secretKey)
+	svcSet, err := handlers.NewFromBaseDir(tilePath)
 	if err != nil {
 		log.Errorf("Unable to create services for mbtiles in '%v': %v\n", tilePath, err)
+	}
+
+	if len(secretKey) > 0 {
+		log.Infoln("An HMAC request authorization key was set.  All incoming must be signed.")
+		svcSet.SetRequestAuthKey(secretKey)
 	}
 
 	// print number of services

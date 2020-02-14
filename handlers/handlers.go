@@ -176,9 +176,8 @@ func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 // the directory at baseDir. The DBs will all be served under their relative paths
 // to baseDir.  If baseDir does not exist, is not a valid path, or does not contain
 // any valid .mbtiles files, an empty ServiceSet will be returned along with the error.
-func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
+func NewFromBaseDir(baseDir string) (*ServiceSet, error) {
 	s := New()
-	s.secretKey = secretKey
 
 	var filenames []string
 	err := filepath.Walk(baseDir, func(p string, info os.FileInfo, err error) error {
@@ -216,6 +215,12 @@ func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
 		}
 	}
 	return s, nil
+}
+
+// SetRequestAuthKey sets the secret key used to verify that incoming requests
+// are authorized.  If blank, no authorization is performed.
+func (s *ServiceSet) SetRequestAuthKey(key string) {
+	s.secretKey = key
 }
 
 // Size returns the number of tilesets in this ServiceSet
