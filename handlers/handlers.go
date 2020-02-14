@@ -14,7 +14,6 @@ import (
 	"html/template"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -219,7 +218,7 @@ func NewFromBaseDir(baseDir string, generateIDs bool) (*ServiceSet, error) {
 			// derive id from relative path
 			e := filepath.Ext(filename)
 			p := filepath.ToSlash(subpath)
-			id = url.PathEscape(p[:len(p)-len(e)])
+			id = p[:len(p)-len(e)]
 		}
 
 		err = s.AddDBOnPath(filename, id)
