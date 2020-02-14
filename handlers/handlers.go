@@ -236,8 +236,6 @@ func NewFromBaseDir(baseDir string) (*ServiceSet, error) {
 		return s, fmt.Errorf("no tilesets found in %s", baseDir)
 	}
 
-	fmt.Println(filenames)
-
 	for _, filename := range filenames {
 		subpath, err := filepath.Rel(baseDir, filename)
 		if err != nil {
