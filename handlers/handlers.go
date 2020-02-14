@@ -179,51 +179,53 @@ func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 // if generateIDs is true, tileset IDs will be generated automatically from a SHA1
 // hash of the path to each mbtiles file.  By default, all tileset IDs are based on
 // the relative path within baseDir, and any special characters are URL-escaped.
-func NewFromBaseDir(baseDir string, generateIDs bool) (*ServiceSet, error) {
+func NewFromBaseDir(generateIDs bool, baseDirs ...string) (*ServiceSet, error) {
 	s := New()
 
-	var filenames []string
-	err := filepath.Walk(baseDir, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if _, err := os.Stat(p + "-journal"); err == nil {
-			// Don't try to load .mbtiles files that are being written
+	for _, baseDir := range baseDirs {
+		var filenames []string
+		err := filepath.Walk(baseDir, func(p string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if _, err := os.Stat(p + "-journal"); err == nil {
+				// Don't try to load .mbtiles files that are being written
+				return nil
+			}
+			if ext := filepath.Ext(p); ext == ".mbtiles" {
+				filenames = append(filenames, p)
+			}
 			return nil
-		}
-		if ext := filepath.Ext(p); ext == ".mbtiles" {
-			filenames = append(filenames, p)
-		}
-		return nil
-	})
-	if err != nil {
-		return s, err
-	}
-
-	if len(filenames) == 0 {
-		return s, fmt.Errorf("no tilesets found in %s", baseDir)
-	}
-
-	var id string
-	for _, filename := range filenames {
-		subpath, err := filepath.Rel(baseDir, filename)
+		})
 		if err != nil {
-			return nil, fmt.Errorf("unable to extract URL path for %q: %v", filename, err)
-		}
-		if generateIDs {
-			// generate IDs from hash of full file path
-			hash := sha1.Sum([]byte(filename))
-			id = base64.RawURLEncoding.EncodeToString(hash[:])
-		} else {
-			// derive id from relative path
-			e := filepath.Ext(filename)
-			p := filepath.ToSlash(subpath)
-			id = p[:len(p)-len(e)]
+			return s, err
 		}
 
-		err = s.AddDBOnPath(filename, id)
-		if err != nil {
-			log.Warnf("%s\nThis tileset will not be available from the API", err.Error())
+		if len(filenames) == 0 {
+			return s, fmt.Errorf("no tilesets found in %s", baseDir)
+		}
+
+		var id string
+		for _, filename := range filenames {
+			subpath, err := filepath.Rel(baseDir, filename)
+			if err != nil {
+				return nil, fmt.Errorf("unable to extract URL path for %q: %v", filename, err)
+			}
+			if generateIDs {
+				// generate IDs from hash of full file path
+				hash := sha1.Sum([]byte(filename))
+				id = base64.RawURLEncoding.EncodeToString(hash[:])
+			} else {
+				// derive id from relative path
+				e := filepath.Ext(filename)
+				p := filepath.ToSlash(subpath)
+				id = p[:len(p)-len(e)]
+			}
+
+			err = s.AddDBOnPath(filename, id)
+			if err != nil {
+				log.Warnf("%s\nThis tileset will not be available from the API", err.Error())
+			}
 		}
 	}
 	return s, nil

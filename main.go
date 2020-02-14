@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"golang.org/x/crypto/acme"
@@ -208,7 +209,7 @@ func serve() {
 		log.Fatalln("Certificate or tls options are required to use redirect")
 	}
 
-	svcSet, err := handlers.NewFromBaseDir(tilePath, generateIDs)
+	svcSet, err := handlers.NewFromBaseDir(generateIDs, strings.Split(tilePath, ",")...)
 	if err != nil {
 		log.Errorf("Unable to create services for mbtiles in '%v': %v\n", tilePath, err)
 	}
