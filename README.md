@@ -8,8 +8,6 @@ format.
 [![GoDoc](https://godoc.org/github.com/consbio/mbtileserver?status.svg)](http://godoc.org/github.com/consbio/mbtileserver)
 [![Go Report Card](https://goreportcard.com/badge/github.com/consbio/mbtileserver)](https://goreportcard.com/report/github.com/consbio/mbtileserver)
 
-_Requires Go 1.10+._
-
 It currently provides support for `png`, `jpg`, and `pbf` (vector tile)
 tilesets according to version 1.0 of the mbtiles specification. Tiles
 are served following the XYZ tile scheme, based on the Web Mercator
@@ -32,6 +30,19 @@ virtual machine without any issues.
 -   Be fast
 -   Run on small resource cloud hosted machines (limited memory & CPU)
 -   Be easy to install and operate
+
+## Supported Go versions
+
+_Requires Go 1.10+._ Go 1.13 is recommended for full support.
+
+`mbtileserver` uses go modules and follows standard practices as of Go 1.13.
+
+Due to varying degrees of go module support between Go versions 1.10 and 1.13, we provide a `vendor` directory with
+dependencies for older versions. This is deprecated and will be removed in an upcoming version.
+
+_Note:_
+Go versions 1.11.0 - 1.11.3 are not supported, use Go 1.11.4. This is due to differences in how those versions handled go modules
+([see](https://github.com/golang/go/issues/30446)).
 
 ## Installation
 

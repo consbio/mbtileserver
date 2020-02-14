@@ -1,7 +1,7 @@
 language: go
 go:
     - "1.10"
-    - "1.11"
+    - "1.11.4" # required per: https://github.com/golang/go/issues/30446
     - "1.12"
     - "1.13"
     - tip
@@ -11,9 +11,9 @@ matrix:
         - go: master
     fast_finish: true
 
-env:
-    global:
-        - GO111MODULE=on
+cache:
+    directories:
+        - $GOPATH/pkg/mod
 
 install: true
 
