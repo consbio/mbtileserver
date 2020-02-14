@@ -14,6 +14,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -224,7 +225,10 @@ func scanTilesets(path string) (filenames []string, err error) {
 // the directory at baseDir. The DBs will all be served under their relative paths
 // to baseDir.  If baseDir does not exist, is not a valid path, or does not contain
 // any valid .mbtiles files, an empty ServiceSet will be returned along with the error.
-func NewFromBaseDir(baseDir string) (*ServiceSet, error) {
+// if generateIDs is true, tileset IDs will be generated automatically from a SHA1
+// hash of the path to each mbtiles file.  By default, all tileset IDs are based on
+// the relative path within baseDir, and any special characters are URL-escaped.
+func NewFromBaseDir(baseDir string, generateIDs bool) (*ServiceSet, error) {
 	s := New()
 
 	filenames, err := scanTilesets(baseDir)
@@ -236,14 +240,23 @@ func NewFromBaseDir(baseDir string) (*ServiceSet, error) {
 		return s, fmt.Errorf("no tilesets found in %s", baseDir)
 	}
 
+	var id string
 	for _, filename := range filenames {
 		subpath, err := filepath.Rel(baseDir, filename)
 		if err != nil {
 			return nil, fmt.Errorf("unable to extract URL path for %q: %v", filename, err)
 		}
-		e := filepath.Ext(filename)
-		p := filepath.ToSlash(subpath)
-		id := p[:len(p)-len(e)]
+		if generateIDs {
+			// generate IDs from hash of full file path
+			hash := sha1.Sum([]byte(filename))
+			id = base64.RawURLEncoding.EncodeToString(hash[:])
+		} else {
+			// derive id from relative path
+			e := filepath.Ext(filename)
+			p := filepath.ToSlash(subpath)
+			id = url.PathEscape(p[:len(p)-len(e)])
+		}
+
 		err = s.AddDBOnPath(filename, id)
 		if err != nil {
 			log.Warnf("%s\nThis tileset will not be available from the API", err.Error())

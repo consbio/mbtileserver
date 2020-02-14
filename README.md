@@ -66,19 +66,20 @@ Usage:
   mbtileserver [flags]
 
 Flags:
-  -c, --cert string       X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
-  -d, --dir string        Directory containing mbtiles files. (default "./tilesets")
-      --domain string     Domain name of this server.    NOTE: only used for AutoTLS.
-      --dsn string        Sentry DSN
-  -h, --help              help for mbtileserver
-  -k, --key string        TLS private key
-      --path string       URL root path of this server (if behind a proxy)
-  -p, --port int          Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
-  -s, --secret-key string Shared secret key used for HMAC request authentication
-  -t, --tls               Auto TLS using Let's Encrypt
-  -r, --redirect          Redirect HTTP to HTTPS
-      --enable-reload     Enable graceful reload
-  -v, --verbose           Verbose logging
+  -c, --cert string         X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
+  -d, --dir string          Directory containing mbtiles files. (default "./tilesets")
+      --domain string       Domain name of this server.  NOTE: only used for AutoTLS.
+      --dsn string          Sentry DSN
+      --enable-reload       Enable graceful reload
+      --generate-ids        Automatically generate tileset IDs instead of using relative path
+  -h, --help                help for mbtileserver
+  -k, --key string          TLS private key
+      --path string         URL root path of this server (if behind a proxy)
+  -p, --port int            Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
+  -r, --redirect            Redirect HTTP to HTTPS
+  -s, --secret-key string   Shared secret key used for HMAC request authentication
+  -t, --tls                 Auto TLS via Let's Encrypt
+  -v, --verbose             Verbose logging
 ```
 
 So hosting tiles is as easy as putting your mbtiles files in the `tilesets`
@@ -87,6 +88,9 @@ directory and starting the server. Woo hoo!
 You can have multiple directories in your `tilesets` directory; these will be converted into appropriate URLs:
 
 `<tile_dir>/foo/bar/baz.mbtiles` will be available at `/services/foo/bar/baz`.
+
+If `--generate-ids` is provided, tileset IDs are automatically generated using a SHA1 hash of the path to each tileset.
+By default, tileset IDs are based on the relative path of each tileset to the base directory provided using `--dir`.
 
 When you want to remove, modify, or add new tilesets, simply restart the server process or use the reloading process below.
 
@@ -98,19 +102,20 @@ If the `--tls` option is provided, the Let's Encrypt Terms of Service are accept
 
 If either `--cert` or `--tls` are provided, the default port is 443.
 
-You can also set up server config using environment variables instead of flags, which may be more helpful when deploying in a docker image. Use the associated flag to determine usage. The following variables are available:
+You can also use environment variables instead of flags, which may be more helpful when deploying in a docker image. Use the associated flag to determine usage. The following variables are available:
 
 -   `PORT` (`--port`)
 -   `TILE_DIR` (`--dir`)
+-   `GENERATE_IDS` (`--generate-ids`)
 -   `PATH_PREFIX` (`--path`)
 -   `DOMAIN` (`--domain`)
 -   `TLS_CERT` (`--cert`)
 -   `TLS_PRIVATE_KEY` (`--key`)
+-   `HMAC_SECRET_KEY` (`--secret-key`)
 -   `AUTO_TLS` (`--tls`)
 -   `REDIRECT` (`--redirect`)
 -   `DSN` (`--dsn`)
 -   `VERBOSE` (`--verbose`)
--   `HMAC_SECRET_KEY` (`--secret-key`)
 
 Example:
 
@@ -455,10 +460,12 @@ But do not forget to perform it in the end.
 -   added example proxy configuration for Caddy and NGINX (#91)
 -   fixed issues with map preview page using HTTP basemaps (#90)
 -   resolved template loading issues (#85)
+-   added support for automatically generating unique tileset IDs
 -   breaking changes:
     -   `handlers.go`:
         -   Removed `TemplatesFromAssets` as it was not used internally, and unlikely used externally
         -   Removed `secretKey` from `NewFromBaseDir` parameters; this is replaced by calling `SetRequestAuthKey` on a `ServiceSet`.
+        -   Added `generateIDs` to `NewFromBaseDir` parameters.
 
 ### 0.5.0
 

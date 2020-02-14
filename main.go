@@ -71,22 +71,24 @@ var (
 	autotls     bool
 	redirect    bool
 	reload      bool
+	generateIDs bool
 )
 
 func init() {
 	flags := rootCmd.Flags()
 	flags.IntVarP(&port, "port", "p", -1, "Server port. Default is 443 if --cert or --tls options are used, otherwise 8000.")
 	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.")
+	flags.BoolVarP(&generateIDs, "generate-ids", "", false, "Automatically generate tileset IDs instead of using relative path")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
 	flags.StringVar(&pathPrefix, "path", "", "URL root path of this server (if behind a proxy)")
 	flags.StringVar(&domain, "domain", "", "Domain name of this server.  NOTE: only used for AutoTLS.")
 	flags.StringVarP(&secretKey, "secret-key", "s", "", "Shared secret key used for HMAC request authentication")
-	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
-	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 	flags.BoolVarP(&reload, "enable-reload", "", false, "Enable graceful reload")
+	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
+	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 
 	if env := os.Getenv("PORT"); env != "" {
 		p, err := strconv.Atoi(env)
@@ -98,6 +100,14 @@ func init() {
 
 	if env := os.Getenv("TILE_DIR"); env != "" {
 		tilePath = env
+	}
+
+	if env := os.Getenv("GENERATE_IDS"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("GENERATE_IDS must be a bool(true/false)")
+		}
+		generateIDs = p
 	}
 
 	if env := os.Getenv("TLS_CERT"); env != "" {
@@ -115,17 +125,8 @@ func init() {
 	if env := os.Getenv("DOMAIN"); env != "" {
 		domain = env
 	}
-
-	if env := os.Getenv("DSN"); env != "" {
-		sentryDSN = env
-	}
-
-	if env := os.Getenv("VERBOSE"); env != "" {
-		p, err := strconv.ParseBool(env)
-		if err != nil {
-			log.Fatalln("VERBOSE must be a bool(true/false)")
-		}
-		verbose = p
+	if secretKey == "" {
+		secretKey = os.Getenv("HMAC_SECRET_KEY")
 	}
 
 	if env := os.Getenv("AUTO_TLS"); env != "" {
@@ -144,8 +145,16 @@ func init() {
 		redirect = p
 	}
 
-	if secretKey == "" {
-		secretKey = os.Getenv("HMAC_SECRET_KEY")
+	if env := os.Getenv("DSN"); env != "" {
+		sentryDSN = env
+	}
+
+	if env := os.Getenv("VERBOSE"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("VERBOSE must be a bool(true/false)")
+		}
+		verbose = p
 	}
 }
 
@@ -199,7 +208,7 @@ func serve() {
 		log.Fatalln("Certificate or tls options are required to use redirect")
 	}
 
-	svcSet, err := handlers.NewFromBaseDir(tilePath)
+	svcSet, err := handlers.NewFromBaseDir(tilePath, generateIDs)
 	if err != nil {
 		log.Errorf("Unable to create services for mbtiles in '%v': %v\n", tilePath, err)
 	}
