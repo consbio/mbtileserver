@@ -8,8 +8,6 @@ format.
 [![GoDoc](https://godoc.org/github.com/consbio/mbtileserver?status.svg)](http://godoc.org/github.com/consbio/mbtileserver)
 [![Go Report Card](https://goreportcard.com/badge/github.com/consbio/mbtileserver)](https://goreportcard.com/report/github.com/consbio/mbtileserver)
 
-_Requires Go 1.10+._
-
 It currently provides support for `png`, `jpg`, and `pbf` (vector tile)
 tilesets according to version 1.0 of the mbtiles specification. Tiles
 are served following the XYZ tile scheme, based on the Web Mercator
@@ -32,6 +30,19 @@ virtual machine without any issues.
 -   Be fast
 -   Run on small resource cloud hosted machines (limited memory & CPU)
 -   Be easy to install and operate
+
+## Supported Go versions
+
+_Requires Go 1.10+._ Go 1.13 is recommended for full support.
+
+`mbtileserver` uses go modules and follows standard practices as of Go 1.13.
+
+Due to varying degrees of go module support between Go versions 1.10 and 1.13, we provide a `vendor` directory with
+dependencies for older versions. This is deprecated and will be removed in an upcoming version.
+
+_Note:_
+Go versions 1.11.0 - 1.11.3 are not supported, use Go 1.11.4. This is due to differences in how those versions handled go modules
+([see](https://github.com/golang/go/issues/30446)).
 
 ## Installation
 
@@ -63,7 +74,7 @@ Flags:
   -k, --key string        TLS private key
       --path string       URL root path of this server (if behind a proxy)
   -p, --port int          Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
-  -s, --secret-key string Shared secret key used for HMAC authentication
+  -s, --secret-key string Shared secret key used for HMAC request authentication
   -t, --tls               Auto TLS using Let's Encrypt
   -r, --redirect          Redirect HTTP to HTTPS
       --enable-reload     Enable graceful reload
@@ -427,7 +438,7 @@ go generate ./handlers/handlers.go
 ```
 
 This will rewrite the `assets_vfsdata.go` which you must commit along with your
-modification. Also you should run `go build` after `go generate`.
+modification. You should run `go build` after `go generate`.
 
 During the development cycle you may use `go build -tags dev .` to build the
 binary, in which case it will always take the assets from the relative file
@@ -438,14 +449,16 @@ But do not forget to perform it in the end.
 
 ### 0.6 (in progress)
 
--   fixed bug in map preview when bounds is not defined for a tileset (#84)
+-   fixed bug in map preview when bounds are not defined for a tileset (#84)
 -   updated Leaflet to 1.6.0 and Mapbox GL to 0.32.0 (larger upgrades contingent on #65)
 -   fixed issues with `--tls` option (#89)
 -   added example proxy configuration for Caddy and NGINX (#91)
 -   fixed issues with map preview page using HTTP basemaps (#90)
 -   resolved template loading issues (#85)
 -   breaking changes:
-    -   Removed `TemplatesFromAssets` as it was not used internally, and unlikely used externally
+    -   `handlers.go`:
+        -   Removed `TemplatesFromAssets` as it was not used internally, and unlikely used externally
+        -   Removed `secretKey` from `NewFromBaseDir` parameters; this is replaced by calling `SetRequestAuthKey` on a `ServiceSet`.
 
 ### 0.5.0
 

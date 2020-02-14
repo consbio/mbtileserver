@@ -224,9 +224,8 @@ func scanTilesets(path string) (filenames []string, err error) {
 // the directory at baseDir. The DBs will all be served under their relative paths
 // to baseDir.  If baseDir does not exist, is not a valid path, or does not contain
 // any valid .mbtiles files, an empty ServiceSet will be returned along with the error.
-func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
+func NewFromBaseDir(baseDir string) (*ServiceSet, error) {
 	s := New()
-	s.secretKey = secretKey
 
 	filenames, err := scanTilesets(baseDir)
 	if err != nil {
@@ -253,6 +252,12 @@ func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
 		}
 	}
 	return s, nil
+}
+
+// SetRequestAuthKey sets the secret key used to verify that incoming requests
+// are authorized.  If blank, no authorization is performed.
+func (s *ServiceSet) SetRequestAuthKey(key string) {
+	s.secretKey = key
 }
 
 // Size returns the number of tilesets in this ServiceSet
@@ -399,7 +404,7 @@ type tileCoord struct {
 // latitude tile indices for that zoom level, both are supposed be integers in
 // the integer interval [0,2^z). Additionally, y may also have an optional
 // filename extension (e.g. "42.png") which is removed before parsing the
-// number, and returned, too. In case an error occured during parsing or if the
+// number, and returned, too. In case an error occurred during parsing or if the
 // values are not in the expected interval, the returned error is non-nil.
 func tileCoordFromString(z, x, y string) (tc tileCoord, ext string, err error) {
 	var z64 uint64
@@ -513,8 +518,8 @@ func (s *ServiceSet) tiles(db *mbtiles.DB) handlerFunc {
 }
 
 // Handler returns a http.Handler that serves the endpoints of the ServiceSet.
-// The function ef is called with any occuring error if it is non-nil, so it
-// can be used for e.g. logging with logging facitilies of the caller.
+// The function ef is called with any occurring error if it is non-nil, so it
+// can be used for e.g. logging with logging facilities of the caller.
 // When the publish parameter is true, a listing of all available services and
 // an endpoint with a HTML slippy map for each service are served by the Handler.
 func (s *ServiceSet) Handler(ef func(error), publish bool) http.Handler {
