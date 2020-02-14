@@ -173,7 +173,6 @@ func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 }
 
 func scanTilesets(path string) (filenames []string, err error) {
-	log.Debugf("scanTilesets path: %s", path)
 	if err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Errorf("scanTilesets: %s", err.Error())
@@ -209,7 +208,6 @@ func scanTilesets(path string) (filenames []string, err error) {
 			return nil
 		}
 		if ext := filepath.Ext(p); ext == ".mbtiles" {
-			log.Debugf("scanTilesets mblites file: %s", p)
 			filenames = append(filenames, p)
 		}
 		return nil
