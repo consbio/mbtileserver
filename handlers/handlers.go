@@ -14,7 +14,6 @@ import (
 	"html/template"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -173,8 +172,10 @@ func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 	return nil
 }
 
-func scanTilesets(path string) (filenames []string, err error) {
+func scanTilesets(path string) (map[string][]string, error) {
+	filenames := make(map[string][]string)
 	for _, path := range strings.Split(path, ",") {
+		filenames[path] = make([]string, 0)
 		if err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
 			if err != nil {
 				log.Errorf("scanTilesets: %s", err.Error())
@@ -186,14 +187,15 @@ func scanTilesets(path string) (filenames []string, err error) {
 					log.Errorf("scanTilesets eval symlink: %s", err.Error())
 					return err
 				}
-				symlinks, err := scanTilesets(path + string(filepath.Separator) + symlink)
+				symlinkPath := path + string(filepath.Separator) + symlink
+				symlinks, err := scanTilesets(symlinkPath)
 				if err != nil {
 					log.Errorf("scanTilesets eval symlink: %s", err.Error())
 					return err
 				}
-				for _, l := range symlinks {
-					filenames = append(
-						filenames,
+				for _, l := range symlinks[symlinkPath] {
+					filenames[path] = append(
+						filenames[path],
 						strings.Join(
 							append(
 								[]string{p},
@@ -210,11 +212,11 @@ func scanTilesets(path string) (filenames []string, err error) {
 				return nil
 			}
 			if ext := filepath.Ext(p); ext == ".mbtiles" {
-				filenames = append(filenames, p)
+				filenames[path] = append(filenames[path], p)
 			}
 			return nil
 		}); err != nil {
-			log.Errorf("scanTilesets stat: %s", err.Error())
+			log.Errorf("scanTilesets error: %s", err.Error())
 			return filenames, err
 		}
 	}
@@ -228,38 +230,36 @@ func scanTilesets(path string) (filenames []string, err error) {
 // if generateIDs is true, tileset IDs will be generated automatically from a SHA1
 // hash of the path to each mbtiles file.  By default, all tileset IDs are based on
 // the relative path within baseDir, and any special characters are URL-escaped.
-func NewFromBaseDir(baseDir string, generateIDs bool) (*ServiceSet, error) {
+func NewFromBaseDir(paths string, generateIDs bool) (*ServiceSet, error) {
 	s := New()
 
-	filenames, err := scanTilesets(baseDir)
+	trees, err := scanTilesets(paths)
 	if err != nil {
 		log.Errorf("scanTilesets error: %s", err.Error())
 	}
 
-	if len(filenames) == 0 {
-		return s, fmt.Errorf("no tilesets found in %s", baseDir)
-	}
-
 	var id string
-	for _, filename := range filenames {
-		subpath, err := filepath.Rel(baseDir, filename)
-		if err != nil {
-			return nil, fmt.Errorf("unable to extract URL path for %q: %v", filename, err)
-		}
-		if generateIDs {
-			// generate IDs from hash of full file path
-			hash := sha1.Sum([]byte(filename))
-			id = base64.RawURLEncoding.EncodeToString(hash[:])
-		} else {
-			// derive id from relative path
-			e := filepath.Ext(filename)
-			p := filepath.ToSlash(subpath)
-			id = url.PathEscape(p[:len(p)-len(e)])
-		}
+	for baseDir, filenames := range trees {
+		for _, filename := range filenames {
+			if generateIDs {
+				// generate IDs from hash of full file path
+				hash := sha1.Sum([]byte(filename))
+				id = base64.RawURLEncoding.EncodeToString(hash[:])
+			} else {
+				// derive id from relative path
+				subpath, err := filepath.Rel(baseDir, filename)
+				if err != nil {
+					return nil, fmt.Errorf("unable to extract URL path for %q: %v", filename, err)
+				}
+				e := filepath.Ext(filename)
+				p := filepath.ToSlash(subpath)
+				id = p[:len(p)-len(e)]
+			}
 
-		err = s.AddDBOnPath(filename, id)
-		if err != nil {
-			log.Warnf("%s\nThis tileset will not be available from the API", err.Error())
+			err = s.AddDBOnPath(filename, id)
+			if err != nil {
+				log.Warnf("%s\nThis tileset will not be available from the API", err.Error())
+			}
 		}
 	}
 	return s, nil
