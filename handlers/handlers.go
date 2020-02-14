@@ -172,6 +172,54 @@ func (s *ServiceSet) AddDBOnPath(filename string, urlPath string) error {
 	return nil
 }
 
+func scanTilesets(path string) (filenames []string, err error) {
+	log.Debugf("scanTilesets path: %s", path)
+	if err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Errorf("scanTilesets: %s", err.Error())
+			return err
+		}
+		if info.Mode() & os.ModeSymlink != 0 {
+			symlink, err := os.Readlink(p)
+			if err != nil {
+				log.Errorf("scanTilesets eval symlink: %s", err.Error())
+				return err
+			}
+			symlinks, err := scanTilesets(path + string(filepath.Separator) + symlink)
+			if err != nil {
+				log.Errorf("scanTilesets eval symlink: %s", err.Error())
+				return err
+			}
+			for _, l := range symlinks {
+				filenames = append(
+					filenames,
+					strings.Join(
+						append(
+							[]string{p},
+							strings.Split(l, string(filepath.Separator))[1:]...,
+						),
+						string(filepath.Separator),
+					),
+				)
+			}
+			return nil
+		}
+		if _, err := os.Stat(path + "-journal"); err == nil {
+			// Don't try to load .mbtiles files that are being written
+			return nil
+		}
+		if ext := filepath.Ext(p); ext == ".mbtiles" {
+			log.Debugf("scanTilesets mblites file: %s", p)
+			filenames = append(filenames, p)
+		}
+		return nil
+	}); err != nil {
+		log.Errorf("scanTilesets stat: %s", err.Error())
+		return filenames, err
+	}
+	return filenames, nil
+}
+
 // NewFromBaseDir returns a ServiceSet that combines all .mbtiles files under
 // the directory at baseDir. The DBs will all be served under their relative paths
 // to baseDir.  If baseDir does not exist, is not a valid path, or does not contain
@@ -180,27 +228,16 @@ func NewFromBaseDir(baseDir string, secretKey string) (*ServiceSet, error) {
 	s := New()
 	s.secretKey = secretKey
 
-	var filenames []string
-	err := filepath.Walk(baseDir, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if _, err := os.Stat(p + "-journal"); err == nil {
-			// Don't try to load .mbtiles files that are being written
-			return nil
-		}
-		if ext := filepath.Ext(p); ext == ".mbtiles" {
-			filenames = append(filenames, p)
-		}
-		return nil
-	})
+	filenames, err := scanTilesets(baseDir)
 	if err != nil {
-		return s, err
+		log.Errorf("scanTilesets error: %s", err.Error())
 	}
 
 	if len(filenames) == 0 {
 		return s, fmt.Errorf("no tilesets found in %s", baseDir)
 	}
+
+	fmt.Println(filenames)
 
 	for _, filename := range filenames {
 		subpath, err := filepath.Rel(baseDir, filename)
