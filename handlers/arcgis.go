@@ -161,7 +161,7 @@ func (s *ServiceSet) arcgisService(id string, db *mbtiles.DB) handlerFunc {
 			"supportedImageFormatTypes": strings.ToUpper(imgFormat),
 			"units":                     "esriMeters",
 			"layers": []arcGISLayerStub{
-				arcGISLayerStub{
+				{
 					ID:                0,
 					Name:              name,
 					ParentLayerID:     -1,
@@ -368,8 +368,8 @@ func geoToMercator(longitude, latitude float64) (float64, float64) {
 }
 
 // ArcGISHandler returns a http.Handler that serves the ArcGIS endpoints of the ServiceSet.
-// The function ef is called with any occuring error if it is non-nil, so it
-// can be used for e.g. logging with logging facitilies of the caller.
+// The function ef is called with any occurring error if it is non-nil, so it
+// can be used for e.g. logging with logging facilities of the caller.
 func (s *ServiceSet) ArcGISHandler(ef func(error)) http.Handler {
 	m := http.NewServeMux()
 	rootPath := "/arcgis/rest/services/"

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -87,9 +86,6 @@ type DB struct {
 // Connection is closed by runtime on application termination or by calling
 // its Close() method.
 func NewDB(filename string) (*DB, error) {
-	_, id := filepath.Split(filename)
-	id = strings.Split(id, ".")[0]
-
 	//Saves last modified mbtiles time for setting Last-Modified header
 	fileStat, err := os.Stat(filename)
 	if err != nil {
