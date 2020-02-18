@@ -208,14 +208,38 @@ func serve() {
 		log.Fatalln("Certificate or tls options are required to use redirect")
 	}
 
-	svcSet, err := handlers.NewFromBaseDir(tilePath, generateIDs)
-	if err != nil {
-		log.Errorf("Unable to create services for mbtiles in '%v': %v\n", tilePath, err)
-	}
-
 	if len(secretKey) > 0 {
 		log.Infoln("An HMAC request authorization key was set.  All incoming must be signed.")
-		svcSet.SetRequestAuthKey(secretKey)
+	}
+	svcSet, err := handlers.New(&handlers.ServiceSetConfig{
+		EnableServiceList: true, // TODO: config
+		EnableTileJSON:    true,
+		EnablePreview:     true,
+		Path:              "/services",
+		SecretKey:         secretKey,
+	})
+	if err != nil {
+		log.Panicln("Could not construct ServiceSet")
+	}
+
+	filenames, err := mbtiles.ListDBs(tilePath)
+	if err != nil {
+		log.Errorf("unable to list mbtiles in '%v': %v\n", tilePath, err)
+	}
+	if len(filenames) == 0 {
+		log.Errorf("no tilesets found in %s", tilePath)
+	}
+
+	var idGenerator handlers.IDGenerator
+	if generateIDs {
+		idGenerator = handlers.SHA1IDGenerator
+	} else {
+		idGenerator = handlers.CreateRelativePathIDGenerator(tilePath)
+	}
+
+	err = svcSet.AddTilesets(filenames, idGenerator)
+	if err != nil {
+		log.Errorf("Unable to create services for mbtiles in '%v': %v\n", tilePath, err)
 	}
 
 	// print number of services
@@ -242,7 +266,13 @@ func serve() {
 	ef := func(err error) {
 		log.Errorf("%v", err)
 	}
-	h := echo.WrapHandler(svcSet.Handler(ef, true))
+
+	svcHandler, err := svcSet.Handler(ef)
+	if err != nil {
+		log.Errorf("Unable to create service handlers\n%v\n", err)
+	}
+
+	h := echo.WrapHandler(svcHandler)
 	e.GET("/*", h)
 	a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
 	e.GET("/arcgis/rest/services/*", a)

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -76,6 +77,7 @@ func (t TileFormat) ContentType() string {
 type DB struct {
 	filename           string     // name of tile mbtiles file
 	db                 *sql.DB    // database connection for mbtiles file
+	id                 string     // unique ID of mbtiles file
 	tileformat         TileFormat // tile format: PNG, JPG, PBF, WEBP
 	timestamp          time.Time  // timestamp of file, for cache control headers
 	hasUTFGrid         bool       // true if mbtiles file contains additional tables with UTFGrid data
@@ -89,7 +91,7 @@ func NewDB(filename string) (*DB, error) {
 	//Saves last modified mbtiles time for setting Last-Modified header
 	fileStat, err := os.Stat(filename)
 	if err != nil {
-		return nil, fmt.Errorf("could not read file stats for mbtiles file: %s\n", filename)
+		return nil, fmt.Errorf("could not read file stats for mbtiles file: %s", filename)
 	}
 
 	db, err := sql.Open("sqlite3", filename)
@@ -122,8 +124,10 @@ func NewDB(filename string) (*DB, error) {
 	if tileformat == GZIP {
 		tileformat = PBF // GZIP masks PBF, which is only expected type for tiles in GZIP format
 	}
+
 	out := DB{
 		db:         db,
+		filename:   filename,
 		tileformat: tileformat,
 		timestamp:  fileStat.ModTime().Round(time.Second), // round to nearest second
 	}
@@ -176,6 +180,11 @@ func (tileset *DB) ReadTile(z uint8, x uint64, y uint64, data *[]byte) error {
 		return err
 	}
 	return nil
+}
+
+// Filename returns the Filename of the DB.
+func (tileset *DB) Filename() string {
+	return tileset.filename
 }
 
 // ReadGrid reads a UTFGrid with identifiers z, x, y into provided *[]byte. data
@@ -390,4 +399,29 @@ func stringToFloats(str string) ([]float64, error) {
 		out = append(out, value)
 	}
 	return out, nil
+}
+
+// ListDBs finds all mbtiles files within a base directory and all subdirectories.
+// Any mbtiles files that are currently being written (identified by -journal extension)
+// are skipped.
+// Any errors encountered while walking the directory tree are returned.
+func ListDBs(baseDir string) ([]string, error) {
+	var filenames []string
+	err := filepath.Walk(baseDir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(p + "-journal"); err == nil {
+			// Don't try to load .mbtiles files that are being written
+			return nil
+		}
+		if ext := filepath.Ext(p); ext == ".mbtiles" {
+			filenames = append(filenames, p)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return filenames, err
 }

@@ -372,15 +372,17 @@ func geoToMercator(longitude, latitude float64) (float64, float64) {
 // can be used for e.g. logging with logging facilities of the caller.
 func (s *ServiceSet) ArcGISHandler(ef func(error)) http.Handler {
 	m := http.NewServeMux()
-	rootPath := "/arcgis/rest/services/"
 
-	for id, db := range s.tilesets {
-		p := rootPath + id + "/MapServer"
-		m.Handle(p, wrapGetWithErrors(ef, hmacAuth(s.arcgisService(id, db), s.secretKey, id)))
-		m.Handle(p+"/layers", wrapGetWithErrors(ef, hmacAuth(s.arcgisLayers(id, db), s.secretKey, id)))
-		m.Handle(p+"/legend", wrapGetWithErrors(ef, hmacAuth(s.arcgisLegend(id, db), s.secretKey, id)))
+	// FIXME: re-enable
+	// rootPath := "/arcgis/rest/services/"
 
-		m.Handle(p+"/tile/", wrapGetWithErrors(ef, hmacAuth(s.arcgisTiles(db), s.secretKey, id)))
-	}
+	// for id, db := range s.tilesets {
+	// 	p := rootPath + id + "/MapServer"
+	// 	m.Handle(p, wrapGetWithErrors(ef, hmacAuth(s.arcgisService(id, db), s.secretKey, id)))
+	// 	m.Handle(p+"/layers", wrapGetWithErrors(ef, hmacAuth(s.arcgisLayers(id, db), s.secretKey, id)))
+	// 	m.Handle(p+"/legend", wrapGetWithErrors(ef, hmacAuth(s.arcgisLegend(id, db), s.secretKey, id)))
+
+	// 	m.Handle(p+"/tile/", wrapGetWithErrors(ef, hmacAuth(s.arcgisTiles(db), s.secretKey, id)))
+	// }
 	return m
 }
