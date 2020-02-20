@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"golang.org/x/crypto/acme"
@@ -64,7 +65,7 @@ var (
 	tilePath           string
 	certificate        string
 	privateKey         string
-	pathPrefix         string
+	rootURLStr         string
 	domain             string
 	secretKey          string
 	sentryDSN          string
@@ -87,7 +88,7 @@ func init() {
 	flags.BoolVarP(&generateIDs, "generate-ids", "", false, "Automatically generate tileset IDs instead of using relative path")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
-	flags.StringVar(&pathPrefix, "root-url", "/services", "URL root path of this server (if behind a proxy)")
+	flags.StringVar(&rootURLStr, "root-url", "/services", "Root URL of services endpoint")
 	flags.StringVar(&domain, "domain", "", "Domain name of this server.  NOTE: only used for AutoTLS.")
 	flags.StringVarP(&secretKey, "secret-key", "s", "", "Shared secret key used for HMAC request authentication")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
@@ -132,7 +133,7 @@ func init() {
 	}
 
 	if env := os.Getenv("ROOT_URL"); env != "" {
-		pathPrefix = env
+		rootURLStr = env
 	}
 
 	if env := os.Getenv("DOMAIN"); env != "" {
@@ -211,9 +212,13 @@ func serve() {
 		disablePreview = true
 	}
 
-	rootURL, err := url.Parse(pathPrefix)
+	if !strings.HasPrefix(rootURLStr, "/") {
+		log.Fatalf("Value for --root-url must start with \"/\"")
+	}
+
+	rootURL, err := url.Parse(rootURLStr)
 	if err != nil {
-		log.Panicf("Could not parse --root-url-path value %q\n")
+		log.Fatalf("Could not parse --root-url value %q\n", rootURLStr)
 	}
 
 	certExists := len(certificate) > 0
@@ -247,7 +252,7 @@ func serve() {
 		SecretKey:         secretKey,
 	})
 	if err != nil {
-		log.Panicln("Could not construct ServiceSet")
+		log.Fatalln("Could not construct ServiceSet")
 	}
 
 	filenames, err := mbtiles.ListDBs(tilePath)
