@@ -8,9 +8,9 @@
             name="viewport"
             content="initial-scale=1,maximum-scale=1,user-scalable=no"
         />
-        <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v0.32.0/mapbox-gl.js"></script>
+        <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v1.8.0/mapbox-gl.js"></script>
         <link
-            href="https://api.tiles.mapbox.com/mapbox-gl-js/v0.32.0/mapbox-gl.css"
+            href="https://api.tiles.mapbox.com/mapbox-gl-js/v1.8.0/mapbox-gl.css"
             rel="stylesheet"
         />
         <style>
@@ -49,79 +49,80 @@
             };
 
             var map;
-            mapboxgl.util.getJSON("{{.URL}}", function(e, tilejson) {
-                var layers = [];
-                tilejson.vector_layers.forEach(function(srcLyr, i) {
-                    layers.push({
-                        id: "overlay-poly-" + i,
-                        source: "overlay",
-                        "source-layer": srcLyr.id,
-                        filter: ["==", "$type", "Polygon"],
-                        type: "fill",
-                        paint: {
-                            "fill-color": "orange",
-                            "fill-opacity": 0.5,
-                            "fill-outline-color": "red"
-                        }
-                    });
+            // Load raw JSON directly from template
+            var tileJSON = {{.TileJSON}};
 
-                    layers.push({
-                        id: "overlay-line-" + i,
-                        source: "overlay",
-                        "source-layer": srcLyr.id,
-                        filter: ["==", "$type", "LineString"],
-                        type: "line",
-                        paint: {
-                            "line-color": "red",
-                            "line-opacity": 0.75,
-                            "line-width": 2
-                        }
-                    });
-
-                    layers.push({
-                        id: "overlay-point-" + i,
-                        source: "overlay",
-                        "source-layer": srcLyr.id,
-                        filter: ["==", "$type", "Point"],
-                        type: "circle",
-                        paint: {
-                            "circle-radius": 6,
-                            "circle-color": "#F00",
-                            "circle-opacity": 1
-                        }
-                    });
+            var layers = [];
+            tileJSON.vector_layers.forEach(function(srcLyr, i) {
+                layers.push({
+                    id: "overlay-poly-" + i,
+                    source: "overlay",
+                    "source-layer": srcLyr.id,
+                    filter: ["==", "$type", "Polygon"],
+                    type: "fill",
+                    paint: {
+                        "fill-color": "orange",
+                        "fill-opacity": 0.5,
+                        "fill-outline-color": "red"
+                    }
                 });
 
-                map = new mapboxgl.Map({
-                    container: "map",
-                    style: {
-                        version: 8,
-                        sources: {
-                            basemap: basemapSource,
-                            overlay: {
-                                type: "vector",
-                                tiles: tilejson.tiles,
-                                minzoom: tilejson.minzoom,
-                                maxzoom: tilejson.maxzoom
-                            }
-                        },
-                        layers: [basemapStyle].concat(layers)
-                    },
-                    maxZoom: basemapStyle.maxzoom,
-                    zoom: tilejson.bounds ? 0 : tilejson.center[2],
-                    center: tilejson.center.slice(0, 2)
+                layers.push({
+                    id: "overlay-line-" + i,
+                    source: "overlay",
+                    "source-layer": srcLyr.id,
+                    filter: ["==", "$type", "LineString"],
+                    type: "line",
+                    paint: {
+                        "line-color": "red",
+                        "line-opacity": 0.75,
+                        "line-width": 2
+                    }
                 });
 
-                if (tilejson.bounds) {
-                    var bounds = [
-                        tilejson.bounds.slice(0, 2),
-                        tilejson.bounds.slice(2, tilejson.bounds.length)
-                    ];
-                    map.fitBounds(bounds);
-                }
-
-                map.addControl(new mapboxgl.Navigation());
+                layers.push({
+                    id: "overlay-point-" + i,
+                    source: "overlay",
+                    "source-layer": srcLyr.id,
+                    filter: ["==", "$type", "Point"],
+                    type: "circle",
+                    paint: {
+                        "circle-radius": 6,
+                        "circle-color": "#F00",
+                        "circle-opacity": 1
+                    }
+                });
             });
+
+            map = new mapboxgl.Map({
+                container: "map",
+                style: {
+                    version: 8,
+                    sources: {
+                        basemap: basemapSource,
+                        overlay: {
+                            type: "vector",
+                            tiles: tileJSON.tiles,
+                            minzoom: tileJSON.minzoom,
+                            maxzoom: tileJSON.maxzoom
+                        }
+                    },
+                    layers: [basemapStyle].concat(layers)
+                },
+                maxZoom: basemapStyle.maxzoom,
+                zoom: tileJSON.bounds ? 0 : tileJSON.center[2],
+                center: tileJSON.center.slice(0, 2)
+            });
+
+            if (tileJSON.bounds) {
+                var bounds = [
+                    tileJSON.bounds.slice(0, 2),
+                    tileJSON.bounds.slice(2, tileJSON.bounds.length)
+                ];
+                map.fitBounds(bounds);
+            }
+
+            map.addControl(new mapboxgl.NavigationControl());
         </script>
     </body>
 </html>

@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 
@@ -81,18 +82,22 @@ func (ts *Tileset) tileJSONHandler(enablePreview bool) handlerFunc {
 
 		tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, r.URL.Path)
 
-		tileJSON, err := ts.TileJSON(tilesetURL, query, enablePreview)
+		tileJSON, err := ts.TileJSON(tilesetURL, query)
+		if enablePreview {
+			tileJSON["map"] = fmt.Sprintf("%s/map", tilesetURL)
+		}
 
+		bytes, err := json.Marshal(tileJSON)
 		if err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("cannot marshal service info JSON: %v", err)
+			return http.StatusInternalServerError, fmt.Errorf("could not render TileJSON: %v", err)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, err = w.Write(tileJSON)
+		_, err = w.Write(bytes)
 		return http.StatusOK, err
 	}
 }
 
-func (ts *Tileset) TileJSON(svcURL string, query string, enablePreview bool) ([]byte, error) {
+func (ts *Tileset) TileJSON(svcURL string, query string) (map[string]interface{}, error) {
 	db := ts.db
 
 	imgFormat := db.TileFormatString()
@@ -103,9 +108,7 @@ func (ts *Tileset) TileJSON(svcURL string, query string, enablePreview bool) ([]
 		"format":   imgFormat,
 		"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s%s", svcURL, imgFormat, query)},
 	}
-	if enablePreview {
-		out["map"] = fmt.Sprintf("%s/map", svcURL)
-	}
+
 	metadata, err := db.ReadMetadata()
 	if err != nil {
 		return nil, err
@@ -132,12 +135,7 @@ func (ts *Tileset) TileJSON(svcURL string, query string, enablePreview bool) ([]
 	if db.HasUTFGrid() {
 		out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.json%s", svcURL, query)}
 	}
-	bytes, err := json.Marshal(out)
-	if err != nil {
-		return nil, err
-	}
-
-	return bytes, nil
+	return out, nil
 }
 
 func (ts *Tileset) tileHandler() handlerFunc {
@@ -200,12 +198,28 @@ func (ts *Tileset) tileHandler() handlerFunc {
 
 func (ts *Tileset) previewHandler() handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) (int, error) {
+
+		query := ""
+		if r.URL.RawQuery != "" {
+			query = "?" + r.URL.RawQuery
+		}
+
+		tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, strings.TrimSuffix(r.URL.Path, "/map"))
+
+		tileJSON, err := ts.TileJSON(tilesetURL, query)
+		bytes, err := json.Marshal(tileJSON)
+		if err != nil {
+			return http.StatusInternalServerError, fmt.Errorf("could not render preview: %v", err)
+		}
+
 		p := struct {
-			URL string
-			ID  string
+			URL      string
+			ID       string
+			TileJSON template.JS
 		}{
-			fmt.Sprintf("%s://%s%s", scheme(r), r.Host, strings.TrimSuffix(r.URL.Path, "/map")),
+			tilesetURL,
 			ts.id,
+			template.JS(string(bytes)),
 		}
 
 		switch ts.db.TileFormat() {

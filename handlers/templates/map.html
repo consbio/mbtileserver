@@ -49,6 +49,9 @@
     <body>
         <div id="Map"></div>
         <script>
+            // Load raw JSON directly from template
+            var tileJSON = {{.TileJSON}};
+
             var basemaps = [
                 L.tileLayer(
                     "//{s}.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
@@ -90,71 +93,78 @@
             ];
 
             var map = L.map("Map", {});
+            map.addControl(
+                L.control.basemaps({
+                    position: "bottomright",
+                    basemaps: basemaps,
+                    tileX: 0,
+                    tileY: 0,
+                    tileZ: 1
+                })
+            );
 
-            var layer = null;
-            d3.json("{{.URL}}").then(function(tileJSON) {
-                if (tileJSON.bounds) {
-                    var b = tileJSON.bounds;
 
-                    // TODO: optimize and prevent jitter
-                    map.fitBounds([
-                        [b[1], b[0]],
-                        [b[3], b[2]]
-                    ]);
-                } else {
-                    map.fitWorld();
-                }
+            if (tileJSON.bounds) {
+                var b = tileJSON.bounds;
 
-                if (tileJSON.maxzoom && tileJSON.maxzoom < map.getZoom()) {
-                    map.setZoom(tileJSON.maxzoom);
-                }
+                // TODO: optimize and prevent jitter
+                map.fitBounds([
+                    [b[1], b[0]],
+                    [b[3], b[2]]
+                ]);
+            } else {
+                map.fitWorld();
+            }
 
-                layer = L.tileLayer(tileJSON.tiles[0], {
-                    minZoom: tileJSON.minzoom || 0,
-                    maxZoom: tileJSON.maxzoom || 23
-                });
+            if (tileJSON.maxzoom && tileJSON.maxzoom < map.getZoom()) {
+                map.setZoom(tileJSON.maxzoom);
+            }
 
-                map.addLayer(layer);
-
-                var legendJSON = tileJSON.legend;
-                if (legendJSON && legendJSON.search(/\{/) === 0) {
-                    legendJSON = JSON.parse(legendJSON);
-                    // Make sure this is the legend JSON structure we expect
-                    if (legendJSON.length && legendJSON[0].elements) {
-                        map.addControl(
-                            L.control.base64legend({
-                                position: "topright",
-                                legends: legendJSON,
-                                collapseSimple: true,
-                                detectStretched: true
-                            })
-                        );
-                    }
-                }
-
-                if (tileJSON.grids && tileJSON.grids.length > 0) {
-                    var gridURL = tileJSON.grids[0];
-                    var utfgrid = L.utfGrid(gridURL, {
-                        resolution: 4,
-                        pointerCursor: true,
-                        mouseInterval: 66 // Delay for mousemove events
-                    });
-                    utfgrid.addTo(map);
-
-                    var infoContainer = L.DomUtil.create(
-                        "div",
-                        "info",
-                        L.DomUtil.get("Map")
-                    );
-                    var textNode = L.DomUtil.create("h3", "", infoContainer);
-                    textNode.innerHTML =
-                        "This service has UTF-8 Grids; see console for grid data.";
-
-                    utfgrid.on("mouseover", function(e) {
-                        console.log("UTF grid data:", e.data);
-                    });
-                }
+            var layer = L.tileLayer(tileJSON.tiles[0], {
+                minZoom: tileJSON.minzoom || 0,
+                maxZoom: tileJSON.maxzoom || 23
             });
+
+            map.addLayer(layer);
+
+            var legendJSON = tileJSON.legend;
+            if (legendJSON && legendJSON.search(/\{/) === 0) {
+                legendJSON = JSON.parse(legendJSON);
+                // Make sure this is the legend JSON structure we expect
+                if (legendJSON.length && legendJSON[0].elements) {
+                    map.addControl(
+                        L.control.base64legend({
+                            position: "topright",
+                            legends: legendJSON,
+                            collapseSimple: true,
+                            detectStretched: true
+                        })
+                    );
+                }
+            }
+
+            if (tileJSON.grids && tileJSON.grids.length > 0) {
+                var gridURL = tileJSON.grids[0];
+                var utfgrid = L.utfGrid(gridURL, {
+                    resolution: 4,
+                    pointerCursor: true,
+                    mouseInterval: 66 // Delay for mousemove events
+                });
+                utfgrid.addTo(map);
+
+                var infoContainer = L.DomUtil.create(
+                    "div",
+                    "info",
+                    L.DomUtil.get("Map")
+                );
+                var textNode = L.DomUtil.create("h3", "", infoContainer);
+                textNode.innerHTML =
+                    "This service has UTF-8 Grids; see console for grid data.";
+
+                utfgrid.on("mouseover", function(e) {
+                    console.log("UTF grid data:", e.data);
+                });
+            }
 
             map.zoomControl.setPosition("topleft");
             map.addControl(
@@ -176,16 +186,6 @@
             });
 
             map.addControl(slider);
-
-            map.addControl(
-                L.control.basemaps({
-                    position: "bottomright",
-                    basemaps: basemaps,
-                    tileX: 0,
-                    tileY: 0,
-                    tileZ: 1
-                })
-            );
         </script>
     </body>
 </html>
