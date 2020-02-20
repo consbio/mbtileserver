@@ -53,3 +53,10 @@ func tileCoordFromString(z, x, y string) (tc tileCoord, ext string, err error) {
 	}
 	return
 }
+
+func calcScaleResolution(zoomLevel uint8, dpi uint8) (float64, float64) {
+	var denom = 1 << zoomLevel
+	resolution := initialResolution / float64(denom)
+	scale := float64(dpi) * 39.37 * resolution // 39.37 in/m
+	return scale, resolution
+}

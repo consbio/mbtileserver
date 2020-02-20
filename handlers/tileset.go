@@ -67,10 +67,6 @@ func (ts *Tileset) Delete() error {
 	return nil
 }
 
-func tilesetURL(r *http.Request) string {
-	return fmt.Sprintf("%s://%s%s", scheme(r), r.Host, r.URL.Path)
-}
-
 func (ts *Tileset) tileFormatString() string {
 	return ts.db.TileFormatString()
 }
@@ -83,7 +79,9 @@ func (ts *Tileset) tileJSONHandler(enablePreview bool) handlerFunc {
 			query = "?" + r.URL.RawQuery
 		}
 
-		tileJSON, err := ts.TileJSON(tilesetURL(r), query, enablePreview)
+		tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, r.URL.Path)
+
+		tileJSON, err := ts.TileJSON(tilesetURL, query, enablePreview)
 
 		if err != nil {
 			return http.StatusInternalServerError, fmt.Errorf("cannot marshal service info JSON: %v", err)
@@ -206,8 +204,7 @@ func (ts *Tileset) previewHandler() handlerFunc {
 			URL string
 			ID  string
 		}{
-			// fmt.Sprintf("%s%s", ts.svc.rootURL(r), strings.TrimSuffix(r.URL.Path, "/map")),
-			tilesetURL(r),
+			fmt.Sprintf("%s://%s%s", scheme(r), r.Host, strings.TrimSuffix(r.URL.Path, "/map")),
 			ts.id,
 		}
 

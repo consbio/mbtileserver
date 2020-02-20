@@ -12,10 +12,8 @@ type ServiceSetConfig struct {
 	EnableServiceList bool
 	EnableTileJSON    bool
 	EnablePreview     bool
-
-	Domain    string
-	Path      string
-	SecretKey string
+	RootURL           *url.URL
+	SecretKey         string
 }
 
 // ServiceSet is the base type for the HTTP handlers which combines multiple
@@ -28,7 +26,7 @@ type ServiceSet struct {
 	enablePreview     bool
 
 	domain    string
-	url       *url.URL
+	rootURL   *url.URL
 	secretKey string
 }
 
@@ -40,18 +38,12 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 		cfg = &ServiceSetConfig{}
 	}
 
-	parsedPath, err := url.Parse(cfg.Path)
-	if err != nil {
-		return nil, err
-	}
-
 	s := &ServiceSet{
 		tilesets:          make(map[string]*Tileset),
 		enableServiceList: cfg.EnableServiceList,
 		enableTileJSON:    cfg.EnableTileJSON,
 		enablePreview:     cfg.EnablePreview,
-		domain:            cfg.Domain,
-		url:               parsedPath,
+		rootURL:           cfg.RootURL,
 		secretKey:         cfg.SecretKey,
 	}
 
@@ -129,11 +121,6 @@ func (s *ServiceSet) Size() int {
 	return len(s.tilesets)
 }
 
-// rootURL returns the root URL of the service.
-func (s *ServiceSet) rootURL(r *http.Request) string {
-	return fmt.Sprintf("%s://%s", scheme(r), r.Host)
-}
-
 // ServiceInfo consists of two strings that contain the image type and a URL.
 type ServiceInfo struct {
 	ImageType string `json:"imageType"`
@@ -142,7 +129,7 @@ type ServiceInfo struct {
 
 // listServices returns a listing of all published services in this ServiceSet
 func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, error) {
-	rootURL := fmt.Sprintf("%s%s", s.rootURL(r), r.URL)
+	rootURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, r.URL)
 	services := []ServiceInfo{}
 
 	// sort ids alpabetically
@@ -175,19 +162,23 @@ func (s *ServiceSet) listServices(w http.ResponseWriter, r *http.Request) (int, 
 func (s *ServiceSet) Handler(ef func(error)) (http.Handler, error) {
 	m := http.NewServeMux()
 
-	root := s.url.Path
+	root := s.rootURL.Path
 	if s.enableServiceList {
 		m.Handle(root, wrapGetWithErrors(ef, hmacAuth(s.listServices, s.secretKey, "")))
 	}
 
 	errors := NewErrors()
-	for _, ts := range s.tilesets {
-		prefix := root + "/" + ts.id
+	for id, ts := range s.tilesets {
+		prefix := root + "/" + id
 
 		m.Handle(prefix+"/tiles/", wrapGetWithErrors(ef, hmacAuth(ts.tileHandler(), s.secretKey, ts.id)))
 
 		if s.enablePreview {
 			m.Handle(prefix+"/map", wrapGetWithErrors(ef, hmacAuth(ts.previewHandler(), s.secretKey, ts.id)))
+
+			staticPrefix := prefix + "/map/static/"
+			m.Handle(staticPrefix, wrapGetWithErrors(ef, hmacAuth(staticHandler(staticPrefix), s.secretKey, ts.id)))
+
 		}
 
 		if s.enableTileJSON {

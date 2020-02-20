@@ -4,8 +4,8 @@
     <head lang="en">
         <meta charset="UTF-8" />
         <title>{{.ID}} Preview</title>
-        <script src="/static/core.min.js"></script>
-        <link href="/static/core.min.css" rel="stylesheet" />
+        <script src="{{.URL}}/map/static/core.min.js"></script>
+        <link href="{{.URL}}/map/static/core.min.css" rel="stylesheet" />
         <style>
             html {
                 height: 100%;
@@ -92,7 +92,7 @@
             var map = L.map("Map", {});
 
             var layer = null;
-            d3.json("./").then(function(tileJSON) {
+            d3.json("{{.URL}}").then(function(tileJSON) {
                 if (tileJSON.bounds) {
                     var b = tileJSON.bounds;
 

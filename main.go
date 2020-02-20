@@ -14,6 +14,7 @@ import (
 
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -59,19 +60,24 @@ var rootCmd = &cobra.Command{
 }
 
 var (
-	port        int
-	tilePath    string
-	certificate string
-	privateKey  string
-	pathPrefix  string
-	domain      string
-	secretKey   string
-	sentryDSN   string
-	verbose     bool
-	autotls     bool
-	redirect    bool
-	reload      bool
-	generateIDs bool
+	port               int
+	tilePath           string
+	certificate        string
+	privateKey         string
+	pathPrefix         string
+	domain             string
+	secretKey          string
+	sentryDSN          string
+	verbose            bool
+	autotls            bool
+	redirect           bool
+	reload             bool
+	generateIDs        bool
+	enableArcGIS       bool
+	disablePreview     bool
+	disableTileJSON    bool
+	disableServiceList bool
+	tilesOnly          bool
 )
 
 func init() {
@@ -81,12 +87,19 @@ func init() {
 	flags.BoolVarP(&generateIDs, "generate-ids", "", false, "Automatically generate tileset IDs instead of using relative path")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
-	flags.StringVar(&pathPrefix, "path", "", "URL root path of this server (if behind a proxy)")
+	flags.StringVar(&pathPrefix, "root-url", "/services", "URL root path of this server (if behind a proxy)")
 	flags.StringVar(&domain, "domain", "", "Domain name of this server.  NOTE: only used for AutoTLS.")
 	flags.StringVarP(&secretKey, "secret-key", "s", "", "Shared secret key used for HMAC request authentication")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 	flags.BoolVarP(&reload, "enable-reload", "", false, "Enable graceful reload")
+	flags.BoolVarP(&enableArcGIS, "enable-arcgis", "", false, "Enable ArcGIS Mapserver endpoints")
+
+	flags.BoolVarP(&disablePreview, "disable-preview", "", false, "Disable map preview for each tileset (enabled by default)")
+	flags.BoolVarP(&disableTileJSON, "disable-tilejson", "", false, "Disable TileJSON endpoint for each tileset (enabled by default)")
+	flags.BoolVarP(&disableServiceList, "disable-svc-list", "", false, "Disable services list endpoint (enabled by default)")
+	flags.BoolVarP(&tilesOnly, "tiles-only", "", false, "Only enable tile endpoints (shortcut for --disable-svc-list --disable-tilejson --disable-preview)")
+
 	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 
@@ -118,7 +131,7 @@ func init() {
 		privateKey = env
 	}
 
-	if env := os.Getenv("PATH_PREFIX"); env != "" {
+	if env := os.Getenv("ROOT_URL"); env != "" {
 		pathPrefix = env
 	}
 
@@ -147,6 +160,14 @@ func init() {
 
 	if env := os.Getenv("DSN"); env != "" {
 		sentryDSN = env
+	}
+
+	if env := os.Getenv("ENABLE_ARCGIS"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("ENABLE_ARCGIS must be a bool(true/false)")
+		}
+		enableArcGIS = p
 	}
 
 	if env := os.Getenv("VERBOSE"); env != "" {
@@ -184,16 +205,23 @@ func serve() {
 		log.Debugln("Added logging hook for Sentry")
 	}
 
+	if tilesOnly {
+		disableServiceList = true
+		disableTileJSON = true
+		disablePreview = true
+	}
+
+	rootURL, err := url.Parse(pathPrefix)
+	if err != nil {
+		log.Panicf("Could not parse --root-url-path value %q\n")
+	}
+
 	certExists := len(certificate) > 0
 	keyExists := len(privateKey) > 0
 	domainExists := len(domain) > 0
 
 	if certExists != keyExists {
 		log.Fatalln("Both certificate and private key are required to use SSL")
-	}
-
-	if len(pathPrefix) > 0 && !domainExists {
-		log.Fatalln("Domain is required if path is provided")
 	}
 
 	if autotls && !domainExists {
@@ -212,10 +240,10 @@ func serve() {
 		log.Infoln("An HMAC request authorization key was set.  All incoming must be signed.")
 	}
 	svcSet, err := handlers.New(&handlers.ServiceSetConfig{
-		EnableServiceList: true, // TODO: config
-		EnableTileJSON:    true,
-		EnablePreview:     true,
-		Path:              "/services",
+		EnableServiceList: !disableServiceList,
+		EnableTileJSON:    !disableTileJSON,
+		EnablePreview:     !disablePreview,
+		RootURL:           rootURL,
 		SecretKey:         secretKey,
 	})
 	if err != nil {
@@ -254,15 +282,6 @@ func serve() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
-	gzip := middleware.Gzip()
-
-	staticPrefix := "/static"
-	if pathPrefix != "" {
-		staticPrefix = "/" + pathPrefix + staticPrefix
-	}
-	staticHandler := http.StripPrefix(staticPrefix, handlers.Static())
-	e.GET(staticPrefix+"*", echo.WrapHandler(staticHandler), gzip)
-
 	ef := func(err error) {
 		log.Errorf("%v", err)
 	}
@@ -274,8 +293,11 @@ func serve() {
 
 	h := echo.WrapHandler(svcHandler)
 	e.GET("/*", h)
-	a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
-	e.GET("/arcgis/rest/services/*", a)
+
+	if enableArcGIS {
+		a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
+		e.GET("/arcgis/rest/services/*", a)
+	}
 
 	// Start the server
 	fmt.Println("\n--------------------------------------")
