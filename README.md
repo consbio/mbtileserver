@@ -447,7 +447,7 @@ But do not forget to perform it in the end.
 
 ## Changes
 
-### 0.6 (in progress)
+### 0.6
 
 -   fixed bug in map preview when bounds are not defined for a tileset (#84)
 -   updated Leaflet to 1.6.0 and Mapbox GL to 0.32.0 (larger upgrades contingent on #65)

@@ -65,23 +65,23 @@ cd $release_path
 ls -al
 
 
-# # Upload to github release assets
-# for asset in "${release_path}"/*.zip; do
-#   file_name="$(basename "$asset")"
+# Upload to github release assets
+for asset in "${release_path}"/*.zip; do
+  file_name="$(basename "$asset")"
 
-#   status_code="$(curl -sS  -X POST \
-#     --write-out "%{http_code}" -o "/tmp/$file_name.json" \
-#     -H "Authorization: token $GITHUB_TOKEN" \
-#     -H "Content-Length: $(stat -c %s "$asset")" \
-#     -H "Content-Type: application/zip" \
-#     --upload-file "$asset" \
-#     "$UPLOAD_URL?name=$file_name")"
+  status_code="$(curl -sS  -X POST \
+    --write-out "%{http_code}" -o "/tmp/$file_name.json" \
+    -H "Authorization: token $GITHUB_TOKEN" \
+    -H "Content-Length: $(stat -c %s "$asset")" \
+    -H "Content-Type: application/zip" \
+    --upload-file "$asset" \
+    "$UPLOAD_URL?name=$file_name")"
 
-#   if [ "$status_code" -ne "201" ]; then
-#     >&2 printf "\n\tERR: Failed asset upload: %s\n" "$file_name"
-#     >&2 jq . < "/tmp/$file_name.json"
-#     exit 1
-#   fi
-# done
+  if [ "$status_code" -ne "201" ]; then
+    >&2 printf "\n\tERR: Failed asset upload: %s\n" "$file_name"
+    >&2 jq . < "/tmp/$file_name.json"
+    exit 1
+  fi
+done
 
-# echo "----> Upload is complete"
+echo "----> Upload is complete"
