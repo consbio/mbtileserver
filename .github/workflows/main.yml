@@ -1,0 +1,16 @@
+name: Build Go Binaries for Release
+
+on:
+  release:
+    types: [published, edited]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Make binaries
+        uses: ./.github/actions/build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
