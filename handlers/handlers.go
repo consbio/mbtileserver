@@ -23,7 +23,7 @@ import (
 	"github.com/shurcooL/httpfs/html/vfstemplate"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/consbio/mbtileserver/mbtiles"
+	"github.com/asdawn/mbtileserver/mbtiles"
 )
 
 const maxSignatureAge = time.Duration(15) * time.Minute
@@ -384,10 +384,12 @@ func tileCoordFromString(z, x, y string) (tc tileCoord, ext string, err error) {
 		err = fmt.Errorf(errMsgParse, "first", err)
 		return
 	}
+	/* do not check
 	if tc.x >= (1 << z64) {
 		err = fmt.Errorf(errMsgOOB, "x", tc.x, tc.z)
 		return
 	}
+	*/
 	s := y
 	if l := strings.LastIndex(s, "."); l >= 0 {
 		s, ext = s[:l], s[l:]
@@ -396,10 +398,12 @@ func tileCoordFromString(z, x, y string) (tc tileCoord, ext string, err error) {
 		err = fmt.Errorf(errMsgParse, "y", err)
 		return
 	}
+	/* do not check
 	if tc.y >= (1 << z64) {
 		err = fmt.Errorf(errMsgOOB, "y", tc.y, tc.z)
 		return
 	}
+	*/
 	return
 }
 
