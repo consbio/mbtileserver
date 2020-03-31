@@ -1,4 +1,13 @@
-# mbtileserver
+# mbtileserver(asdawn mod)
+go get github.com/asdawn/mbtileserver
+
+This is a tile server for WGS 1984 tiles.
+
+The only change is **it will work even when x>2^zoom_level or y>2^zoom_level** (handlers.go). That is not valid for standard ESPG:3857 tiles, but EPSG:4326 tiles are not quite the same, with this limitation the tiles can't be fully loaded.
+
+Of course some *import* statements have to be changed to make the change work. That is not important. 
+
+# mbtileserver(original)
 
 A simple Go-based server for map tiles stored in [mbtiles](https://github.com/mapbox/mbtiles-spec)
 format.
