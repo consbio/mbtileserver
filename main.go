@@ -24,8 +24,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/consbio/mbtileserver/handlers"
-	"github.com/consbio/mbtileserver/mbtiles"
+	"github.com/asdawn/mbtileserver/handlers"
+	"github.com/asdawn/mbtileserver/mbtiles"
 )
 
 var (
