@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/consbio/mbtileserver/mbtiles"
+	"github.com/asdawn/mbtileserver/mbtiles"
 )
 
 type arcGISLOD struct {
