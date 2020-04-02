@@ -447,6 +447,10 @@ But do not forget to perform it in the end.
 
 ## Changes
 
+### 0.6.1
+
+-   upgraded Docker containers to Go 1.14
+
 ### 0.6
 
 -   fixed bug in map preview when bounds are not defined for a tileset (#84)
