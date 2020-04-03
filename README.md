@@ -1,5 +1,10 @@
 # mbtileserver(asdawn mod)
+
+Make sure you have installed gcc and golang (and libsqlite if you are using Linux), then
+
+```sh
 go get github.com/asdawn/mbtileserver
+```
 
 This is a tile server for WGS 1984 tiles.
 
