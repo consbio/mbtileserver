@@ -1,4 +1,4 @@
-module github.com/consbio/mbtileserver
+module github.com/asdawn/mbtileserver
 
 require (
 	github.com/certifi/gocertifi v0.0.0-20190105021004-abcd57078448 // indirect
