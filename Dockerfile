@@ -1,15 +1,15 @@
 # Stage 1: compile mbtileserver
-FROM golang:1.12.9-alpine
+FROM golang:1.14-alpine
 
 WORKDIR /
 RUN apk add git build-base
 COPY . .
 
-RUN GOOS=linux GO111MODULE=on go build -o /mbtileserver
+RUN GOOS=linux go build -o /mbtileserver
 
 
 # Stage 2: start from a smaller image
-FROM alpine:3.10.1
+FROM alpine:3.11
 
 WORKDIR /
 
