@@ -67,7 +67,7 @@ Usage:
 
 Flags:
   -c, --cert string            X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
-  -d, --dir string             Directory containing mbtiles files. (default "./tilesets")
+  -d, --dir string             Directory containing mbtiles files. Directory containing mbtiles files.  Can be a comma-delimited list of directories. (default "./tilesets")
       --disable-preview        Disable map preview for each tileset (enabled by default)
       --disable-svc-list       Disable services list endpoint (enabled by default)
       --disable-tilejson       Disable TileJSON endpoint for each tileset (enabled by default)

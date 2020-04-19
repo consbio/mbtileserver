@@ -57,6 +57,8 @@ Most of the updates are demonstrated in `main.go`.
     -   `--disable-tilejson`: disables the TileJSON endpoint for each tile service
     -   `--tiles-only`: shortcut that disables preview, service list, and TileJSON endpoints
 
+-   added ability to have multiple tile paths using a comma-delimited list of paths passed to `--dir` option
+
 -   moved static assets for map preview that were originally served on `/static`
     endpoint to `/services/<tileset_id>/map/static` so that this endpoint is
     disabled when preview is disabled via `--disable-preview`.

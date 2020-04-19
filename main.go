@@ -84,7 +84,7 @@ var (
 func init() {
 	flags := rootCmd.Flags()
 	flags.IntVarP(&port, "port", "p", -1, "Server port. Default is 443 if --cert or --tls options are used, otherwise 8000.")
-	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.")
+	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.  Can be a comma-delimited list of directories.")
 	flags.BoolVarP(&generateIDs, "generate-ids", "", false, "Automatically generate tileset IDs instead of using relative path")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
@@ -261,32 +261,35 @@ func serve() {
 		log.Fatalln("Could not construct ServiceSet")
 	}
 
-	// Discover all tilesets
-	filenames, err := mbtiles.ListDBs(tilePath)
-	if err != nil {
-		log.Errorf("unable to list mbtiles in '%v': %v\n", tilePath, err)
-	}
-	if len(filenames) == 0 {
-		log.Errorf("no tilesets found in %s", tilePath)
-	}
-
-	// Register all tilesets
-	for _, filename := range filenames {
-		var id string
-		var err error
-		if generateIDs {
-			id = handlers.SHA1ID(filename)
-		} else {
-			id, err = handlers.RelativePathID(filename, tilePath)
-			if err != nil {
-				log.Errorf("Could not generate ID for tileset: %q", filename)
-				continue
-			}
+	for _, path := range strings.Split(tilePath, ",") {
+		// Discover all tilesets
+		log.Infof("Searching for tilesets in %v\n", path)
+		filenames, err := mbtiles.ListDBs(path)
+		if err != nil {
+			log.Errorf("Unable to list mbtiles in '%v': %v\n", path, err)
+		}
+		if len(filenames) == 0 {
+			log.Errorf("No tilesets found in %s", path)
 		}
 
-		err = svcSet.AddTileset(filename, id)
-		if err != nil {
-			log.Errorf("Could not add tileset for %q with ID %q\n%v", filename, id, err)
+		// Register all tilesets
+		for _, filename := range filenames {
+			var id string
+			var err error
+			if generateIDs {
+				id = handlers.SHA1ID(filename)
+			} else {
+				id, err = handlers.RelativePathID(filename, path)
+				if err != nil {
+					log.Errorf("Could not generate ID for tileset: %q", filename)
+					continue
+				}
+			}
+
+			err = svcSet.AddTileset(filename, id)
+			if err != nil {
+				log.Errorf("Could not add tileset for %q with ID %q\n%v", filename, id, err)
+			}
 		}
 	}
 
