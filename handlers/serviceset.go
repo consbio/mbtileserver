@@ -16,6 +16,7 @@ type ServiceSetConfig struct {
 	EnableServiceList bool
 	EnableTileJSON    bool
 	EnablePreview     bool
+	EnableArcGIS      bool
 	RootURL           *url.URL
 	ErrorWriter       io.Writer
 }
@@ -28,6 +29,7 @@ type ServiceSet struct {
 	enableServiceList bool
 	enableTileJSON    bool
 	enablePreview     bool
+	enableArcGIS      bool
 
 	domain      string
 	rootURL     *url.URL
@@ -47,6 +49,7 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 		enableServiceList: cfg.EnableServiceList,
 		enableTileJSON:    cfg.EnableTileJSON,
 		enablePreview:     cfg.EnablePreview,
+		enableArcGIS:      cfg.EnableArcGIS,
 		rootURL:           cfg.RootURL,
 		errorWriter:       cfg.ErrorWriter,
 	}
@@ -142,7 +145,7 @@ func (s *ServiceSet) logError(format string, args ...interface{}) {
 	}
 }
 
-// serviceListHandler returns an http.Handler that provides a listing of all
+// serviceListHandler is an http.HandlerFunc that provides a listing of all
 // published services in this ServiceSet
 func (s *ServiceSet) serviceListHandler(w http.ResponseWriter, r *http.Request) {
 	rootURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, r.URL)
@@ -177,45 +180,59 @@ func (s *ServiceSet) serviceListHandler(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// tilesetHandler is an http.HandlerFunc that handles a given tileset
+// and associated subpaths
+func (s *ServiceSet) tilesetHandler(w http.ResponseWriter, r *http.Request) {
+	id := s.IDFromURLPath((r.URL.Path))
+
+	if id == "" {
+		http.Error(w, "404 page not found", http.StatusNotFound)
+		return
+	}
+
+	s.tilesets[id].router.ServeHTTP(w, r)
+}
+
 // IDFromURLPath extracts a tileset ID from a URL Path.
 // If no valid ID is found, a blank string is returned.
-func (s *ServiceSet) IDFromURLPath(path string) string {
-
-	// TODO: if normal service path vs ArcGIS service path
+func (s *ServiceSet) IDFromURLPath(id string) string {
 	root := s.rootURL.Path + "/"
-	if !strings.HasPrefix(path, s.rootURL.Path+"/") {
-		return ""
-	}
 
-	// strip root path
-	id := strings.TrimPrefix(path, root)
+	if strings.HasPrefix(id, root) {
+		id = strings.TrimPrefix(id, root)
 
-	// test exact match first
-	if _, ok := s.tilesets[id]; ok {
-		return id
-	}
+		// test exact match first
+		if _, ok := s.tilesets[id]; ok {
+			return id
+		}
 
-	// Split on /tiles/ and /map/ and trim /map
-	i := strings.LastIndex(id, "/tiles/")
-	if i != -1 {
-		id = id[:i]
-	} else if s.enablePreview {
-		id = strings.TrimSuffix(id, "/map")
-
-		i = strings.LastIndex(id, "/map/")
+		// Split on /tiles/ and /map/ and trim /map
+		i := strings.LastIndex(id, "/tiles/")
 		if i != -1 {
 			id = id[:i]
-		}
-	}
+		} else if s.enablePreview {
+			id = strings.TrimSuffix(id, "/map")
 
-	// TODO: strip / split ArcGIS endpoints
+			i = strings.LastIndex(id, "/map/")
+			if i != -1 {
+				id = id[:i]
+			}
+		}
+	} else if s.enableArcGIS && strings.HasPrefix(id, ArcGISRoot) {
+		id = strings.TrimPrefix(id, ArcGISRoot)
+		// MapServer should be a reserved word, so should be OK to split on it
+		id = strings.Split(id, "/MapServer")[0]
+	} else {
+		// not on a subpath of service roots, so no id
+		return ""
+	}
 
 	// make sure tileset exists
 	if _, ok := s.tilesets[id]; ok {
 		return id
 	}
 
-	return path
+	return ""
 }
 
 // Handler returns a http.Handler that serves the endpoints of the ServiceSet.
@@ -226,23 +243,16 @@ func (s *ServiceSet) Handler() http.Handler {
 
 	root := s.rootURL.Path + "/"
 
+	// Route requests at the tileset or subpath to the corresponding tileset
+	m.HandleFunc(root, s.tilesetHandler)
+
 	if s.enableServiceList {
 		m.HandleFunc(s.rootURL.Path, s.serviceListHandler)
 	}
 
-	m.Handle(root, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// find the appropriate tileset for incoming request, and let
-		// it handle requests to its endpoints
-		id := s.IDFromURLPath((r.URL.Path))
-
-		ts, ok := s.tilesets[id]
-		if !ok {
-			http.Error(w, "404 page not found", http.StatusNotFound)
-			return
-		}
-
-		ts.router.ServeHTTP(w, r)
-	}))
+	if s.enableArcGIS {
+		m.HandleFunc(ArcGISRoot, s.tilesetHandler)
+	}
 
 	return m
 }

@@ -249,12 +249,12 @@ func serve() {
 	}
 
 	svcSet, err := handlers.New(&handlers.ServiceSetConfig{
+		RootURL:           rootURL,
+		ErrorWriter:       &ErrorLogger{log: log.New()},
 		EnableServiceList: !disableServiceList,
 		EnableTileJSON:    !disableTileJSON,
 		EnablePreview:     !disablePreview,
-		RootURL:           rootURL,
-		ErrorWriter:       &ErrorLogger{log: log.New()},
-		// SecretKey:         secretKey,
+		EnableArcGIS:      enableArcGIS,
 	})
 	if err != nil {
 		log.Fatalln("Could not construct ServiceSet")
@@ -311,12 +311,6 @@ func serve() {
 
 	// Get HTTP.Handler for the service set, and wrap for use in echo
 	e.GET("/*", echo.WrapHandler(svcSet.Handler()))
-
-	// TODO: re-enable ArcGIS handlers
-	// if enableArcGIS {
-	// 	a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
-	// 	e.GET("/arcgis/rest/services/*", a)
-	// }
 
 	// Start the server
 	fmt.Println("\n--------------------------------------")

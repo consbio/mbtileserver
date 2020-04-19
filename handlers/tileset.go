@@ -65,6 +65,14 @@ func newTileset(svc *ServiceSet, filename, id, path string) (*Tileset, error) {
 		m.Handle(staticPrefix, staticHandler(staticPrefix))
 	}
 
+	if svc.enableArcGIS {
+		arcgisRoot := ArcGISRoot + id + "/MapServer"
+		m.HandleFunc(arcgisRoot, ts.arcgisServiceHandler)
+		m.HandleFunc(arcgisRoot+"/layers", ts.arcgisLayersHandler)
+		m.HandleFunc(arcgisRoot+"/legend", ts.arcgisLegendHandler)
+		m.HandleFunc(arcgisRoot+"/tile/", ts.arcgisTileHandler)
+	}
+
 	ts.router = m
 
 	return ts, nil
@@ -160,7 +168,7 @@ func (ts *Tileset) TileJSON(svcURL string, query string) (map[string]interface{}
 	return out, nil
 }
 
-// tilesJSONHandler returns a handlerFunc for the TileJSON endpoint of the tileset
+// tilesJSONHandler is an http.HandlerFunc for the TileJSON endpoint of the tileset
 func (ts *Tileset) tileJSONHandler(w http.ResponseWriter, r *http.Request) {
 	if ts == nil || !ts.published {
 		http.NotFound(w, r)
@@ -193,8 +201,8 @@ func (ts *Tileset) tileJSONHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// tileHandler returns a handlerFunc for the tile endpoint of the tileset.
-// If a tile is not found, the handlerFunc returns a blank image if the tileset
+// tileHandler is an http.HandlerFunc for the tile endpoint of the tileset.
+// If a tile is not found, the handler returns a blank image if the tileset
 // has images, and an empty response if the tileset has vector tiles.
 func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 	if ts == nil || !ts.published {
@@ -266,7 +274,7 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// previewHandler returns a handlerFunc to render the map preview template
+// previewHandler is an http.HandlerFunc that renders the map preview template
 // appropriate for the type of tileset.  Image tilesets use Leaflet, whereas
 // vector tilesets use Mapbox GL.
 func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
@@ -308,7 +316,8 @@ func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// tileNotFoundHandler writes the default response for a non-existing tile of type f to w
+// tileNotFoundHandler is an http.HandlerFunc that writes the default response
+// for a non-existing tile of type f to w
 func tileNotFoundHandler(w http.ResponseWriter, r *http.Request, f mbtiles.TileFormat) {
 	switch f {
 	case mbtiles.PNG, mbtiles.JPG, mbtiles.WEBP:
