@@ -66,25 +66,25 @@ Usage:
   mbtileserver [flags]
 
 Flags:
-  -c, --cert string         X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
-  -d, --dir string          Directory containing mbtiles files. (default "./tilesets")
-      --disable-preview     Disable map preview for each tileset (enabled by default)
-      --disable-svc-list    Disable services list endpoint (enabled by default)
-      --disable-tilejson    Disable TileJSON endpoint for each tileset (enabled by default)
-      --domain string       Domain name of this server.  NOTE: only used for AutoTLS.
-      --dsn string          Sentry DSN
-      --enable-arcgis       Enable ArcGIS Mapserver endpoints
-      --enable-reload       Enable graceful reload
-      --generate-ids        Automatically generate tileset IDs instead of using relative path
-  -h, --help                help for mbtileserver
-  -k, --key string          TLS private key
-  -p, --port int            Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
-  -r, --redirect            Redirect HTTP to HTTPS
-      --root-url string     URL root path of this server (if behind a proxy) (default "/services")
-  -s, --secret-key string   Shared secret key used for HMAC request authentication
-      --tiles-only          Only enable tile endpoints (shortcut for --disable-svc-list --disable-tilejson --disable-preview)
-  -t, --tls                 Auto TLS via Let's Encrypt
-  -v, --verbose             Verbose logging
+  -c, --cert string            X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
+  -d, --dir string             Directory containing mbtiles files. (default "./tilesets")
+      --disable-preview        Disable map preview for each tileset (enabled by default)
+      --disable-svc-list       Disable services list endpoint (enabled by default)
+      --disable-tilejson       Disable TileJSON endpoint for each tileset (enabled by default)
+      --domain string          Domain name of this server.  NOTE: only used for AutoTLS.
+      --dsn string             Sentry DSN
+      --enable-arcgis          Enable ArcGIS Mapserver endpoints
+      --enable-reload-signal   Enable graceful reload using HUP signal to the server process
+      --generate-ids           Automatically generate tileset IDs instead of using relative path
+  -h, --help                   help for mbtileserver
+  -k, --key string             TLS private key
+  -p, --port int               Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
+  -r, --redirect               Redirect HTTP to HTTPS
+      --root-url string        Root URL of services endpoint (default "/services")
+  -s, --secret-key string      Shared secret key used for HMAC request authentication
+      --tiles-only             Only enable tile endpoints (shortcut for --disable-svc-list --disable-tilejson --disable-preview)
+  -t, --tls                    Auto TLS via Let's Encrypt
+  -v, --verbose                Verbose logging
 ```
 
 So hosting tiles is as easy as putting your mbtiles files in the `tilesets`
@@ -146,7 +146,7 @@ mbtileserver:
 ### Reload
 
 mbtileserver optionally supports graceful reload (without interrupting any in-progress requests). This functionality
-must be enabled with the `--enable-reload` flag. When enabled, the server can be reloaded by sending it a `HUP` signal:
+must be enabled with the `--enable-reload-signal` flag. When enabled, the server can be reloaded by sending it a `HUP` signal:
 
 ```
 $ kill -HUP <pid>
@@ -466,31 +466,7 @@ But do not forget to perform it in the end.
 
 ## Changes
 
-### 0.6 (in progress)
-
--   fixed bug in map preview when bounds are not defined for a tileset (#84)
--   updated Leaflet to 1.6.0 and Mapbox GL to 0.32.0 (larger upgrades contingent on #65)
--   fixed issues with `--tls` option (#89)
--   added example proxy configuration for Caddy and NGINX (#91)
--   fixed issues with map preview page using HTTP basemaps (#90)
--   resolved template loading issues (#85)
--   added support for automatically generating unique tileset IDs
--   breaking changes:
-    -   `handlers.go`:
-        -   Removed `TemplatesFromAssets` as it was not used internally, and unlikely used externally
-        -   Removed `secretKey` from `NewFromBaseDir` parameters; this is replaced by calling `SetRequestAuthKey` on a `ServiceSet`.
-        -   Added `generateIDs` to `NewFromBaseDir` parameters.
-    -   command-line interface:
-        -   ArcGIS endpoints are now opt-in via `--enable-arcgis` option (disabled by default)
-        -   `--path` option has been renamed to `--root-url` for clarity (env var is now `ROOT_URL`)
-
-### 0.5.0
-
--   Added Docker support (#74, #75)
--   Fix case-sensitive mbtiles URLs (#77)
--   Add support for graceful reloading (#69, #72, #73)
--   Add support for environment args (#70)
--   All changes prior to 6/1/2019
+See [CHANGELOG](CHANGELOG.md).
 
 ## Contributors ✨
 

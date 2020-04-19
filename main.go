@@ -48,7 +48,7 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		if reload {
+		if enableReloadSignal {
 			if isChild := os.Getenv("MBTS_IS_CHILD"); isChild != "" {
 				serve()
 			} else {
@@ -72,7 +72,7 @@ var (
 	verbose            bool
 	autotls            bool
 	redirect           bool
-	reload             bool
+	enableReloadSignal bool
 	generateIDs        bool
 	enableArcGIS       bool
 	disablePreview     bool
@@ -93,8 +93,9 @@ func init() {
 	flags.StringVarP(&secretKey, "secret-key", "s", "", "Shared secret key used for HMAC request authentication")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
-	flags.BoolVarP(&reload, "enable-reload", "", false, "Enable graceful reload")
+
 	flags.BoolVarP(&enableArcGIS, "enable-arcgis", "", false, "Enable ArcGIS Mapserver endpoints")
+	flags.BoolVarP(&enableReloadSignal, "enable-reload-signal", "", false, "Enable graceful reload using HUP signal to the server process")
 
 	flags.BoolVarP(&disablePreview, "disable-preview", "", false, "Disable map preview for each tileset (enabled by default)")
 	flags.BoolVarP(&disableTileJSON, "disable-tilejson", "", false, "Disable TileJSON endpoint for each tileset (enabled by default)")
@@ -250,7 +251,7 @@ func serve() {
 
 	svcSet, err := handlers.New(&handlers.ServiceSetConfig{
 		RootURL:           rootURL,
-		ErrorWriter:       &ErrorLogger{log: log.New()},
+		ErrorWriter:       &errorLogger{log: log.New()},
 		EnableServiceList: !disableServiceList,
 		EnableTileJSON:    !disableTileJSON,
 		EnablePreview:     !disablePreview,
@@ -330,7 +331,7 @@ func serve() {
 
 	var listener net.Listener
 
-	if reload {
+	if enableReloadSignal {
 		f := os.NewFile(3, "")
 		listener, err = net.FileListener(f)
 	} else {
@@ -345,7 +346,7 @@ func serve() {
 
 	// Listen for SIGHUP (graceful shutdown)
 	go func(e *echo.Echo) {
-		if !reload {
+		if !enableReloadSignal {
 			return
 		}
 
@@ -505,13 +506,13 @@ func supervise() {
 	}
 }
 
-// ErrorLogger wraps logrus logger so that we can pass it into the handlers
-type ErrorLogger struct {
+// errorLogger wraps logrus logger so that we can pass it into the handlers
+type errorLogger struct {
 	log *log.Logger
 }
 
 // It implements the required io.Writer interface
-func (el *ErrorLogger) Write(p []byte) (n int, err error) {
+func (el *errorLogger) Write(p []byte) (n int, err error) {
 	el.log.Errorln(string(p))
 	return len(p), nil
 }
