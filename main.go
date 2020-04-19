@@ -213,7 +213,10 @@ func serve() {
 	}
 
 	if !strings.HasPrefix(rootURLStr, "/") {
-		log.Fatalf("Value for --root-url must start with \"/\"")
+		log.Fatalln("Value for --root-url must start with \"/\"")
+	}
+	if strings.HasSuffix(rootURLStr, "/") {
+		log.Fatalln("Value for --root-url must not end with \"/\"")
 	}
 
 	rootURL, err := url.Parse(rootURLStr)
@@ -244,17 +247,20 @@ func serve() {
 	if len(secretKey) > 0 {
 		log.Infoln("An HMAC request authorization key was set.  All incoming must be signed.")
 	}
+
 	svcSet, err := handlers.New(&handlers.ServiceSetConfig{
 		EnableServiceList: !disableServiceList,
 		EnableTileJSON:    !disableTileJSON,
 		EnablePreview:     !disablePreview,
 		RootURL:           rootURL,
-		SecretKey:         secretKey,
+		ErrorWriter:       &ErrorLogger{log: log.New()},
+		// SecretKey:         secretKey,
 	})
 	if err != nil {
 		log.Fatalln("Could not construct ServiceSet")
 	}
 
+	// Discover all tilesets
 	filenames, err := mbtiles.ListDBs(tilePath)
 	if err != nil {
 		log.Errorf("unable to list mbtiles in '%v': %v\n", tilePath, err)
@@ -263,16 +269,24 @@ func serve() {
 		log.Errorf("no tilesets found in %s", tilePath)
 	}
 
-	var idGenerator handlers.IDGenerator
-	if generateIDs {
-		idGenerator = handlers.SHA1IDGenerator
-	} else {
-		idGenerator = handlers.CreateRelativePathIDGenerator(tilePath)
-	}
+	// Register all tilesets
+	for _, filename := range filenames {
+		var id string
+		var err error
+		if generateIDs {
+			id = handlers.SHA1ID(filename)
+		} else {
+			id, err = handlers.RelativePathID(filename, tilePath)
+			if err != nil {
+				log.Errorf("Could not generate ID for tileset: %q", filename)
+				continue
+			}
+		}
 
-	err = svcSet.AddTilesets(filenames, idGenerator)
-	if err != nil {
-		log.Errorf("Unable to create services for mbtiles in '%v': %v\n", tilePath, err)
+		err = svcSet.AddTileset(filename, id)
+		if err != nil {
+			log.Errorf("Could not add tileset for %q with ID %q\n%v", filename, id, err)
+		}
 	}
 
 	// print number of services
@@ -281,28 +295,28 @@ func serve() {
 	e := echo.New()
 	e.HideBanner = true
 	e.Pre(middleware.RemoveTrailingSlash())
-	if verbose {
-		e.Use(middleware.Logger())
-	}
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
-	ef := func(err error) {
-		log.Errorf("%v", err)
+	// log all requests if verbose mode
+	if verbose {
+		e.Use(middleware.Logger())
 	}
 
-	svcHandler, err := svcSet.Handler(ef)
-	if err != nil {
-		log.Errorf("Unable to create service handlers\n%v\n", err)
+	// setup auth middleware if secret key is set
+	if secretKey != "" {
+		hmacAuth := handlers.HMACAuthMiddleware(secretKey, svcSet)
+		e.Use(echo.WrapMiddleware(hmacAuth))
 	}
 
-	h := echo.WrapHandler(svcHandler)
-	e.GET("/*", h)
+	// Get HTTP.Handler for the service set, and wrap for use in echo
+	e.GET("/*", echo.WrapHandler(svcSet.Handler()))
 
-	if enableArcGIS {
-		a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
-		e.GET("/arcgis/rest/services/*", a)
-	}
+	// TODO: re-enable ArcGIS handlers
+	// if enableArcGIS {
+	// 	a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
+	// 	e.GET("/arcgis/rest/services/*", a)
+	// }
 
 	// Start the server
 	fmt.Println("\n--------------------------------------")
@@ -495,4 +509,15 @@ func supervise() {
 		fmt.Println("\nReloading...")
 		fmt.Println("")
 	}
+}
+
+// ErrorLogger wraps logrus logger so that we can pass it into the handlers
+type ErrorLogger struct {
+	log *log.Logger
+}
+
+// It implements the required io.Writer interface
+func (el *ErrorLogger) Write(p []byte) (n int, err error) {
+	el.log.Errorln(string(p))
+	return len(p), nil
 }

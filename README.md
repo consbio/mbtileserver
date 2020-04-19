@@ -366,7 +366,7 @@ A signature is a URL-safe, base64 encoded HMAC hash using the `SHA1` algorithm. 
 from a randomly generated salt, and the **secret key** string. The hash payload is a combination of the ISO-formatted
 date when the hash was created, and the authorized service id.
 
-The following is an example signature, created in Go for the serivce id `test`, the date
+The following is an example signature, created in Go for the service id `test`, the date
 `2019-03-08T19:31:12.213831+00:00`, the salt `0EvkK316T-sBLA`, and the secret key
 `YMIVXikJWAiiR3q-JMz1v2Mfmx3gTXJVNqme5kyaqrY`
 

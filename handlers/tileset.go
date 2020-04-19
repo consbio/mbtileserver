@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/consbio/mbtileserver/mbtiles"
@@ -12,28 +13,66 @@ import (
 
 // Tileset provides a tileset constructed from an mbtiles file
 type Tileset struct {
-	db  *mbtiles.DB
-	id  string
-	svc *ServiceSet
+	svc        *ServiceSet
+	db         *mbtiles.DB
+	id         string
+	name       string
+	tileformat mbtiles.TileFormat
+	published  bool
+	router     *http.ServeMux
 }
 
-// NewTileset constructs a new Tileset from an mbtiles filename.
+// newTileset constructs a new Tileset from an mbtiles filename.
+// Tileset is registered at the passed in path.
 // Any errors encountered opening the tileset are returned.
-func NewTileset(filename string, id string) (*Tileset, error) {
+func newTileset(svc *ServiceSet, filename, id, path string) (*Tileset, error) {
 	db, err := mbtiles.NewDB(filename)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid mbtiles file %q: %v", filename, err)
 	}
 
-	return &Tileset{
-		db: db,
-		id: id,
-	}, nil
+	metadata, err := db.ReadMetadata()
+	if err != nil {
+		return nil, fmt.Errorf("Invalid mbtiles file %q: %v", filename, err)
+	}
+
+	name, ok := metadata["name"].(string)
+	if !ok {
+		name = strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
+	}
+
+	ts := &Tileset{
+		svc:        svc,
+		db:         db,
+		id:         id,
+		name:       name,
+		tileformat: db.TileFormat(),
+		published:  true,
+	}
+
+	// setup routes for tileset
+	m := http.NewServeMux()
+	m.HandleFunc(path+"/tiles/", ts.tileHandler)
+
+	if svc.enableTileJSON {
+		m.HandleFunc(path, ts.tileJSONHandler)
+	}
+
+	if svc.enablePreview {
+		m.HandleFunc(path+"/map", ts.previewHandler)
+
+		staticPrefix := path + "/map/static/"
+		m.Handle(staticPrefix, staticHandler(staticPrefix))
+	}
+
+	ts.router = m
+
+	return ts, nil
 }
 
 // Reload reloads the mbtiles file from disk using the same filename as
 // used when this was first constructed
-func (ts *Tileset) Reload() error {
+func (ts *Tileset) reload() error {
 	if ts.db == nil {
 		return nil
 	}
@@ -55,58 +94,41 @@ func (ts *Tileset) Reload() error {
 }
 
 // Delete closes and deletes the mbtiles file for this tileset
-func (ts *Tileset) Delete() error {
+func (ts *Tileset) delete() error {
 	if ts.db != nil {
-
 		err := ts.db.Close()
 		if err != nil {
 			return err
 		}
 	}
 	ts.db = nil
+	ts.published = false
 
 	return nil
 }
 
+// tileFormatString returns the tile format string of the underlying mbtiles file
 func (ts *Tileset) tileFormatString() string {
-	return ts.db.TileFormatString()
+	return ts.tileformat.String()
 }
 
-func (ts *Tileset) tileJSONHandler(enablePreview bool) handlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) (int, error) {
-
-		query := ""
-		if r.URL.RawQuery != "" {
-			query = "?" + r.URL.RawQuery
-		}
-
-		tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, r.URL.Path)
-
-		tileJSON, err := ts.TileJSON(tilesetURL, query)
-		if enablePreview {
-			tileJSON["map"] = fmt.Sprintf("%s/map", tilesetURL)
-		}
-
-		bytes, err := json.Marshal(tileJSON)
-		if err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("could not render TileJSON: %v", err)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, err = w.Write(bytes)
-		return http.StatusOK, err
-	}
-}
-
+// TileJSON returns the TileJSON (as a map of strings to interface{} values)
+// for the tileset.  This can be rendered into templates or returned via a
+// handler.
 func (ts *Tileset) TileJSON(svcURL string, query string) (map[string]interface{}, error) {
+	if ts == nil || !ts.published {
+		return nil, fmt.Errorf("Tileset does not exist")
+	}
+
 	db := ts.db
 
 	imgFormat := db.TileFormatString()
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
-		"id":       ts.id,
 		"scheme":   "xyz",
 		"format":   imgFormat,
 		"tiles":    []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.%s%s", svcURL, imgFormat, query)},
+		"name":     ts.name,
 	}
 
 	metadata, err := db.ReadMetadata()
@@ -138,108 +160,162 @@ func (ts *Tileset) TileJSON(svcURL string, query string) (map[string]interface{}
 	return out, nil
 }
 
-func (ts *Tileset) tileHandler() handlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) (int, error) {
-		db := ts.db
-		// split path components to extract tile coordinates x, y and z
-		pcs := strings.Split(r.URL.Path[1:], "/")
-		// we are expecting at least "services", <id> , "tiles", <z>, <x>, <y plus .ext>
-		l := len(pcs)
-		if l < 6 || pcs[5] == "" {
-			return http.StatusBadRequest, fmt.Errorf("requested path is too short")
-		}
-		z, x, y := pcs[l-3], pcs[l-2], pcs[l-1]
-		tc, ext, err := tileCoordFromString(z, x, y)
-		if err != nil {
-			return http.StatusBadRequest, err
-		}
-		var data []byte
-		// flip y to match the spec
-		tc.y = (1 << uint64(tc.z)) - 1 - tc.y
-		isGrid := ext == ".json"
-		switch {
-		case !isGrid:
-			err = db.ReadTile(tc.z, tc.x, tc.y, &data)
-		case isGrid && db.HasUTFGrid():
-			err = db.ReadGrid(tc.z, tc.x, tc.y, &data)
-		default:
-			err = fmt.Errorf("no grid supplied by tile database")
-		}
-		if err != nil {
-			// augment error info
-			t := "tile"
-			if isGrid {
-				t = "grid"
-			}
-			err = fmt.Errorf("cannot fetch %s from DB for z=%d, x=%d, y=%d: %v", t, tc.z, tc.x, tc.y, err)
-			return http.StatusInternalServerError, err
-		}
-		if data == nil || len(data) <= 1 {
-			return tileNotFoundHandler(w, db.TileFormat())
-		}
+// tilesJSONHandler returns a handlerFunc for the TileJSON endpoint of the tileset
+func (ts *Tileset) tileJSONHandler(w http.ResponseWriter, r *http.Request) {
+	if ts == nil || !ts.published {
+		http.NotFound(w, r)
+		return
+	}
 
-		if isGrid {
-			w.Header().Set("Content-Type", "application/json")
-			if db.UTFGridCompression() == mbtiles.ZLIB {
-				w.Header().Set("Content-Encoding", "deflate")
-			} else {
-				w.Header().Set("Content-Encoding", "gzip")
-			}
-		} else {
-			w.Header().Set("Content-Type", db.ContentType())
-			if db.TileFormat() == mbtiles.PBF {
-				w.Header().Set("Content-Encoding", "gzip")
-			}
-		}
-		_, err = w.Write(data)
-		return http.StatusOK, err
+	query := ""
+	if r.URL.RawQuery != "" {
+		query = "?" + r.URL.RawQuery
+	}
+
+	tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, r.URL.Path)
+
+	tileJSON, err := ts.TileJSON(tilesetURL, query)
+	if ts.svc.enablePreview {
+		tileJSON["map"] = fmt.Sprintf("%s/map", tilesetURL)
+	}
+
+	bytes, err := json.Marshal(tileJSON)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("could not render TileJSON for %v: %v", r.URL.Path, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(bytes)
+
+	if err != nil {
+		ts.svc.logError("could not write tileJSON content for %v: %v", r.URL.Path, err)
 	}
 }
 
-func (ts *Tileset) previewHandler() handlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) (int, error) {
+// tileHandler returns a handlerFunc for the tile endpoint of the tileset.
+// If a tile is not found, the handlerFunc returns a blank image if the tileset
+// has images, and an empty response if the tileset has vector tiles.
+func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
+	if ts == nil || !ts.published {
+		// In order to not break any requests from when this tileset was published
+		// return the appropriate not found handler for the original tile format.
+		tileNotFoundHandler(w, r, ts.tileformat)
+		return
+	}
 
-		query := ""
-		if r.URL.RawQuery != "" {
-			query = "?" + r.URL.RawQuery
+	db := ts.db
+	// split path components to extract tile coordinates x, y and z
+	pcs := strings.Split(r.URL.Path[1:], "/")
+	// we are expecting at least "services", <id> , "tiles", <z>, <x>, <y plus .ext>
+	l := len(pcs)
+	if l < 6 || pcs[5] == "" {
+		http.Error(w, "requested path is too short", http.StatusBadRequest)
+		return
+	}
+	z, x, y := pcs[l-3], pcs[l-2], pcs[l-1]
+	tc, ext, err := tileCoordFromString(z, x, y)
+	if err != nil {
+		http.Error(w, "invalid tile coordinates", http.StatusBadRequest)
+		return
+	}
+	var data []byte
+	// flip y to match the spec
+	tc.y = (1 << uint64(tc.z)) - 1 - tc.y
+	isGrid := ext == ".json"
+	switch {
+	case !isGrid:
+		err = db.ReadTile(tc.z, tc.x, tc.y, &data)
+	case isGrid && db.HasUTFGrid():
+		err = db.ReadGrid(tc.z, tc.x, tc.y, &data)
+	default:
+		err = fmt.Errorf("no grid supplied by tile database")
+	}
+	if err != nil {
+		// augment error info
+		t := "tile"
+		if isGrid {
+			t = "grid"
 		}
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("cannot fetch %s from DB for z=%d, x=%d, y=%d at path %v: %v", t, tc.z, tc.x, tc.y, r.URL.Path, err)
+		return
+	}
+	if data == nil || len(data) <= 1 {
+		tileNotFoundHandler(w, r, ts.tileformat)
+		return
+	}
 
-		tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, strings.TrimSuffix(r.URL.Path, "/map"))
-
-		tileJSON, err := ts.TileJSON(tilesetURL, query)
-		bytes, err := json.Marshal(tileJSON)
-		if err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("could not render preview: %v", err)
+	if isGrid {
+		w.Header().Set("Content-Type", "application/json")
+		if db.UTFGridCompression() == mbtiles.ZLIB {
+			w.Header().Set("Content-Encoding", "deflate")
+		} else {
+			w.Header().Set("Content-Encoding", "gzip")
 		}
-
-		p := struct {
-			URL      string
-			ID       string
-			TileJSON template.JS
-		}{
-			tilesetURL,
-			ts.id,
-			template.JS(string(bytes)),
+	} else {
+		w.Header().Set("Content-Type", db.ContentType())
+		if db.TileFormat() == mbtiles.PBF {
+			w.Header().Set("Content-Encoding", "gzip")
 		}
+	}
+	_, err = w.Write(data)
 
-		switch ts.db.TileFormat() {
-		default:
-			return executeTemplate(w, "map", p)
-		case mbtiles.PBF:
-			return executeTemplate(w, "map_gl", p)
-		}
+	if err != nil {
+		ts.svc.logError("Could not write tile data for %v: %v", r.URL.Path, err)
+	}
+}
+
+// previewHandler returns a handlerFunc to render the map preview template
+// appropriate for the type of tileset.  Image tilesets use Leaflet, whereas
+// vector tilesets use Mapbox GL.
+func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
+	if ts == nil || !ts.published {
+		http.NotFound(w, r)
+		return
+	}
+
+	query := ""
+	if r.URL.RawQuery != "" {
+		query = "?" + r.URL.RawQuery
+	}
+
+	tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, strings.TrimSuffix(r.URL.Path, "/map"))
+
+	tileJSON, err := ts.TileJSON(tilesetURL, query)
+	bytes, err := json.Marshal(tileJSON)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("could not render tileJSON for preview for %v: %v", r.URL.Path, err)
+		return
+	}
+
+	p := struct {
+		URL      string
+		ID       string
+		TileJSON template.JS
+	}{
+		tilesetURL,
+		ts.id,
+		template.JS(string(bytes)),
+	}
+
+	switch ts.db.TileFormat() {
+	default:
+		executeTemplate(w, "map", p)
+	case mbtiles.PBF:
+		executeTemplate(w, "map_gl", p)
 	}
 }
 
 // tileNotFoundHandler writes the default response for a non-existing tile of type f to w
-func tileNotFoundHandler(w http.ResponseWriter, f mbtiles.TileFormat) (int, error) {
-	var err error
+func tileNotFoundHandler(w http.ResponseWriter, r *http.Request, f mbtiles.TileFormat) {
 	switch f {
 	case mbtiles.PNG, mbtiles.JPG, mbtiles.WEBP:
 		// Return blank PNG for all image types
 		w.Header().Set("Content-Type", "image/png")
 		w.WriteHeader(http.StatusOK)
-		_, err = w.Write(BlankPNG())
+		w.Write(BlankPNG())
 	case mbtiles.PBF:
 		// Return 204
 		w.WriteHeader(http.StatusNoContent)
@@ -248,5 +324,4 @@ func tileNotFoundHandler(w http.ResponseWriter, f mbtiles.TileFormat) (int, erro
 		w.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(w, `{"message": "Tile does not exist"}`)
 	}
-	return http.StatusOK, err // http.StatusOK doesn't matter, code was written by w.WriteHeader already
 }

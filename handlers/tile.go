@@ -2,8 +2,17 @@ package handlers
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
+)
+
+
+const (
+	earthRadius              = 6378137.0
+	earthCircumference       = math.Pi * earthRadius
+	initialResolution        = 2 * earthCircumference / 256
+	dpi                uint8 = 96
 )
 
 type tileCoord struct {
