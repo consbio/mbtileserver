@@ -141,7 +141,7 @@ func (s *ServiceSet) logError(format string, args ...interface{}) {
 	if s.errorWriter != nil {
 		s.errorWriter.Write([]byte(fmt.Sprintf(format, args...)))
 	} else {
-		log.Writer().Write([]byte(fmt.Sprintf(format, args...)))
+		log.Printf(format, args...)
 	}
 }
 
