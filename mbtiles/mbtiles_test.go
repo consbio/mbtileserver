@@ -127,9 +127,22 @@ func Test_TileFormat_ContentType(t *testing.T) {
 
 func Test_NewDB(t *testing.T) {
 	// valid tileset should not raise error
-	_, err := mbtiles.NewDB("./testdata/geography-class-png.mbtiles")
+	filename := "./testdata/geography-class-png.mbtiles"
+	db, err := mbtiles.NewDB(filename)
 	if err != nil {
 		t.Errorf("Valid tileset could not be opened: %q", err)
+	}
+
+	// closing mbtiles file should not raise error
+	err = db.Close()
+	if err != nil {
+		t.Error("Closing mbtiles file raised error")
+	}
+
+	// nonexistent tileset should raise error
+	_, err = mbtiles.NewDB("does_not_exist.mbtiles")
+	if err == nil {
+		t.Error("Nonexistent tileset did not raise validation error")
 	}
 
 	// invalid tileset should raise error
@@ -144,3 +157,148 @@ func Test_NewDB(t *testing.T) {
 		t.Error("Invalid tileset did not raise validation error")
 	}
 }
+
+func Test_Metadata(t *testing.T) {
+	filename := "./testdata/geography-class-png.mbtiles"
+	db, err := mbtiles.NewDB(filename)
+
+	expectedMetadata := map[string]interface{}{
+		"name":        "Geography Class",
+		"description": "One of the example maps that comes with TileMill - a bright & colorful world map that blends retro and high-tech with its folded paper texture and interactive flag tooltips. ",
+		"minzoom":     0,
+		"maxzoom":     1,
+	}
+	metadata, err := db.ReadMetadata()
+	if err != nil {
+		t.Error("Error raised when reading metadata")
+	}
+	for key, expectedValue := range expectedMetadata {
+		value, ok := metadata[key]
+		if !ok {
+			t.Errorf("Metadata missing expected key: %q", key)
+		}
+		if value != expectedValue {
+			t.Errorf("Metadata value '%v' does not match expected value '%v'", value, expectedValue)
+		}
+	}
+	var expectedBounds = []float64{-180, -85.0511, 180, 85.0511}
+	bounds, ok := metadata["bounds"]
+	if !ok {
+		t.Error("Metadata missing expected key: bounds")
+	}
+	boundsValues := bounds.([]float64)
+	if len(boundsValues) != 4 {
+		t.Error("Metadata bounds not expected length")
+	}
+	for i, expectedValue := range expectedBounds {
+		if boundsValues[i] != expectedValue {
+			t.Errorf("Metadata bounds does not have expected values.  Found: %v expected: %v", boundsValues[i], expectedValue)
+		}
+	}
+}
+
+func Test_ReadTile(t *testing.T) {
+	filename := "./testdata/geography-class-png.mbtiles"
+	db, err := mbtiles.NewDB(filename)
+
+	// valid tile should return data
+	var data []byte
+	err = db.ReadTile(0, 0, 0, &data)
+	if err != nil {
+		t.Error("Error raised when reading valid tile")
+	}
+	if data == nil {
+		t.Error("Did not read tile data")
+	}
+
+	// missing tile should return nil
+	err = db.ReadTile(10, 0, 0, &data)
+	if err != nil {
+		t.Error("Error raised when reading missing tile")
+	}
+	if data != nil {
+		t.Error("Tile data should have been empty for missing tile")
+	}
+}
+
+func Test_ReadGrid(t *testing.T) {
+	filename := "./testdata/geography-class-png.mbtiles"
+	db, err := mbtiles.NewDB(filename)
+
+	// valid UTF grid should return data
+	var data []byte
+	err = db.ReadGrid(0, 0, 0, &data)
+	if err != nil {
+		t.Error("Error raised when reading valid UTF grid")
+	}
+	if data == nil {
+		t.Error("Did not read UTF grid data")
+	}
+
+	// missing UTF grid should return nil
+	err = db.ReadGrid(10, 0, 0, &data)
+	if err != nil {
+		t.Error("Error raised when reading missing UTF grid")
+	}
+	if data != nil {
+		t.Error("Tile data should have been empty for missing UTF grid")
+	}
+}
+
+func Test_Property_Methods(t *testing.T) {
+	filename := "./testdata/geography-class-png.mbtiles"
+	db, err := mbtiles.NewDB(filename)
+	if err != nil {
+		t.Errorf("Valid tileset could not be opened: %q", err)
+	}
+
+	if db.Filename() != filename {
+		t.Errorf("Unexpected filename: %q => %q", filename, db.Filename())
+	}
+
+	if db.TileFormat() != mbtiles.PNG {
+		t.Errorf("TileFormat %v is not expected value", db.TileFormat())
+	}
+
+	if db.TileFormatString() != "png" {
+		t.Errorf("TileFormatString %q is not expected value 'png'", db.TileFormatString())
+	}
+
+	if db.ContentType() != "image/png" {
+		t.Errorf("ContentType %q is not expected value 'image/png'", db.ContentType())
+	}
+
+	if !db.HasUTFGrid() {
+		t.Error("Tileset with UTF grids claims to not have UTF grids")
+	}
+
+	if db.UTFGridCompression() != mbtiles.ZLIB {
+		t.Errorf("UTF grid compression %v is not expected value", db.UTFGridCompression())
+	}
+
+	filename = "./testdata/world_cities.mbtiles"
+	db, err = mbtiles.NewDB(filename)
+	if err != nil {
+		t.Errorf("Valid tileset could not be opened: %q", err)
+	}
+
+	if db.TileFormat() != mbtiles.PBF {
+		t.Errorf("TileFormat %v is not expected value", db.TileFormat())
+	}
+
+	if db.TileFormatString() != "pbf" {
+		t.Errorf("TileFormatString %q is not expected value 'pbf'", db.TileFormatString())
+	}
+
+	if db.ContentType() != "application/x-protobuf" {
+		t.Errorf("ContentType %q is not expected value 'application/x-protobuf'", db.ContentType())
+	}
+
+	if db.HasUTFGrid() {
+		t.Error("Tileset with no UTF grids claims to have UTF grids")
+	}
+
+}
+
+// filename := "./testdata/geography-class-png.mbtiles"
+// db, err := mbtiles.NewDB(filename)
