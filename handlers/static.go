@@ -3,16 +3,20 @@ package handlers
 import (
 	"net/http"
 	"path"
+	"strings"
 	"time"
 )
 
-// Static returns an http.Handler that will serve the contents of
-// the subdirectory "/static/dist" of the Assets.
-func Static() http.Handler {
+// staticHandler returns a handler that retrieves static files from the virtual
+// assets filesystem based on a path.  The URL prefix of the resource where
+// these are accessed is first trimmed before requesting from the filesystem.
+func staticHandler(prefix string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		f, err := Assets.Open(path.Join("/static/dist", r.URL.Path))
+		filePath := strings.TrimPrefix(r.URL.Path, prefix)
+		f, err := Assets.Open(path.Join("/static/dist", filePath))
 		if err != nil {
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			// not an error, file was not found
+			http.NotFound(w, r)
 			return
 		}
 		defer f.Close()

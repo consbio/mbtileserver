@@ -18,7 +18,7 @@ In addition to tile-level access, it provides:
 -   TileJSON 2.1.0 endpoint for each tileset, with full metadata
     from the mbtiles file.
 -   a preview map for exploring each tileset.
--   a minimal ArcGIS tile map service API (work in progress)
+-   a minimal ArcGIS tile map service API
 
 We have been able to host a bunch of tilesets on an
 [AWS t2.nano](https://aws.amazon.com/about-aws/whats-new/2015/12/introducing-t2-nano-the-smallest-lowest-cost-amazon-ec2-instance/)
@@ -66,19 +66,25 @@ Usage:
   mbtileserver [flags]
 
 Flags:
-  -c, --cert string       X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
-  -d, --dir string        Directory containing mbtiles files. (default "./tilesets")
-      --domain string     Domain name of this server.    NOTE: only used for AutoTLS.
-      --dsn string        Sentry DSN
-  -h, --help              help for mbtileserver
-  -k, --key string        TLS private key
-      --path string       URL root path of this server (if behind a proxy)
-  -p, --port int          Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
-  -s, --secret-key string Shared secret key used for HMAC request authentication
-  -t, --tls               Auto TLS using Let's Encrypt
-  -r, --redirect          Redirect HTTP to HTTPS
-      --enable-reload     Enable graceful reload
-  -v, --verbose           Verbose logging
+  -c, --cert string            X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
+  -d, --dir string             Directory containing mbtiles files. Directory containing mbtiles files.  Can be a comma-delimited list of directories. (default "./tilesets")
+      --disable-preview        Disable map preview for each tileset (enabled by default)
+      --disable-svc-list       Disable services list endpoint (enabled by default)
+      --disable-tilejson       Disable TileJSON endpoint for each tileset (enabled by default)
+      --domain string          Domain name of this server.  NOTE: only used for AutoTLS.
+      --dsn string             Sentry DSN
+      --enable-arcgis          Enable ArcGIS Mapserver endpoints
+      --enable-reload-signal   Enable graceful reload using HUP signal to the server process
+      --generate-ids           Automatically generate tileset IDs instead of using relative path
+  -h, --help                   help for mbtileserver
+  -k, --key string             TLS private key
+  -p, --port int               Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
+  -r, --redirect               Redirect HTTP to HTTPS
+      --root-url string        Root URL of services endpoint (default "/services")
+  -s, --secret-key string      Shared secret key used for HMAC request authentication
+      --tiles-only             Only enable tile endpoints (shortcut for --disable-svc-list --disable-tilejson --disable-preview)
+  -t, --tls                    Auto TLS via Let's Encrypt
+  -v, --verbose                Verbose logging
 ```
 
 So hosting tiles is as easy as putting your mbtiles files in the `tilesets`
@@ -87,6 +93,9 @@ directory and starting the server. Woo hoo!
 You can have multiple directories in your `tilesets` directory; these will be converted into appropriate URLs:
 
 `<tile_dir>/foo/bar/baz.mbtiles` will be available at `/services/foo/bar/baz`.
+
+If `--generate-ids` is provided, tileset IDs are automatically generated using a SHA1 hash of the path to each tileset.
+By default, tileset IDs are based on the relative path of each tileset to the base directory provided using `--dir`.
 
 When you want to remove, modify, or add new tilesets, simply restart the server process or use the reloading process below.
 
@@ -98,19 +107,20 @@ If the `--tls` option is provided, the Let's Encrypt Terms of Service are accept
 
 If either `--cert` or `--tls` are provided, the default port is 443.
 
-You can also set up server config using environment variables instead of flags, which may be more helpful when deploying in a docker image. Use the associated flag to determine usage. The following variables are available:
+You can also use environment variables instead of flags, which may be more helpful when deploying in a docker image. Use the associated flag to determine usage. The following variables are available:
 
 -   `PORT` (`--port`)
 -   `TILE_DIR` (`--dir`)
--   `PATH_PREFIX` (`--path`)
+-   `GENERATE_IDS` (`--generate-ids`)
+-   `ROOT_URL_PATH` (`--root-url-path`)
 -   `DOMAIN` (`--domain`)
 -   `TLS_CERT` (`--cert`)
 -   `TLS_PRIVATE_KEY` (`--key`)
+-   `HMAC_SECRET_KEY` (`--secret-key`)
 -   `AUTO_TLS` (`--tls`)
 -   `REDIRECT` (`--redirect`)
 -   `DSN` (`--dsn`)
 -   `VERBOSE` (`--verbose`)
--   `HMAC_SECRET_KEY` (`--secret-key`)
 
 Example:
 
@@ -136,7 +146,7 @@ mbtileserver:
 ### Reload
 
 mbtileserver optionally supports graceful reload (without interrupting any in-progress requests). This functionality
-must be enabled with the `--enable-reload` flag. When enabled, the server can be reloaded by sending it a `HUP` signal:
+must be enabled with the `--enable-reload-signal` flag. When enabled, the server can be reloaded by sending it a `HUP` signal:
 
 ```
 $ kill -HUP <pid>
@@ -275,7 +285,7 @@ file.
 
 `mbtileserver` automatically creates a TileJSON endpoint for each service at `/services/<tileset_id>`.
 The TileJSON uses the same scheme and domain name as is used for the incoming request; the `--domain` setting does not
-have an affect on auto-generated URLs.
+affect auto-generated URLs.
 
 This API provides most elements of the `metadata` table in the mbtiles file as well as others that are
 automatically inferred from tile data.
@@ -327,9 +337,18 @@ This currently uses `Leaflet` for image tiles and `Mapbox GL JS` for vector tile
 ## ArcGIS API
 
 This project currently provides a minimal ArcGIS tiled map service API for tiles stored in an mbtiles file.
+
+This is enabled with the `--enable-arcgis` flag.
+
 This should be sufficient for use with online platforms such as [Data Basin](https://databasin.org). Because the ArcGIS API relies on a number of properties that are not commonly available within an mbtiles file, so certain aspects are stubbed out with minimal information.
 
 This API is not intended for use with more full-featured ArcGIS applications such as ArcGIS Desktop.
+
+Available endpoints:
+
+-   Service info: `http://localhost:8000/arcgis/rest/services/<tileset_id>/MapServer`
+-   Layer info: `http://localhost:8000/arcgis/rest/services/<tileset_id>/MapServer/layers`
+-   Tiles: `http://localhost:8000/arcgis/rest/services/<tileset_id>/MapServer/tile/0/0/0`
 
 ## Request authorization
 
@@ -347,7 +366,7 @@ A signature is a URL-safe, base64 encoded HMAC hash using the `SHA1` algorithm. 
 from a randomly generated salt, and the **secret key** string. The hash payload is a combination of the ISO-formatted
 date when the hash was created, and the authorized service id.
 
-The following is an example signature, created in Go for the serivce id `test`, the date
+The following is an example signature, created in Go for the service id `test`, the date
 `2019-03-08T19:31:12.213831+00:00`, the salt `0EvkK316T-sBLA`, and the secret key
 `YMIVXikJWAiiR3q-JMz1v2Mfmx3gTXJVNqme5kyaqrY`
 
@@ -429,12 +448,12 @@ $gulp build
 
 Modifying the `.go` files always requires re-running `go build .`.
 
-In case you have modified the templates and static assets, you need to run `go generate ./handlers` to ensure that your modifications
+In case you have modified the templates and static assets, you need to run `go generate ./handlers/templates.go` to ensure that your modifications
 are embedded into the executable. For this to work, you must have
 [github.com/shurcooL/vfsgen)[https://github.com/shurcooL/vfsgen) installed.
 
 ```bash
-go generate ./handlers/handlers.go
+go generate ./handlers/templates.go
 ```
 
 This will rewrite the `assets_vfsdata.go` which you must commit along with your
@@ -447,30 +466,7 @@ But do not forget to perform it in the end.
 
 ## Changes
 
-### 0.6.1
-
--   upgraded Docker containers to Go 1.14
-
-### 0.6
-
--   fixed bug in map preview when bounds are not defined for a tileset (#84)
--   updated Leaflet to 1.6.0 and Mapbox GL to 0.32.0 (larger upgrades contingent on #65)
--   fixed issues with `--tls` option (#89)
--   added example proxy configuration for Caddy and NGINX (#91)
--   fixed issues with map preview page using HTTP basemaps (#90)
--   resolved template loading issues (#85)
--   breaking changes:
-    -   `handlers.go`:
-        -   Removed `TemplatesFromAssets` as it was not used internally, and unlikely used externally
-        -   Removed `secretKey` from `NewFromBaseDir` parameters; this is replaced by calling `SetRequestAuthKey` on a `ServiceSet`.
-
-### 0.5.0
-
--   Added Docker support (#74, #75)
--   Fix case-sensitive mbtiles URLs (#77)
--   Add support for graceful reloading (#69, #72, #73)
--   Add support for environment args (#70)
--   All changes prior to 6/1/2019
+See [CHANGELOG](CHANGELOG.md).
 
 ## Contributors ✨
 

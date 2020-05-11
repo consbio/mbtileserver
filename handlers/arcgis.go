@@ -2,12 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"net/http"
 	"strings"
-
-	"github.com/consbio/mbtileserver/mbtiles"
 )
 
 type arcGISLOD struct {
@@ -63,265 +60,307 @@ type arcGISLayer struct {
 	CurrentVersion    float32           `json:"currentVersion"`
 }
 
-const (
-	earthRadius              = 6378137.0
-	earthCircumference       = math.Pi * earthRadius
-	initialResolution        = 2 * earthCircumference / 256
-	dpi                uint8 = 96
-)
+const ArcGISRoot = "/arcgis/rest/services/"
 
 var webMercatorSR = arcGISSpatialReference{Wkid: 3857}
 var geographicSR = arcGISSpatialReference{Wkid: 4326}
 
-// wrapJSONP writes b (JSON marshalled to bytes) as a JSONP response to
-// w if the callback query parameter is present, and writes b as a JSON
-// response otherwise. Any error that occurs during writing is returned.
-func wrapJSONP(w http.ResponseWriter, r *http.Request, b []byte) (err error) {
-	callback := r.URL.Query().Get("callback")
+// arcGISServiceJSON returns ArcGIS standard JSON describing the ArcGIS
+// tile service.
+func (ts *Tileset) arcgisServiceJSON() ([]byte, error) {
+	db := ts.db
+	imgFormat := db.TileFormatString()
+	metadata, err := db.ReadMetadata()
+	if err != nil {
+		return nil, err
+	}
+	name, _ := metadata["name"].(string)
+	description, _ := metadata["description"].(string)
+	attribution, _ := metadata["attribution"].(string)
+	tags, _ := metadata["tags"].(string)
+	credits, _ := metadata["credits"].(string)
 
-	if callback != "" {
-		w.Header().Set("Content-Type", "application/javascript")
-		_, err = w.Write([]byte(fmt.Sprintf("%s(%s);", callback, b)))
+	// TODO: make sure that min and max zoom always populated
+	minZoom, _ := metadata["minzoom"].(uint8)
+	maxZoom, _ := metadata["maxzoom"].(uint8)
+	// TODO: extract dpi from the image instead
+	var lods []arcGISLOD
+	for i := minZoom; i <= maxZoom; i++ {
+		scale, resolution := calcScaleResolution(i, dpi)
+		lods = append(lods, arcGISLOD{
+			Level:      i,
+			Resolution: resolution,
+			Scale:      scale,
+		})
+	}
+
+	minScale := lods[0].Scale
+	maxScale := lods[len(lods)-1].Scale
+
+	bounds, ok := metadata["bounds"].([]float32)
+	if !ok {
+		bounds = []float32{-180, -85, 180, 85} // default to world bounds
+	}
+	extent := geoBoundsToWMExtent(bounds)
+
+	tileInfo := map[string]interface{}{
+		"rows": 256,
+		"cols": 256,
+		"dpi":  dpi,
+		"origin": map[string]float32{
+			"x": -20037508.342787,
+			"y": 20037508.342787,
+		},
+		"spatialReference": webMercatorSR,
+		"lods":             lods,
+	}
+
+	documentInfo := map[string]string{
+		"Title":    name,
+		"Author":   attribution,
+		"Comments": "",
+		"Subject":  "",
+		"Category": "",
+		"Keywords": tags,
+		"Credits":  credits,
+	}
+
+	out := map[string]interface{}{
+		"currentVersion":            "10.4",
+		"id":                        ts.id,
+		"name":                      name,
+		"mapName":                   name,
+		"capabilities":              "Map,TilesOnly",
+		"description":               description,
+		"serviceDescription":        description,
+		"copyrightText":             attribution,
+		"singleFusedMapCache":       true,
+		"supportedImageFormatTypes": strings.ToUpper(imgFormat),
+		"units":                     "esriMeters",
+		"layers": []arcGISLayerStub{
+			{
+				ID:                0,
+				Name:              name,
+				ParentLayerID:     -1,
+				DefaultVisibility: true,
+				SubLayerIDs:       nil,
+				MinScale:          minScale,
+				MaxScale:          maxScale,
+			},
+		},
+		"tables":              []string{},
+		"spatialReference":    webMercatorSR,
+		"minScale":            minScale,
+		"maxScale":            maxScale,
+		"tileInfo":            tileInfo,
+		"documentInfo":        documentInfo,
+		"initialExtent":       extent,
+		"fullExtent":          extent,
+		"exportTilesAllowed":  false,
+		"maxExportTilesCount": 0,
+		"resampling":          false,
+	}
+
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return bytes, nil
+}
+
+// arcgisServiceHandler is an http.HandlerFunc that returns standard ArcGIS
+// JSON for a given ArcGIS tile service
+func (ts *Tileset) arcgisServiceHandler(w http.ResponseWriter, r *http.Request) {
+	svcJSON, err := ts.arcgisServiceJSON()
+
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("Could not render ArcGIS Service JSON for %v: %v", r.URL.Path, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(b)
-	return
-}
+	err = wrapJSONP(w, r, svcJSON)
 
-func (s *ServiceSet) arcgisService(id string, db *mbtiles.DB) handlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) (int, error) {
-		imgFormat := db.TileFormatString()
-		metadata, err := db.ReadMetadata()
-		if err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("Could not read metadata for tileset %v", id)
-		}
-		name, _ := metadata["name"].(string)
-		description, _ := metadata["description"].(string)
-		attribution, _ := metadata["attribution"].(string)
-		tags, _ := metadata["tags"].(string)
-		credits, _ := metadata["credits"].(string)
-
-		// TODO: make sure that min and max zoom always populated
-		minZoom, _ := metadata["minzoom"].(uint8)
-		maxZoom, _ := metadata["maxzoom"].(uint8)
-		// TODO: extract dpi from the image instead
-		var lods []arcGISLOD
-		for i := minZoom; i <= maxZoom; i++ {
-			scale, resolution := calcScaleResolution(i, dpi)
-			lods = append(lods, arcGISLOD{
-				Level:      i,
-				Resolution: resolution,
-				Scale:      scale,
-			})
-		}
-
-		minScale := lods[0].Scale
-		maxScale := lods[len(lods)-1].Scale
-
-		bounds, ok := metadata["bounds"].([]float32)
-		if !ok {
-			bounds = []float32{-180, -85, 180, 85} // default to world bounds
-		}
-		extent := geoBoundsToWMExtent(bounds)
-
-		tileInfo := map[string]interface{}{
-			"rows": 256,
-			"cols": 256,
-			"dpi":  dpi,
-			"origin": map[string]float32{
-				"x": -20037508.342787,
-				"y": 20037508.342787,
-			},
-			"spatialReference": webMercatorSR,
-			"lods":             lods,
-		}
-
-		documentInfo := map[string]string{
-			"Title":    name,
-			"Author":   attribution,
-			"Comments": "",
-			"Subject":  "",
-			"Category": "",
-			"Keywords": tags,
-			"Credits":  credits,
-		}
-
-		out := map[string]interface{}{
-			"currentVersion":            "10.4",
-			"id":                        id,
-			"name":                      name,
-			"mapName":                   name,
-			"capabilities":              "Map,TilesOnly",
-			"description":               description,
-			"serviceDescription":        description,
-			"copyrightText":             attribution,
-			"singleFusedMapCache":       true,
-			"supportedImageFormatTypes": strings.ToUpper(imgFormat),
-			"units":                     "esriMeters",
-			"layers": []arcGISLayerStub{
-				{
-					ID:                0,
-					Name:              name,
-					ParentLayerID:     -1,
-					DefaultVisibility: true,
-					SubLayerIDs:       nil,
-					MinScale:          minScale,
-					MaxScale:          maxScale,
-				},
-			},
-			"tables":              []string{},
-			"spatialReference":    webMercatorSR,
-			"minScale":            minScale,
-			"maxScale":            maxScale,
-			"tileInfo":            tileInfo,
-			"documentInfo":        documentInfo,
-			"initialExtent":       extent,
-			"fullExtent":          extent,
-			"exportTilesAllowed":  false,
-			"maxExportTilesCount": 0,
-			"resampling":          false,
-		}
-
-		bytes, err := json.Marshal(out)
-		if err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("cannot marshal ArcGIS service info JSON: %v", err)
-		}
-
-		return http.StatusOK, wrapJSONP(w, r, bytes)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("Could not render ArcGIS Service JSON to JSONP for %v: %v", r.URL.Path, err)
 	}
 }
 
-func (s *ServiceSet) arcgisLayers(id string, db *mbtiles.DB) handlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) (int, error) {
-		metadata, err := db.ReadMetadata()
-		if err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("Could not read metadata for tileset %v", id)
-		}
+// arcGISLayersJSON returns JSON for the layers in a given ArcGIS tile service
+func (ts *Tileset) arcgisLayersJSON() ([]byte, error) {
+	metadata, err := ts.db.ReadMetadata()
+	if err != nil {
+		return nil, err
+	}
 
-		name, _ := metadata["name"].(string)
-		description, _ := metadata["description"].(string)
-		attribution, _ := metadata["attribution"].(string)
+	name, _ := metadata["name"].(string)
+	description, _ := metadata["description"].(string)
+	attribution, _ := metadata["attribution"].(string)
 
-		bounds, ok := metadata["bounds"].([]float32)
-		if !ok {
-			bounds = []float32{-180, -85, 180, 85} // default to world bounds
-		}
-		extent := geoBoundsToWMExtent(bounds)
+	bounds, ok := metadata["bounds"].([]float32)
+	if !ok {
+		bounds = []float32{-180, -85, 180, 85} // default to world bounds
+	}
+	extent := geoBoundsToWMExtent(bounds)
 
-		minZoom, _ := metadata["minzoom"].(uint8)
-		maxZoom, _ := metadata["maxzoom"].(uint8)
-		minScale, _ := calcScaleResolution(minZoom, dpi)
-		maxScale, _ := calcScaleResolution(maxZoom, dpi)
+	minZoom, _ := metadata["minzoom"].(uint8)
+	maxZoom, _ := metadata["maxzoom"].(uint8)
+	minScale, _ := calcScaleResolution(minZoom, dpi)
+	maxScale, _ := calcScaleResolution(maxZoom, dpi)
 
-		// for now, just create a placeholder root layer
-		emptyArray := []interface{}{}
-		emptyLayerArray := []arcGISLayerStub{}
+	// for now, just create a placeholder root layer
+	emptyArray := []interface{}{}
+	emptyLayerArray := []arcGISLayerStub{}
 
-		var layers [1]arcGISLayer
-		layers[0] = arcGISLayer{
-			ID:                0,
-			DefaultVisibility: true,
-			ParentLayer:       nil,
-			Name:              name,
-			Description:       description,
-			Extent:            extent,
-			MinScale:          minScale,
-			MaxScale:          maxScale,
-			CopyrightText:     attribution,
-			HTMLPopupType:     "esriServerHTMLPopupTypeAsHTMLText",
-			Fields:            emptyArray,
-			Relationships:     emptyArray,
-			SubLayers:         emptyLayerArray,
-			CurrentVersion:    10.4,
-			Capabilities:      "Map",
-		}
+	var layers [1]arcGISLayer
+	layers[0] = arcGISLayer{
+		ID:                0,
+		DefaultVisibility: true,
+		ParentLayer:       nil,
+		Name:              name,
+		Description:       description,
+		Extent:            extent,
+		MinScale:          minScale,
+		MaxScale:          maxScale,
+		CopyrightText:     attribution,
+		HTMLPopupType:     "esriServerHTMLPopupTypeAsHTMLText",
+		Fields:            emptyArray,
+		Relationships:     emptyArray,
+		SubLayers:         emptyLayerArray,
+		CurrentVersion:    10.4,
+		Capabilities:      "Map",
+	}
 
-		out := map[string]interface{}{
-			"layers": layers,
-		}
+	out := map[string]interface{}{
+		"layers": layers,
+	}
 
-		bytes, err := json.Marshal(out)
-		if err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("cannot marshal ArcGIS layer info JSON: %v", err)
-		}
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return bytes, nil
+}
 
-		return http.StatusOK, wrapJSONP(w, r, bytes)
+// arcgisLayersHandler is an http.HandlerFunc that returns standard ArcGIS
+// Layers JSON for a given ArcGIS tile service
+func (ts *Tileset) arcgisLayersHandler(w http.ResponseWriter, r *http.Request) {
+	layersJSON, err := ts.arcgisLayersJSON()
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("Could not render ArcGIS layer JSON for %v: %v", r.URL.Path, err)
+		return
+	}
+
+	err = wrapJSONP(w, r, layersJSON)
+
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("Could not render ArcGIS layers JSON to JSONP for %v: %v", r.URL.Path, err)
 	}
 }
 
-func (s *ServiceSet) arcgisLegend(id string, db *mbtiles.DB) handlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) (int, error) {
+// arcgisLegendJSON returns minimal ArcGIS legend JSON for a given ArcGIS
+// tile service.  Legend elements are not yet supported.
+func (ts *Tileset) arcgisLegendJSON() ([]byte, error) {
+	metadata, err := ts.db.ReadMetadata()
+	if err != nil {
+		return nil, err
+	}
 
-		metadata, err := db.ReadMetadata()
-		if err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("Could not read metadata for tileset %v", id)
-		}
+	name, _ := metadata["name"].(string)
 
-		name, _ := metadata["name"].(string)
+	// TODO: pull the legend from ArcGIS specific metadata tables
+	var elements [0]interface{}
+	var layers [1]map[string]interface{}
 
-		// TODO: pull the legend from ArcGIS specific metadata tables
-		var elements [0]interface{}
-		var layers [1]map[string]interface{}
+	layers[0] = map[string]interface{}{
+		"layerId":   0,
+		"layerName": name,
+		"layerType": "",
+		"minScale":  0,
+		"maxScale":  0,
+		"legend":    elements,
+	}
 
-		layers[0] = map[string]interface{}{
-			"layerId":   0,
-			"layerName": name,
-			"layerType": "",
-			"minScale":  0,
-			"maxScale":  0,
-			"legend":    elements,
-		}
+	out := map[string]interface{}{
+		"layers": layers,
+	}
 
-		out := map[string]interface{}{
-			"layers": layers,
-		}
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return bytes, nil
+}
 
-		bytes, err := json.Marshal(out)
-		if err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("cannot marshal ArcGIS legend info JSON: %v", err)
-		}
-		return http.StatusOK, wrapJSONP(w, r, bytes)
+// arcgisLegendHandler is an http.HandlerFunc that returns minimal ArcGIS
+// legend JSON for a given ArcGIS tile service
+func (ts *Tileset) arcgisLegendHandler(w http.ResponseWriter, r *http.Request) {
+	legendJSON, err := ts.arcgisLegendJSON()
+
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("Could not render ArcGIS legend JSON for %v: %v", r.URL.Path, err)
+		return
+	}
+
+	err = wrapJSONP(w, r, legendJSON)
+
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("Could not render ArcGIS legend JSON to JSONP for %v: %v", r.URL.Path, err)
 	}
 }
 
-func (s *ServiceSet) arcgisTiles(db *mbtiles.DB) handlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) (int, error) {
-		// split path components to extract tile coordinates x, y and z
-		pcs := strings.Split(r.URL.Path[1:], "/")
-		// strip off /arcgis/rest/services/ and then
-		// we should have at least <id> , "MapServer", "tiles", <z>, <y>, <x>
-		l := len(pcs)
-		if l < 6 || pcs[5] == "" {
-			return http.StatusBadRequest, fmt.Errorf("requested path is too short")
-		}
-		z, y, x := pcs[l-3], pcs[l-2], pcs[l-1]
-		tc, _, err := tileCoordFromString(z, x, y)
+// arcgisTileHandler returns an image tile or blank image for a given
+// tile request within a given ArcGIS tile service
+func (ts *Tileset) arcgisTileHandler(w http.ResponseWriter, r *http.Request) {
+	db := ts.db
+
+	// split path components to extract tile coordinates x, y and z
+	pcs := strings.Split(r.URL.Path[1:], "/")
+	// strip off /arcgis/rest/services/ and then
+	// we should have at least <id> , "MapServer", "tiles", <z>, <y>, <x>
+	l := len(pcs)
+	if l < 6 || pcs[5] == "" {
+		http.Error(w, "requested path is too short", http.StatusBadRequest)
+		return
+	}
+	z, y, x := pcs[l-3], pcs[l-2], pcs[l-1]
+	tc, _, err := tileCoordFromString(z, x, y)
+	if err != nil {
+		http.Error(w, "invalid tile coordinates", http.StatusBadRequest)
+		return
+	}
+
+	var data []byte
+	err = db.ReadTile(tc.z, tc.x, tc.y, &data)
+
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("cannot fetch tile from DB for z=%d, x=%d, y=%d for %v: %v", tc.z, tc.x, tc.y, r.URL.Path, err)
+		return
+	}
+
+	if data == nil || len(data) <= 1 {
+		// Return blank PNG for all image types
+		w.Header().Set("Content-Type", "image/png")
+		_, err = w.Write(BlankPNG())
+
 		if err != nil {
-			return http.StatusBadRequest, err
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			ts.svc.logError("could not return blank image for %v: %v", r.URL.Path, err)
 		}
-
-		var data []byte
-		err = db.ReadTile(tc.z, tc.x, tc.y, &data)
+	} else {
+		w.Header().Set("Content-Type", db.ContentType())
+		_, err = w.Write(data)
 
 		if err != nil {
-			// augment error info
-			t := "tile"
-			err = fmt.Errorf("cannot fetch %s from DB for z=%d, x=%d, y=%d: %v", t, tc.z, tc.x, tc.y, err)
-			return http.StatusInternalServerError, err
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			ts.svc.logError("could not write tile data to response for %v: %v", r.URL.Path, err)
 		}
-
-		if data == nil || len(data) <= 1 {
-			// Return blank PNG for all image types
-			w.Header().Set("Content-Type", "image/png")
-			_, err = w.Write(BlankPNG())
-		} else {
-			w.Header().Set("Content-Type", db.ContentType())
-			_, err = w.Write(data)
-		}
-
-		return http.StatusOK, err
 	}
 }
 
@@ -335,13 +374,6 @@ func geoBoundsToWMExtent(bounds []float32) arcGISExtent {
 		Ymax:             ymax,
 		SpatialReference: webMercatorSR,
 	}
-}
-
-func calcScaleResolution(zoomLevel uint8, dpi uint8) (float64, float64) {
-	var denom = 1 << zoomLevel
-	resolution := initialResolution / float64(denom)
-	scale := float64(dpi) * 39.37 * resolution // 39.37 in/m
-	return scale, resolution
 }
 
 // Cast interface to a string if not nil, otherwise empty string
@@ -370,17 +402,18 @@ func geoToMercator(longitude, latitude float64) (float64, float64) {
 // ArcGISHandler returns a http.Handler that serves the ArcGIS endpoints of the ServiceSet.
 // The function ef is called with any occurring error if it is non-nil, so it
 // can be used for e.g. logging with logging facilities of the caller.
-func (s *ServiceSet) ArcGISHandler(ef func(error)) http.Handler {
-	m := http.NewServeMux()
-	rootPath := "/arcgis/rest/services/"
+// func (s *ServiceSet) ArcGISHandler(ef func(error)) http.Handler {
+// 	m := http.NewServeMux()
 
-	for id, db := range s.tilesets {
-		p := rootPath + id + "/MapServer"
-		m.Handle(p, wrapGetWithErrors(ef, hmacAuth(s.arcgisService(id, db), s.secretKey, id)))
-		m.Handle(p+"/layers", wrapGetWithErrors(ef, hmacAuth(s.arcgisLayers(id, db), s.secretKey, id)))
-		m.Handle(p+"/legend", wrapGetWithErrors(ef, hmacAuth(s.arcgisLegend(id, db), s.secretKey, id)))
+// 	root := "/arcgis/rest/services/"
 
-		m.Handle(p+"/tile/", wrapGetWithErrors(ef, hmacAuth(s.arcgisTiles(db), s.secretKey, id)))
-	}
-	return m
-}
+// 	for id, ts := range s.tilesets {
+// 		prefix := root + id + "/MapServer"
+// 		m.Handle(prefix, wrapGetWithErrors(ef, hmacAuth(ts.arcgisServiceHandler(), s.secretKey, id)))
+// 		m.Handle(prefix+"/layers", wrapGetWithErrors(ef, hmacAuth(ts.arcgisLayersHandler(), s.secretKey, id)))
+// 		m.Handle(prefix+"/legend", wrapGetWithErrors(ef, hmacAuth(ts.arcgisLegendHandler(), s.secretKey, id)))
+
+// 		m.Handle(prefix+"/tile/", wrapGetWithErrors(ef, hmacAuth(ts.arcgisTileHandler(), s.secretKey, id)))
+// 	}
+// 	return m
+// }

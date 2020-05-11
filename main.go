@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"golang.org/x/crypto/acme"
@@ -14,6 +15,7 @@ import (
 
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -46,7 +48,7 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		if reload {
+		if enableReloadSignal {
 			if isChild := os.Getenv("MBTS_IS_CHILD"); isChild != "" {
 				serve()
 			} else {
@@ -59,34 +61,49 @@ var rootCmd = &cobra.Command{
 }
 
 var (
-	port        int
-	tilePath    string
-	certificate string
-	privateKey  string
-	pathPrefix  string
-	domain      string
-	secretKey   string
-	sentryDSN   string
-	verbose     bool
-	autotls     bool
-	redirect    bool
-	reload      bool
+	port               int
+	tilePath           string
+	certificate        string
+	privateKey         string
+	rootURLStr         string
+	domain             string
+	secretKey          string
+	sentryDSN          string
+	verbose            bool
+	autotls            bool
+	redirect           bool
+	enableReloadSignal bool
+	generateIDs        bool
+	enableArcGIS       bool
+	disablePreview     bool
+	disableTileJSON    bool
+	disableServiceList bool
+	tilesOnly          bool
 )
 
 func init() {
 	flags := rootCmd.Flags()
 	flags.IntVarP(&port, "port", "p", -1, "Server port. Default is 443 if --cert or --tls options are used, otherwise 8000.")
-	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.")
+	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.  Can be a comma-delimited list of directories.")
+	flags.BoolVarP(&generateIDs, "generate-ids", "", false, "Automatically generate tileset IDs instead of using relative path")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
-	flags.StringVar(&pathPrefix, "path", "", "URL root path of this server (if behind a proxy)")
+	flags.StringVar(&rootURLStr, "root-url", "/services", "Root URL of services endpoint")
 	flags.StringVar(&domain, "domain", "", "Domain name of this server.  NOTE: only used for AutoTLS.")
 	flags.StringVarP(&secretKey, "secret-key", "s", "", "Shared secret key used for HMAC request authentication")
-	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
-	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
-	flags.BoolVarP(&reload, "enable-reload", "", false, "Enable graceful reload")
+
+	flags.BoolVarP(&enableArcGIS, "enable-arcgis", "", false, "Enable ArcGIS Mapserver endpoints")
+	flags.BoolVarP(&enableReloadSignal, "enable-reload-signal", "", false, "Enable graceful reload using HUP signal to the server process")
+
+	flags.BoolVarP(&disablePreview, "disable-preview", "", false, "Disable map preview for each tileset (enabled by default)")
+	flags.BoolVarP(&disableTileJSON, "disable-tilejson", "", false, "Disable TileJSON endpoint for each tileset (enabled by default)")
+	flags.BoolVarP(&disableServiceList, "disable-svc-list", "", false, "Disable services list endpoint (enabled by default)")
+	flags.BoolVarP(&tilesOnly, "tiles-only", "", false, "Only enable tile endpoints (shortcut for --disable-svc-list --disable-tilejson --disable-preview)")
+
+	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
+	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 
 	if env := os.Getenv("PORT"); env != "" {
 		p, err := strconv.Atoi(env)
@@ -100,6 +117,14 @@ func init() {
 		tilePath = env
 	}
 
+	if env := os.Getenv("GENERATE_IDS"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("GENERATE_IDS must be a bool(true/false)")
+		}
+		generateIDs = p
+	}
+
 	if env := os.Getenv("TLS_CERT"); env != "" {
 		certificate = env
 	}
@@ -108,24 +133,15 @@ func init() {
 		privateKey = env
 	}
 
-	if env := os.Getenv("PATH_PREFIX"); env != "" {
-		pathPrefix = env
+	if env := os.Getenv("ROOT_URL"); env != "" {
+		rootURLStr = env
 	}
 
 	if env := os.Getenv("DOMAIN"); env != "" {
 		domain = env
 	}
-
-	if env := os.Getenv("DSN"); env != "" {
-		sentryDSN = env
-	}
-
-	if env := os.Getenv("VERBOSE"); env != "" {
-		p, err := strconv.ParseBool(env)
-		if err != nil {
-			log.Fatalln("VERBOSE must be a bool(true/false)")
-		}
-		verbose = p
+	if secretKey == "" {
+		secretKey = os.Getenv("HMAC_SECRET_KEY")
 	}
 
 	if env := os.Getenv("AUTO_TLS"); env != "" {
@@ -144,8 +160,24 @@ func init() {
 		redirect = p
 	}
 
-	if secretKey == "" {
-		secretKey = os.Getenv("HMAC_SECRET_KEY")
+	if env := os.Getenv("DSN"); env != "" {
+		sentryDSN = env
+	}
+
+	if env := os.Getenv("ENABLE_ARCGIS"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("ENABLE_ARCGIS must be a bool(true/false)")
+		}
+		enableArcGIS = p
+	}
+
+	if env := os.Getenv("VERBOSE"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("VERBOSE must be a bool(true/false)")
+		}
+		verbose = p
 	}
 }
 
@@ -175,16 +207,30 @@ func serve() {
 		log.Debugln("Added logging hook for Sentry")
 	}
 
+	if tilesOnly {
+		disableServiceList = true
+		disableTileJSON = true
+		disablePreview = true
+	}
+
+	if !strings.HasPrefix(rootURLStr, "/") {
+		log.Fatalln("Value for --root-url must start with \"/\"")
+	}
+	if strings.HasSuffix(rootURLStr, "/") {
+		log.Fatalln("Value for --root-url must not end with \"/\"")
+	}
+
+	rootURL, err := url.Parse(rootURLStr)
+	if err != nil {
+		log.Fatalf("Could not parse --root-url value %q\n", rootURLStr)
+	}
+
 	certExists := len(certificate) > 0
 	keyExists := len(privateKey) > 0
 	domainExists := len(domain) > 0
 
 	if certExists != keyExists {
 		log.Fatalln("Both certificate and private key are required to use SSL")
-	}
-
-	if len(pathPrefix) > 0 && !domainExists {
-		log.Fatalln("Domain is required if path is provided")
 	}
 
 	if autotls && !domainExists {
@@ -199,14 +245,52 @@ func serve() {
 		log.Fatalln("Certificate or tls options are required to use redirect")
 	}
 
-	svcSet, err := handlers.NewFromBaseDir(tilePath)
-	if err != nil {
-		log.Errorf("Unable to create services for mbtiles in '%v': %v\n", tilePath, err)
-	}
-
 	if len(secretKey) > 0 {
 		log.Infoln("An HMAC request authorization key was set.  All incoming must be signed.")
-		svcSet.SetRequestAuthKey(secretKey)
+	}
+
+	svcSet, err := handlers.New(&handlers.ServiceSetConfig{
+		RootURL:           rootURL,
+		ErrorWriter:       &errorLogger{log: log.New()},
+		EnableServiceList: !disableServiceList,
+		EnableTileJSON:    !disableTileJSON,
+		EnablePreview:     !disablePreview,
+		EnableArcGIS:      enableArcGIS,
+	})
+	if err != nil {
+		log.Fatalln("Could not construct ServiceSet")
+	}
+
+	for _, path := range strings.Split(tilePath, ",") {
+		// Discover all tilesets
+		log.Infof("Searching for tilesets in %v\n", path)
+		filenames, err := mbtiles.ListDBs(path)
+		if err != nil {
+			log.Errorf("Unable to list mbtiles in '%v': %v\n", path, err)
+		}
+		if len(filenames) == 0 {
+			log.Errorf("No tilesets found in %s", path)
+		}
+
+		// Register all tilesets
+		for _, filename := range filenames {
+			var id string
+			var err error
+			if generateIDs {
+				id = handlers.SHA1ID(filename)
+			} else {
+				id, err = handlers.RelativePathID(filename, path)
+				if err != nil {
+					log.Errorf("Could not generate ID for tileset: %q", filename)
+					continue
+				}
+			}
+
+			err = svcSet.AddTileset(filename, id)
+			if err != nil {
+				log.Errorf("Could not add tileset for %q with ID %q\n%v", filename, id, err)
+			}
+		}
 	}
 
 	// print number of services
@@ -215,28 +299,22 @@ func serve() {
 	e := echo.New()
 	e.HideBanner = true
 	e.Pre(middleware.RemoveTrailingSlash())
-	if verbose {
-		e.Use(middleware.Logger())
-	}
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
-	gzip := middleware.Gzip()
-
-	staticPrefix := "/static"
-	if pathPrefix != "" {
-		staticPrefix = "/" + pathPrefix + staticPrefix
+	// log all requests if verbose mode
+	if verbose {
+		e.Use(middleware.Logger())
 	}
-	staticHandler := http.StripPrefix(staticPrefix, handlers.Static())
-	e.GET(staticPrefix+"*", echo.WrapHandler(staticHandler), gzip)
 
-	ef := func(err error) {
-		log.Errorf("%v", err)
+	// setup auth middleware if secret key is set
+	if secretKey != "" {
+		hmacAuth := handlers.HMACAuthMiddleware(secretKey, svcSet)
+		e.Use(echo.WrapMiddleware(hmacAuth))
 	}
-	h := echo.WrapHandler(svcSet.Handler(ef, true))
-	e.GET("/*", h)
-	a := echo.WrapHandler(svcSet.ArcGISHandler(ef))
-	e.GET("/arcgis/rest/services/*", a)
+
+	// Get HTTP.Handler for the service set, and wrap for use in echo
+	e.GET("/*", echo.WrapHandler(svcSet.Handler()))
 
 	// Start the server
 	fmt.Println("\n--------------------------------------")
@@ -256,7 +334,7 @@ func serve() {
 
 	var listener net.Listener
 
-	if reload {
+	if enableReloadSignal {
 		f := os.NewFile(3, "")
 		listener, err = net.FileListener(f)
 	} else {
@@ -271,7 +349,7 @@ func serve() {
 
 	// Listen for SIGHUP (graceful shutdown)
 	go func(e *echo.Echo) {
-		if !reload {
+		if !enableReloadSignal {
 			return
 		}
 
@@ -429,4 +507,15 @@ func supervise() {
 		fmt.Println("\nReloading...")
 		fmt.Println("")
 	}
+}
+
+// errorLogger wraps logrus logger so that we can pass it into the handlers
+type errorLogger struct {
+	log *log.Logger
+}
+
+// It implements the required io.Writer interface
+func (el *errorLogger) Write(p []byte) (n int, err error) {
+	el.log.Errorln(string(p))
+	return len(p), nil
 }
