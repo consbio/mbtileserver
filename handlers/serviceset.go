@@ -248,10 +248,14 @@ func (s *ServiceSet) Handler() http.Handler {
 
 	if s.enableServiceList {
 		m.HandleFunc(s.rootURL.Path, s.serviceListHandler)
+	} else {
+		m.Handle(s.rootURL.Path, http.NotFoundHandler())
 	}
 
 	if s.enableArcGIS {
 		m.HandleFunc(ArcGISRoot, s.tilesetHandler)
+	} else {
+		m.Handle(ArcGISRoot, http.NotFoundHandler())
 	}
 
 	return m
