@@ -196,7 +196,7 @@ server {
    <other config options>
 
     location /services {
-        proxy_set_header Host $http_host;
+        proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $server_name;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_pass http://localhost:8000;
