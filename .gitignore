@@ -7,3 +7,4 @@ mbtileserver
 *.pem
 .certs/*
 **/node_modules/*
+coverage*

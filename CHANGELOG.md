@@ -50,6 +50,7 @@ Most of the updates are demonstrated in `main.go`.
 -   Upgraded Docker containers to Go 1.16
 -   Now requires Go 1.13+
 -   Removed `vendor` directory
+-   Switched from Travis-CI to Github actions for running tests
 
 ### Command-line interface
 
