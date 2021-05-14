@@ -1,12 +1,12 @@
-version: '3'
+version: "3"
 
 services:
-  mbtileserver:
-    image: consbio/mbtileserver:latest
-    container_name: mbtileserver
-    entrypoint: /mbtileserver --enable-reload
-    restart: always
-    ports:
-      - 8080:8000
-    volumes:
-      - ./mbtiles/testdata:/tilesets
+    mbtileserver:
+        image: consbio/mbtileserver:latest
+        container_name: mbtileserver
+        entrypoint: /mbtileserver --enable-reload-signal
+        restart: always
+        ports:
+            - 8080:8000
+        volumes:
+            - ./mbtiles/testdata:/tilesets
