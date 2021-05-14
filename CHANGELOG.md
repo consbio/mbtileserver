@@ -1,56 +1,15 @@
 # Changelog
 
-## O.7 (in progress)
-
-This version involved a significant refactor of internal functionality and HTTP
-handlers to provide better ability to modify services at runtime, provide
-granular control over the endpoints that are exposed, and cleanup handling
-of middleware.
-
-Most internal HTTP handlers for `ServiceSet` and `Tileset` in the
-`github.com/consbio/mbtileserver/handlers` package are now `http.HandlerFunc`s
-instead of custom handlers that returned status codes or errors as in the previous
-versions.
-
-The internal routing within these handlers has been modified to enable
-tilesets to change at runtime. Previously, we were using an `http.ServeMux`
-for all routes, which breaks when the `Tileset` instances pointed to by those
-routes have changed at runtime. Now, the top-level `ServiceSet.Handler()`
-allows dynamic routing to any `Tileset` instances currently published. Each
-`Tileset` is now responsible for routing to its subpaths (e.g., tile endpoint).
-
-The singular public handler endpoint is still an `http.Handler` instance but
-no longer takes any parameters. Those parameters are now handled using
-configuration options instead.
-
-`ServiceSet` now enables configuration to set the root URL, toggle which endpoints
-are exposed and set the internal error logger. These are passed in using a
-`ServiceSetConfig` struct when the service is constructed; these configuration
-options are not modifiable at runtime.
-
-`Tileset` instances are now created individually from a set of source `mbtiles`
-files, instead of generated within `ServiceSet` from a directory. This provides
-more granular control over assigning IDs to tilesets as well as creating,
-updating, or deleting `Tileset` instances. You must generate unique IDs for
-tilesets before adding to the `ServiceSet`; you can use
-`handlers.SHA1ID(filename)` to generate a unique SHA1 ID of the service based on
-its full filename path, or `handlers.RelativePathID(filename, tilePath)` to
-generate the ID from its path and filename within the tile directory `tilePath`.
-
-HMAC authorization has been refactored into middleware external to the Go API.
-It now is instantiated as middleware in `main.go`; this provides better
-separation of concerns between the server (`main.go`) and the Go API. The API
-for interacting with HMAC authorization from the CLI or endpoints remains the
-same.
-
-Most of the updates are demonstrated in `main.go`.
+## O.7
 
 ### General changes
 
--   Upgraded Docker containers to Go 1.16
--   Now requires Go 1.13+
--   Removed `vendor` directory
--   Switched from Travis-CI to Github actions for running tests
+-   substantial changes to internal functionality and HTTP handlers, see details below
+-   now requires Go 1.13+
+-   upgraded Docker containers to Go 1.16
+-   upgraded Go version used for release to Go 1.16
+-   removed `vendor` directory; no longer needed for Go 1.13
+-   switched from Travis-CI to Github actions for running tests
 
 ### Command-line interface
 
@@ -95,6 +54,51 @@ Most of the updates are demonstrated in `main.go`.
 ### Bug fixes
 
 -   Fixed WebP parsing, now uses simplified check for a `RIFF` header (WebP is only likely RIFF format to be stored in tiles). #98, #110
+
+### Details
+
+This version involved a significant refactor of internal functionality and HTTP
+handlers to provide better ability to modify services at runtime, provide
+granular control over the endpoints that are exposed, and cleanup handling
+of middleware.
+
+Most internal HTTP handlers for `ServiceSet` and `Tileset` in the
+`github.com/consbio/mbtileserver/handlers` package are now `http.HandlerFunc`s
+instead of custom handlers that returned status codes or errors as in the previous
+versions.
+
+The internal routing within these handlers has been modified to enable
+tilesets to change at runtime. Previously, we were using an `http.ServeMux`
+for all routes, which breaks when the `Tileset` instances pointed to by those
+routes have changed at runtime. Now, the top-level `ServiceSet.Handler()`
+allows dynamic routing to any `Tileset` instances currently published. Each
+`Tileset` is now responsible for routing to its subpaths (e.g., tile endpoint).
+
+The singular public handler endpoint is still an `http.Handler` instance but
+no longer takes any parameters. Those parameters are now handled using
+configuration options instead.
+
+`ServiceSet` now enables configuration to set the root URL, toggle which endpoints
+are exposed and set the internal error logger. These are passed in using a
+`ServiceSetConfig` struct when the service is constructed; these configuration
+options are not modifiable at runtime.
+
+`Tileset` instances are now created individually from a set of source `mbtiles`
+files, instead of generated within `ServiceSet` from a directory. This provides
+more granular control over assigning IDs to tilesets as well as creating,
+updating, or deleting `Tileset` instances. You must generate unique IDs for
+tilesets before adding to the `ServiceSet`; you can use
+`handlers.SHA1ID(filename)` to generate a unique SHA1 ID of the service based on
+its full filename path, or `handlers.RelativePathID(filename, tilePath)` to
+generate the ID from its path and filename within the tile directory `tilePath`.
+
+HMAC authorization has been refactored into middleware external to the Go API.
+It now is instantiated as middleware in `main.go`; this provides better
+separation of concerns between the server (`main.go`) and the Go API. The API
+for interacting with HMAC authorization from the CLI or endpoints remains the
+same.
+
+Most of the updates are demonstrated in `main.go`.
 
 ## 0.6.1
 
