@@ -48,6 +48,8 @@ Most of the updates are demonstrated in `main.go`.
 ### General changes
 
 -   Upgraded Docker containers to Go 1.16
+-   Now requires Go 1.13+
+-   Removed `vendor` directory
 
 ### Command-line interface
 
