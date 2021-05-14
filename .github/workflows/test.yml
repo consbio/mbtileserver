@@ -18,8 +18,8 @@ jobs:
       - name: Install GCC (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
-          apt update
-          apt install -y gcc-multilib g++-multilib
+          sudo apt update
+          sudo apt install -y gcc-multilib g++-multilib
         shell: bash
       - name: Install Go
         uses: actions/setup-go@v2
@@ -35,8 +35,8 @@ jobs:
     steps:
       - name: Install GCC (Ubuntu)
         run: |
-          apt update
-          apt install -y gcc-multilib g++-multilib
+          sudo apt update
+          sudo apt install -y gcc-multilib g++-multilib
         shell: bash
       - name: Install Go
         if: success()
