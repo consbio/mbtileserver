@@ -436,12 +436,13 @@ to pull in the static dependencies. These are referenced in the
 Then to build the minified version, run:
 
 ```bash
-$  gulp build
+$  npm run build
 ```
 
 Modifying the `.go` files always requires re-running `go build .`.
 
-In case you have modified the templates and static assets, you need to run `go generate ./handlers/templates.go` to ensure that your modifications
+In case you have modified the templates and static assets, you need to run
+`go generate ./handlers/templates.go` to ensure that your modifications
 are embedded into the executable. For this to work, you must have
 [github.com/shurcooL/vfsgen)[https://github.com/shurcooL/vfsgen) installed.
 
@@ -451,11 +452,6 @@ $  go generate ./handlers/templates.go
 
 This will rewrite the `assets_vfsdata.go` which you must commit along with your
 modification. You should run `go build` after `go generate`.
-
-During the development cycle you may use `go build -tags dev .` to build the
-binary, in which case it will always take the assets from the relative file
-path `handlers/templates/` directly and you can omit the `go generate` step. (note: this is currently not working properly)
-But do not forget to perform it in the end.
 
 ## Changes
 
