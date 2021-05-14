@@ -47,6 +47,8 @@ Most of the updates are demonstrated in `main.go`.
 
 ### General changes
 
+-   Upgraded Docker containers to Go 1.16
+
 ### Command-line interface
 
 -   added support for automatically generating unique tileset IDs using `--generate-ids` option
@@ -86,6 +88,10 @@ Most of the updates are demonstrated in `main.go`.
     `ServiceSet.AddTileset()` for each `Tileset` to register.
 -   removed `ServiceSet.AddDBOnPath()`; this is replaced by calling
     `ServiceSet.AddTileset()` for each `Tileset` to register.
+
+### Bug fixes
+
+-   Fixed WebP parsing, now uses simplified check for a `RIFF` header (WebP is only likely RIFF format to be stored in tiles). #98, #110
 
 ## 0.6.1
 

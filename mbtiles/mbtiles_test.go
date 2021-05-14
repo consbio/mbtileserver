@@ -10,8 +10,8 @@ func Test_ListDBs(t *testing.T) {
 	var expected = []string{
 		"testdata/geography-class-jpg.mbtiles",
 		"testdata/geography-class-png.mbtiles",
+		"testdata/geography-class-webp.mbtiles",
 		"testdata/world_cities.mbtiles",
-		"testdata/openstreetmap/open-streets-dc.mbtiles",
 	}
 
 	filenames, err := mbtiles.ListDBs("./testdata")
