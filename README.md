@@ -166,19 +166,28 @@ OR
 Host:
 Set `Host` and `X-Forwarded-Host`.
 
-#### Caddy Example:
+#### Caddy v2 Example:
 
 For `mbtileserver` running on port 8000 locally, add the following to the block for your domain name:
 
 ```
 <domain_name> {
-    proxy /services localhost:8000 {
-        transparent
-    }
+  route /services* {
+    reverse_proxy localhost:8000
+  }
 }
 ```
 
-Using `transparent` [preset](https://caddyserver.com/v1/docs/proxy) for the `proxy` settings instructs `Caddy` to automatically set appropriate headers.
+You may want to consider adding cache control headers within the `route` block
+depending on how often the contents of your tilesets change. For instance,
+to prevent clients from caching tiles longer than 1 hour:
+
+```
+  route /services* {
+    header Cache-Control "public, max-age=3600, must-revalidate"
+    localhost mbtileserver:8000
+  }
+```
 
 #### NGINX Example:
 
