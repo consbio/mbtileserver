@@ -2,3 +2,4 @@
 **/node_modules
 mbtiles/testdata/*
 mbtiles/testdata-bad/*
+deployment/*

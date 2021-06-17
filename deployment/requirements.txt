@@ -1,0 +1,10 @@
+# aws cdk
+aws-cdk.core~=1.108.1
+aws-cdk.aws_ecs~=1.108.1
+aws-cdk.aws_ec2~=1.108.1
+aws-cdk.aws_autoscaling~=1.108.1
+aws-cdk.aws_ecs_patterns~=1.108.1
+
+# pydantic settings
+pydantic
+python-dotenv

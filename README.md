@@ -1,5 +1,8 @@
 # mbtileserver
 
+**This has been forked for the NASA IMPACT project to modify the Docker image to sync mbtiles from S3
+and add scripts for ECS deployment. Instructions for deploy are [here](deployment/README.md).**
+
 A simple Go-based server for map tiles stored in [mbtiles](https://github.com/mapbox/mbtiles-spec)
 format.
 

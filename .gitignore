@@ -1,3 +1,5 @@
+.env
+__pycache__/
 tilesets/*
 .idea/*
 .DS_Store
