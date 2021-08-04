@@ -8,7 +8,7 @@ import (
 )
 
 type arcGISLOD struct {
-	Level      uint8   `json:"level"`
+	Level      int   `json:"level"`
 	Resolution float64 `json:"resolution"`
 	Scale      float64 `json:"scale"`
 }
@@ -81,8 +81,8 @@ func (ts *Tileset) arcgisServiceJSON() ([]byte, error) {
 	credits, _ := metadata["credits"].(string)
 
 	// TODO: make sure that min and max zoom always populated
-	minZoom, _ := metadata["minzoom"].(uint8)
-	maxZoom, _ := metadata["maxzoom"].(uint8)
+	minZoom, _ := metadata["minzoom"].(int)
+	maxZoom, _ := metadata["maxzoom"].(int)
 	// TODO: extract dpi from the image instead
 	var lods []arcGISLOD
 	for i := minZoom; i <= maxZoom; i++ {
@@ -137,17 +137,17 @@ func (ts *Tileset) arcgisServiceJSON() ([]byte, error) {
 		"singleFusedMapCache":       true,
 		"supportedImageFormatTypes": strings.ToUpper(imgFormat),
 		"units":                     "esriMeters",
-		"layers": []arcGISLayerStub{
-			{
-				ID:                0,
-				Name:              name,
-				ParentLayerID:     -1,
-				DefaultVisibility: true,
-				SubLayerIDs:       nil,
-				MinScale:          minScale,
-				MaxScale:          maxScale,
-			},
-		},
+		// "layers": []arcGISLayerStub{
+		// 	{
+		// 		ID:                0,
+		// 		Name:              name,
+		// 		ParentLayerID:     -1,
+		// 		DefaultVisibility: true,
+		// 		SubLayerIDs:       nil,
+		// 		MinScale:          minScale,
+		// 		MaxScale:          maxScale,
+		// 	},
+		// },
 		"tables":              []string{},
 		"spatialReference":    webMercatorSR,
 		"minScale":            minScale,
@@ -159,6 +159,7 @@ func (ts *Tileset) arcgisServiceJSON() ([]byte, error) {
 		"exportTilesAllowed":  false,
 		"maxExportTilesCount": 0,
 		"resampling":          false,
+		"supportsDynamicLayers": false,
 	}
 
 	bytes, err := json.Marshal(out)
@@ -204,8 +205,8 @@ func (ts *Tileset) arcgisLayersJSON() ([]byte, error) {
 	}
 	extent := geoBoundsToWMExtent(bounds)
 
-	minZoom, _ := metadata["minzoom"].(uint8)
-	maxZoom, _ := metadata["maxzoom"].(uint8)
+	minZoom, _ := metadata["minzoom"].(int)
+	maxZoom, _ := metadata["maxzoom"].(int)
 	minScale, _ := calcScaleResolution(minZoom, dpi)
 	maxScale, _ := calcScaleResolution(maxZoom, dpi)
 
@@ -336,6 +337,8 @@ func (ts *Tileset) arcgisTileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var data []byte
+	// flip y to match the spec
+	tc.y = (1 << uint64(tc.z)) - 1 - tc.y
 	err = db.ReadTile(tc.z, tc.x, tc.y, &data)
 
 	if err != nil {
