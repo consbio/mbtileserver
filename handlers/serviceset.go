@@ -17,6 +17,7 @@ type ServiceSetConfig struct {
 	EnableTileJSON    bool
 	EnablePreview     bool
 	EnableArcGIS      bool
+	EnableWMTS	      bool
 	RootURL           *url.URL
 	ErrorWriter       io.Writer
 }

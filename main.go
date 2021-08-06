@@ -75,6 +75,7 @@ var (
 	enableReloadSignal bool
 	generateIDs        bool
 	enableArcGIS       bool
+	enableWMTS	       bool
 	disablePreview     bool
 	disableTileJSON    bool
 	disableServiceList bool
@@ -95,6 +96,7 @@ func init() {
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 
 	flags.BoolVarP(&enableArcGIS, "enable-arcgis", "", false, "Enable ArcGIS Mapserver endpoints")
+	flags.BoolVarP(&enableWMTS, "enable-wmts", "", true, "Enable WMTS endpoints BETA")
 	flags.BoolVarP(&enableReloadSignal, "enable-reload-signal", "", false, "Enable graceful reload using HUP signal to the server process")
 
 	flags.BoolVarP(&disablePreview, "disable-preview", "", false, "Disable map preview for each tileset (enabled by default)")
@@ -170,6 +172,14 @@ func init() {
 			log.Fatalln("ENABLE_ARCGIS must be a bool(true/false)")
 		}
 		enableArcGIS = p
+	}
+
+	if env := os.Getenv("ENABLE_WMTS"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("ENABLE_WMTS must be a bool(true/false)")
+		}
+		enableWMTS = p
 	}
 
 	if env := os.Getenv("VERBOSE"); env != "" {
@@ -256,6 +266,7 @@ func serve() {
 		EnableTileJSON:    !disableTileJSON,
 		EnablePreview:     !disablePreview,
 		EnableArcGIS:      enableArcGIS,
+		EnableWMTS:				 !enableWMTS,
 	})
 	if err != nil {
 		log.Fatalln("Could not construct ServiceSet")

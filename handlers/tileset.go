@@ -71,6 +71,9 @@ func newTileset(svc *ServiceSet, filename, id, path string) (*Tileset, error) {
 		m.HandleFunc(arcgisRoot+"/layers", ts.arcgisLayersHandler)
 		m.HandleFunc(arcgisRoot+"/legend", ts.arcgisLegendHandler)
 		m.HandleFunc(arcgisRoot+"/tile/", ts.arcgisTileHandler)
+		m.HandleFunc(arcgisRoot+"/test", ts.arcgisServiceHandler)
+		m.HandleFunc(arcgisRoot+"/WMTS", ts.wmtsHandler)
+		m.HandleFunc(arcgisRoot+"/WMTS/1.0.0/WMTSCapabilities.xml", ts.wmtsHandler)
 	}
 
 	ts.router = m
