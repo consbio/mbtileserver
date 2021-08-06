@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/xml"
 	"fmt"
-	// "github.com/beevik/etree"
+	"github.com/beevik/etree"
 	"net/http"
 )
 
@@ -30,16 +30,18 @@ type ServiceIdentification struct {
 
 type OperationsMetadata struct {
 	XMLName		xml.Name `xml:"ows:OperationsMetadata"`
-	Operation []Operation `xml:"ows:Operation"`
+	Operations []Operation `xml:"ows:Operation"`
 }
 type Operation struct {
 	XMLName		xml.Name `xml:"ows:Operation"`
 	Name string `xml:"name,attr"`
 	DCP  struct {
 		HTTP struct {
-			Get struct {
-				Type string `xml:"xlink:type,attr"`
+			Get [] struct {
 				Href string `xml:"xlink:href,attr"`
+				Contraint struct {
+					Name string `xml:"name,attr"`
+				} `xml:"ows:Constraint"`
 			} `xml:"ows:Get"`
 		} `xml:"ows:HTTP"`
 	} `xml:"ows:DCP"`
@@ -74,24 +76,55 @@ func (ts *Tileset) wmtsHandler(w http.ResponseWriter, r *http.Request) {
 
 	operations := make([]Operation, 2)
 	operations[0].Name = "GetCapabilities"
+	// operations[0] = append(operations[0], )
+	// 	DCP: {
+	// 		// HTTP: {
+	// 		// 	Get: []string{
+	// 		// 		Href: "test",
+	// 		// 	},
+	// 		// 	{
+	// 		// 		Href: "test2",
+	// 		// 	},
+	// 		// },
+	// 	},
+	// }
 	operations[1].Name = "GetTile"
 
 	v.OperationsMetadata = append(v.OperationsMetadata, OperationsMetadata{
-		Operation: operations,
+		Operations: operations,
 	})
 
 	v.ServiceMetadataURL = append(v.ServiceMetadataURL, ServiceMetadataURL{
 		Xlink: "test",
 	})
 
-	fmt.Println(v)
+	doc := etree.NewDocument()
+	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
+	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
 
-	res, err := xml.MarshalIndent(v, "  ", "    ")
+	people := doc.CreateElement("People")
+	people.CreateComment("These are all known people")
+
+	jon := people.CreateElement("Person")
+	jon.CreateAttr("name", "Jon")
+
+	sally := people.CreateElement("Person")
+	sally.CreateAttr("name", "Sally")
+
+	doc.Indent(2)
+
+	fmt.Println(fmt.Sprintf("%T", doc))
+	fmt.Println(fmt.Sprintf("%T", v))
+
+	str, err := doc.WriteToBytes()
+	// res, err := xml.MarshalIndent(doc, "  ", "    ")
+
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
 
 	w.Header().Set("Content-Type", "application/xml")
-	w.Write(res)
+	
+	w.Write(str)
 }
