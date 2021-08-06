@@ -107,9 +107,9 @@ func (ts *Tileset) arcgisServiceJSON() ([]byte, error) {
 		"rows": 256,
 		"cols": 256,
 		"dpi":  dpi,
-		"origin": map[string]float32{
-			"x": -20037508.342787,
-			"y": 20037508.342787,
+		"origin": map[string]float64{
+			"x": -20037508.34278925,
+			"y": 20037508.34278925,
 		},
 		"spatialReference": webMercatorSR,
 		"lods":             lods,
