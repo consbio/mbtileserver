@@ -253,7 +253,6 @@ func (s *ServiceSet) Handler() http.Handler {
 	}
 
 	if s.enableArcGIS {
-		fmt.Println("ArcGIS root", ArcGISServicesRoot)
 		m.HandleFunc(ArcGISInfoRoot, s.arcgisInfoHandler)
 		m.HandleFunc(ArcGISServicesRoot, s.tilesetHandler)
 	} else {
