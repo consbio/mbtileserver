@@ -135,9 +135,9 @@ func (ts *Tileset) arcgisServiceJSON() ([]byte, error) {
 	minScale := lods[0].Scale
 	maxScale := lods[len(lods)-1].Scale
 
-	bounds, ok := metadata["bounds"].([]float32)
+	bounds, ok := metadata["bounds"].([]float64)
 	if !ok {
-		bounds = []float32{-180, -85, 180, 85} // default to world bounds
+		bounds = []float64{-180, -85, 180, 85} // default to world bounds
 	}
 	extent := geoBoundsToWMExtent(bounds)
 
@@ -412,7 +412,7 @@ func (ts *Tileset) arcgisTileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func geoBoundsToWMExtent(bounds []float32) arcGISExtent {
+func geoBoundsToWMExtent(bounds []float64) arcGISExtent {
 	xmin, ymin := geoToMercator(float64(bounds[0]), float64(bounds[1]))
 	xmax, ymax := geoToMercator(float64(bounds[2]), float64(bounds[3]))
 	return arcGISExtent{
