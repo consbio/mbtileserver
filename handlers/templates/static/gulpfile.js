@@ -11,6 +11,7 @@ gulp.task("compress-css", function () {
             "node_modules/leaflet-basemaps/L.Control.Basemaps.css",
             "node_modules/leaflet-range/L.Control.Range.css",
             "node_modules/leaflet-base64-legend/L.Control.Base64Legend.css",
+            "node_modules/mapbox-gl/dist/mapbox-gl.css",
         ])
         .pipe(cleanCSS())
         .pipe(concat("core.min.css"))
@@ -28,6 +29,7 @@ gulp.task("concat-js", function () {
             "node_modules/leaflet-range/L.Control.Range-min.js",
             "node_modules/leaflet-base64-legend/L.Control.Base64Legend-min.js",
             "node_modules/leaflet-utfgrid/L.UTFGrid-min.js",
+            "node_modules/mapbox-gl/dist/mapbox-gl.js",
         ])
         .pipe(strip())
         .pipe(concat("core.min.js"))

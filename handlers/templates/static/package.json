@@ -1,6 +1,6 @@
 {
     "name": "mbtileserver",
-    "version": "0.5.0",
+    "version": "0.7.0",
     "description": "Go powered mbtiles tile map server",
     "main": "index.js",
     "scripts": {
@@ -29,12 +29,13 @@
     },
     "dependencies": {
         "d3-collection": "^1.0.4",
-        "d3-fetch": "^2.0.0",
+        "d3-fetch": "^3.0.1",
         "leaflet": "^1.7.1",
         "leaflet-base64-legend": "^0.1.1",
         "leaflet-basemaps": "^0.3.4",
         "leaflet-range": "^0.1.0",
         "leaflet-utfgrid": "^0.3.0",
-        "leaflet-zoombox": "^0.5.2"
+        "leaflet-zoombox": "^0.5.2",
+        "mapbox-gl": "^1.13.1"
     }
 }
