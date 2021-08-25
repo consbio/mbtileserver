@@ -105,7 +105,7 @@ You can also use environment variables instead of flags, which may be more helpf
 -   `PORT` (`--port`)
 -   `TILE_DIR` (`--dir`)
 -   `GENERATE_IDS` (`--generate-ids`)
--   `ROOT_URL_PATH` (`--root-url-path`)
+-   `ROOT_URL` (`--root-url`)
 -   `DOMAIN` (`--domain`)
 -   `TLS_CERT` (`--cert`)
 -   `TLS_PRIVATE_KEY` (`--key`)
