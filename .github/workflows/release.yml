@@ -8,7 +8,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Set build flags 
-      run: echo "CGO_ENABLED=1" >> $GITHUB_ENV; echo "CC=arm-linux-gnueabi-gcc" >> $GITHUB_ENV
+      run: echo "CGO_ENABLED=1" >> $GITHUB_ENV; echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
     - uses: wangyoucao577/go-release-action@v1.20
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
