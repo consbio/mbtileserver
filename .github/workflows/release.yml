@@ -1,0 +1,18 @@
+# .github/workflows/release.yaml
+
+on: 
+  release:
+    types: [created]
+
+jobs:
+  release-linux-aarch64:
+    name: release linux/aarch64
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: wangyoucao577/go-release-action@v1.20
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        goos: linux
+        goarch: arm
+        binary_name: "mbtileserver_aarch64"
