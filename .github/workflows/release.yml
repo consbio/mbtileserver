@@ -2,7 +2,7 @@
 
 on: 
   release:
-    types: [created]
+    types: [published, edited]
 
 jobs:
   release-linux-aarch64:
