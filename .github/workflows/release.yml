@@ -1,8 +1,5 @@
-# .github/workflows/release.yaml
-
-on: 
-  release:
-    types: [published, edited]
+name: Build Go Binaries for AArch64 (ARM Architecture)
+on: workflow_dispatch
 
 jobs:
   release-linux-aarch64:
