@@ -13,3 +13,4 @@ jobs:
         goos: linux
         goarch: arm
         binary_name: "mbtileserver_aarch64"
+        release_tag: v0.7.0
