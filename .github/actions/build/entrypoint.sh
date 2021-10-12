@@ -9,7 +9,7 @@ set -e
 # Build targets
 # Omit: darwin/amd64 darwin/386   (MacOS requires signed, notarized binaries now)
 # Omit: windows/amd64 windows/386  (CGO cross-compile for Windows is more work)
-targets=${@-"linux/amd64 linux/386"}
+targets=${@-"linux/amd64 linux/386 linux/arm64"}
 
 
 # Get repo information from the github event
@@ -45,18 +45,22 @@ mkdir -p $root_path
 cp -a $GITHUB_WORKSPACE/* $root_path/
 cd $root_path
 
+gcc=""
+
 for target in $targets; do
   os="$(echo $target | cut -d '/' -f1)"
   arch="$(echo $target | cut -d '/' -f2)"
 
-  if [ $os == 'windows' ]; then
-    ext='.exe'
-  fi
-
   output="${release_path}/${repo_name}_${tag}_${os}_${arch}"
 
+  # install GCC for Arm64
+  if [$target -eq "linux/arm64"]; then
+    sudo apt-get install -y gcc-aarch64-linux-gnu
+    gcc="CC=/usr/bin/aarch64-linux-gnu-gcc"
+  fi
+
   echo "----> Building project for: $target"
-  GOOS=$os GOARCH=$arch CGO_ENABLED=1 go build -o "$output${ext}"
+  GOOS=$os GOARCH=$arch CGO_ENABLED=1 $gcc go build -o "$output${ext}"
   zip -j $output.zip "$output${ext}" > /dev/null
 done
 

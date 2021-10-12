@@ -3,6 +3,7 @@ name: Build Go Binaries for Release
 on:
   release:
     types: [published, edited]
+  workflow_dispatch:
 
 jobs:
   build:
