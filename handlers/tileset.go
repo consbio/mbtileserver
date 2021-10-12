@@ -66,7 +66,7 @@ func newTileset(svc *ServiceSet, filename, id, path string) (*Tileset, error) {
 	}
 
 	if svc.enableArcGIS {
-		arcgisRoot := ArcGISRoot + id + "/MapServer"
+		arcgisRoot := ArcGISServicesRoot + id + "/MapServer"
 		m.HandleFunc(arcgisRoot, ts.arcgisServiceHandler)
 		m.HandleFunc(arcgisRoot+"/layers", ts.arcgisLayersHandler)
 		m.HandleFunc(arcgisRoot+"/legend", ts.arcgisLegendHandler)

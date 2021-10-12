@@ -218,8 +218,8 @@ func (s *ServiceSet) IDFromURLPath(id string) string {
 				id = id[:i]
 			}
 		}
-	} else if s.enableArcGIS && strings.HasPrefix(id, ArcGISRoot) {
-		id = strings.TrimPrefix(id, ArcGISRoot)
+	} else if s.enableArcGIS && strings.HasPrefix(id, ArcGISServicesRoot) {
+		id = strings.TrimPrefix(id, ArcGISServicesRoot)
 		// MapServer should be a reserved word, so should be OK to split on it
 		id = strings.Split(id, "/MapServer")[0]
 	} else {
@@ -253,7 +253,8 @@ func (s *ServiceSet) Handler() http.Handler {
 	}
 
 	if s.enableArcGIS {
-		m.HandleFunc(ArcGISRoot, s.tilesetHandler)
+		m.HandleFunc(ArcGISInfoRoot, s.arcgisInfoHandler)
+		m.HandleFunc(ArcGISServicesRoot, s.tilesetHandler)
 	} else {
 		m.Handle(ArcGISRoot, http.NotFoundHandler())
 	}
