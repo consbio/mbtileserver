@@ -54,7 +54,7 @@ for target in $targets; do
   output="${release_path}/${repo_name}_${tag}_${os}_${arch}"
 
   # install GCC for Arm64
-  if [$target -eq "linux/arm64"]; then
+  if [ $target == "linux/arm64" ]; then
     sudo apt-get install -y gcc-aarch64-linux-gnu
     gcc="CC=/usr/bin/aarch64-linux-gnu-gcc"
   fi
