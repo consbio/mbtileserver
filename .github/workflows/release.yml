@@ -8,7 +8,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Set build flags 
-      run: echo "CGO_ENABLED=1" >> $GITHUB_ENV; echo "CC=/usr/bin/aarch64-linux-gnu-gcc-9" >> $GITHUB_ENV
+      run: echo "CGO_ENABLED=1" >> $GITHUB_ENV; echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
     - name: Install gcc-aarch64-linux-gnu
       run: sudo apt-get install -y gcc-aarch64-linux-gnu
     - uses: wangyoucao577/go-release-action@v1.20
