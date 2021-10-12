@@ -9,7 +9,7 @@ set -e
 # Build targets
 # Omit: darwin/amd64 darwin/386   (MacOS requires signed, notarized binaries now)
 # Omit: windows/amd64 windows/386  (CGO cross-compile for Windows is more work)
-targets=${@-"linux/amd64 linux/386"}
+targets=${@-"linux/amd64 linux/386 linux/arm64"}
 
 
 # Get repo information from the github event
