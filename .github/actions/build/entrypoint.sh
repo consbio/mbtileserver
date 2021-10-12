@@ -45,7 +45,7 @@ mkdir -p $root_path
 cp -a $GITHUB_WORKSPACE/* $root_path/
 cd $root_path
 
-gcc=""
+gcc="/usr/bin/gcc"
 
 for target in $targets; do
   os="$(echo $target | cut -d '/' -f1)"
@@ -54,13 +54,13 @@ for target in $targets; do
   output="${release_path}/${repo_name}_${tag}_${os}_${arch}"
 
   # install GCC for Arm64
-  if [ $target == "linux/arm64" ]; then
-    gcc="CC=/usr/bin/aarch64-linux-gnu-gcc"
+  if [ $arch == "arm64" ]; then
+    gcc="/usr/bin/aarch64-linux-gnu-gcc"
   fi
 
   echo "----> Building project for: $target"
-  GOOS=$os GOARCH=$arch CGO_ENABLED=1 $gcc go build -o "$output${ext}"
-  zip -j $output.zip "$output${ext}" > /dev/null
+  GOOS=$os GOARCH=$arch CGO_ENABLED=1 CC=$gcc go build -o "$output"
+  zip -j $output.zip "$output" > /dev/null
 done
 
 echo "----> Build is complete. List of files at $release_path:"
