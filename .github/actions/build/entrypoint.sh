@@ -55,7 +55,6 @@ for target in $targets; do
 
   # install GCC for Arm64
   if [ $target == "linux/arm64" ]; then
-    apt-get install -y gcc-aarch64-linux-gnu
     gcc="CC=/usr/bin/aarch64-linux-gnu-gcc"
   fi
 
