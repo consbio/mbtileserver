@@ -1,134 +1,152 @@
 {
-  "projectName": "mbtileserver",
-  "projectOwner": "consbio",
-  "repoType": "github",
-  "repoHost": "https://github.com",
-  "files": [
-    "README.md"
-  ],
-  "imageSize": 100,
-  "commit": false,
-  "commitConvention": "none",
-  "contributors": [
-    {
-      "login": "brendan-ward",
-      "name": "Brendan Ward",
-      "avatar_url": "https://avatars2.githubusercontent.com/u/3375604?v=4",
-      "profile": "https://astutespruce.com",
-      "contributions": [
-        "code",
-        "doc",
-        "bug",
-        "blog",
-        "review",
-        "ideas"
-      ]
-    },
-    {
-      "login": "fawick",
-      "name": "Fabian Wickborn",
-      "avatar_url": "https://avatars3.githubusercontent.com/u/1886500?v=4",
-      "profile": "https://github.com/fawick",
-      "contributions": [
-        "code",
-        "doc",
-        "bug",
-        "ideas"
-      ]
-    },
-    {
-      "login": "nikmolnar",
-      "name": "Nik Molnar",
-      "avatar_url": "https://avatars1.githubusercontent.com/u/2422416?v=4",
-      "profile": "https://github.com/nikmolnar",
-      "contributions": [
-        "code",
-        "ideas",
-        "bug"
-      ]
-    },
-    {
-      "login": "sikmir",
-      "name": "Nikolay Korotkiy",
-      "avatar_url": "https://avatars3.githubusercontent.com/u/688044?v=4",
-      "profile": "https://sikmir.ru",
-      "contributions": [
-        "code",
-        "bug"
-      ]
-    },
-    {
-      "login": "retbrown",
-      "name": "Robert Brown",
-      "avatar_url": "https://avatars1.githubusercontent.com/u/3111954?v=4",
-      "profile": "https://github.com/retbrown",
-      "contributions": [
-        "code"
-      ]
-    },
-    {
-      "login": "kow33",
-      "name": "Mihail",
-      "avatar_url": "https://avatars0.githubusercontent.com/u/26978815?v=4",
-      "profile": "https://github.com/kow33",
-      "contributions": [
-        "code"
-      ]
-    },
-    {
-      "login": "buma",
-      "name": "Marko Burjek",
-      "avatar_url": "https://avatars2.githubusercontent.com/u/1055967?v=4",
-      "profile": "https://github.com/buma",
-      "contributions": [
-        "code"
-      ]
-    },
-    {
-      "login": "Krizz",
-      "name": "Kristjan",
-      "avatar_url": "https://avatars0.githubusercontent.com/u/689050?v=4",
-      "profile": "https://github.com/Krizz",
-      "contributions": [
-        "code"
-      ]
-    },
-    {
-      "login": "evbarnett",
-      "name": "evbarnett",
-      "avatar_url": "https://avatars2.githubusercontent.com/u/4960874?v=4",
-      "profile": "https://github.com/evbarnett",
-      "contributions": [
-        "bug"
-      ]
-    },
-    {
-      "login": "carlos-mg89",
-      "name": "walkaholic.me",
-      "avatar_url": "https://avatars1.githubusercontent.com/u/19690868?v=4",
-      "profile": "https://www.walkaholic.me",
-      "contributions": [
-        "bug"
-      ]
-    },
-    {
-      "login": "brianvoe",
-      "name": "Brian Voelker",
-      "avatar_url": "https://avatars1.githubusercontent.com/u/1580910?v=4",
-      "profile": "http://www.webiswhatido.com",
-      "contributions": [
-        "bug"
-      ]
-    },
-    {
-      "login": "schorsch",
-      "name": "Georg Leciejewski",
-      "avatar_url": "https://avatars1.githubusercontent.com/u/13575?v=4",
-      "profile": "http://salesking.eu",
-      "contributions": [
-        "bug"
-      ]
-    }
-  ],
-  "contributorsPerLine": 7
+    "projectName": "mbtileserver",
+    "projectOwner": "consbio",
+    "repoType": "github",
+    "repoHost": "https://github.com",
+    "files": [
+        "README.md"
+    ],
+    "imageSize": 100,
+    "commit": false,
+    "commitConvention": "none",
+    "contributors": [
+        {
+            "login": "brendan-ward",
+            "name": "Brendan Ward",
+            "avatar_url": "https://avatars2.githubusercontent.com/u/3375604?v=4",
+            "profile": "https://astutespruce.com",
+            "contributions": [
+                "code",
+                "doc",
+                "bug",
+                "blog",
+                "review",
+                "ideas"
+            ]
+        },
+        {
+            "login": "fawick",
+            "name": "Fabian Wickborn",
+            "avatar_url": "https://avatars3.githubusercontent.com/u/1886500?v=4",
+            "profile": "https://github.com/fawick",
+            "contributions": [
+                "code",
+                "doc",
+                "bug",
+                "ideas"
+            ]
+        },
+        {
+            "login": "nikmolnar",
+            "name": "Nik Molnar",
+            "avatar_url": "https://avatars1.githubusercontent.com/u/2422416?v=4",
+            "profile": "https://github.com/nikmolnar",
+            "contributions": [
+                "code",
+                "ideas",
+                "bug"
+            ]
+        },
+        {
+            "login": "sikmir",
+            "name": "Nikolay Korotkiy",
+            "avatar_url": "https://avatars3.githubusercontent.com/u/688044?v=4",
+            "profile": "https://sikmir.ru",
+            "contributions": [
+                "code",
+                "bug"
+            ]
+        },
+        {
+            "login": "retbrown",
+            "name": "Robert Brown",
+            "avatar_url": "https://avatars1.githubusercontent.com/u/3111954?v=4",
+            "profile": "https://github.com/retbrown",
+            "contributions": [
+                "code"
+            ]
+        },
+        {
+            "login": "mika-go-13",
+            "name": "Mihail",
+            "avatar_url": "https://avatars.githubusercontent.com/u/26978815?v=4",
+            "profile": "mika-go-13",
+            "contributions": [
+                "code"
+            ]
+        },
+        {
+            "login": "buma",
+            "name": "Marko Burjek",
+            "avatar_url": "https://avatars2.githubusercontent.com/u/1055967?v=4",
+            "profile": "https://github.com/buma",
+            "contributions": [
+                "code"
+            ]
+        },
+        {
+            "login": "Krizz",
+            "name": "Kristjan",
+            "avatar_url": "https://avatars0.githubusercontent.com/u/689050?v=4",
+            "profile": "https://github.com/Krizz",
+            "contributions": [
+                "code"
+            ]
+        },
+        {
+            "login": "evbarnett",
+            "name": "evbarnett",
+            "avatar_url": "https://avatars2.githubusercontent.com/u/4960874?v=4",
+            "profile": "https://github.com/evbarnett",
+            "contributions": [
+                "bug"
+            ]
+        },
+        {
+            "login": "carlos-mg89",
+            "name": "walkaholic.me",
+            "avatar_url": "https://avatars1.githubusercontent.com/u/19690868?v=4",
+            "profile": "https://www.walkaholic.me",
+            "contributions": [
+                "bug"
+            ]
+        },
+        {
+            "login": "brianvoe",
+            "name": "Brian Voelker",
+            "avatar_url": "https://avatars1.githubusercontent.com/u/1580910?v=4",
+            "profile": "http://www.webiswhatido.com",
+            "contributions": [
+                "bug"
+            ]
+        },
+        {
+            "login": "schorsch",
+            "name": "Georg Leciejewski",
+            "avatar_url": "https://avatars1.githubusercontent.com/u/13575?v=4",
+            "profile": "http://salesking.eu",
+            "contributions": [
+                "bug"
+            ]
+        },
+        {
+            "login": "cbenz",
+            "name": "Christophe Benz",
+            "avatar_url": "https://avatars.githubusercontent.com/u/12686?v=4",
+            "profile": "https://github.com/cbenz",
+            "contributions": [
+                "bug"
+            ]
+        },
+        {
+            "login": "reyemtm",
+            "name": "Malcolm Meyer",
+            "avatar_url": "https://avatars.githubusercontent.com/u/6398929?v=4",
+            "profile": "https://github.com/reyemtm",
+            "contributions": [
+                "bug"
+            ]
+        }
+    ],
+    "contributorsPerLine": 7
 }

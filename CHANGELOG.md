@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8 (in progress)
+
+### Breaking changes
+
+-   removes ArcGIS API layer info at the service root and layers endpoint (#116);
+    this was not providing useful information for image tilesets.
+
+### Bug Fixes
+
+-   fix handlers for ArcGIS API endpoints, resolving tile shift issue (#116)
+
 ## O.7
 
 ### General changes

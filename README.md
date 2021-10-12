@@ -480,7 +480,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
     <td align="center"><a href="https://github.com/nikmolnar"><img src="https://avatars1.githubusercontent.com/u/2422416?v=4" width="100px;" alt="Nik Molnar"/><br /><sub><b>Nik Molnar</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/commits?author=nikmolnar" title="Code">💻</a> <a href="#ideas-nikmolnar" title="Ideas, Planning, & Feedback">🤔</a> <a href="https://github.com/consbio/mbtileserver/issues?q=author%3Anikmolnar" title="Bug reports">🐛</a></td>
     <td align="center"><a href="https://sikmir.ru"><img src="https://avatars3.githubusercontent.com/u/688044?v=4" width="100px;" alt="Nikolay Korotkiy"/><br /><sub><b>Nikolay Korotkiy</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/commits?author=sikmir" title="Code">💻</a> <a href="https://github.com/consbio/mbtileserver/issues?q=author%3Asikmir" title="Bug reports">🐛</a></td>
     <td align="center"><a href="https://github.com/retbrown"><img src="https://avatars1.githubusercontent.com/u/3111954?v=4" width="100px;" alt="Robert Brown"/><br /><sub><b>Robert Brown</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/commits?author=retbrown" title="Code">💻</a></td>
-    <td align="center"><a href="https://github.com/kow33"><img src="https://avatars0.githubusercontent.com/u/26978815?v=4" width="100px;" alt="Mihail"/><br /><sub><b>Mihail</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/commits?author=kow33" title="Code">💻</a></td>
+    <td align="center"><a href="mika-go-13"><img src="https://avatars.githubusercontent.com/u/26978815?v=4" width="100px;" alt="Mihail"/><br /><sub><b>Mihail</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/commits?author=mika-go-13" title="Code">💻</a></td>
     <td align="center"><a href="https://github.com/buma"><img src="https://avatars2.githubusercontent.com/u/1055967?v=4" width="100px;" alt="Marko Burjek"/><br /><sub><b>Marko Burjek</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/commits?author=buma" title="Code">💻</a></td>
   </tr>
   <tr>
@@ -489,12 +489,13 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
     <td align="center"><a href="https://www.walkaholic.me"><img src="https://avatars1.githubusercontent.com/u/19690868?v=4" width="100px;" alt="walkaholic.me"/><br /><sub><b>walkaholic.me</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/issues?q=author%3Acarlos-mg89" title="Bug reports">🐛</a></td>
     <td align="center"><a href="http://www.webiswhatido.com"><img src="https://avatars1.githubusercontent.com/u/1580910?v=4" width="100px;" alt="Brian Voelker"/><br /><sub><b>Brian Voelker</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/issues?q=author%3Abrianvoe" title="Bug reports">🐛</a></td>
     <td align="center"><a href="http://salesking.eu"><img src="https://avatars1.githubusercontent.com/u/13575?v=4" width="100px;" alt="Georg Leciejewski"/><br /><sub><b>Georg Leciejewski</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/issues?q=author%3Aschorsch" title="Bug reports">🐛</a></td>
+    <td align="center"><a href="https://github.com/cbenz"><img src="https://avatars.githubusercontent.com/u/12686?v=4" width="100px;" alt="Christophe Benz"/><br /><sub><b>Christophe Benz</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/issues?q=author%3Acbenz" title="Bug reports">🐛</a></td>
+    <td align="center"><a href="https://github.com/reyemtm"><img src="https://avatars.githubusercontent.com/u/6398929?v=4" width="100px;" alt="Malcolm Meyer"/><br /><sub><b>Malcolm Meyer</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/issues?q=author%3Areyemtm" title="Bug reports">🐛</a></td>
   </tr>
 </table>
 
 <!-- markdownlint-enable -->
 <!-- prettier-ignore-end -->
-
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
