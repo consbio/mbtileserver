@@ -7,9 +7,7 @@
 set -e
 
 # Build targets
-# Omit: darwin/amd64 darwin/386   (MacOS requires signed, notarized binaries now)
-# Omit: windows/amd64 windows/386  (CGO cross-compile for Windows is more work)
-targets=${@-"linux/amd64 linux/386"}
+targets=${@-"linux/arm64"}
 
 
 # Get repo information from the github event
@@ -45,6 +43,7 @@ mkdir -p $root_path
 cp -a $GITHUB_WORKSPACE/* $root_path/
 cd $root_path
 
+
 for target in $targets; do
   os="$(echo $target | cut -d '/' -f1)"
   arch="$(echo $target | cut -d '/' -f2)"
@@ -52,7 +51,7 @@ for target in $targets; do
   output="${release_path}/${repo_name}_${tag}_${os}_${arch}"
 
   echo "----> Building project for: $target"
-  GOOS=$os GOARCH=$arch CGO_ENABLED=1 go build -o "$output"
+  GOOS=$os GOARCH=$arch CGO_ENABLED=1 CC="/usr/bin/aarch64-linux-gnu-gcc" go build -o "$output"
   zip -j $output.zip "$output" > /dev/null
 done
 
