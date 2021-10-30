@@ -122,7 +122,8 @@
 
             var layer = L.tileLayer(tileJSON.tiles[0], {
                 minZoom: tileJSON.minzoom || 0,
-                maxZoom: tileJSON.maxzoom || 23
+                maxZoom: tileJSON.maxzoom || 23,
+                attribution: tileJSON.attribution || ''
             });
 
             map.addLayer(layer);

@@ -99,6 +99,7 @@
                         basemap: basemapSource,
                         overlay: {
                             type: "vector",
+                            attribution: tileJSON.attribution || '',
                             tiles: tileJSON.tiles,
                             minzoom: tileJSON.minzoom,
                             maxzoom: tileJSON.maxzoom

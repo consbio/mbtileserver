@@ -2,6 +2,10 @@
 
 ## 0.8 (in progress)
 
+### General changes
+
+-   display attribution in preview maps if present in tileset metadata.
+
 ### Breaking changes
 
 -   removes ArcGIS API layer info at the service root and layers endpoint (#116);
@@ -9,7 +13,7 @@
 
 ### Bug Fixes
 
--   fix handlers for ArcGIS API endpoints, resolving tile shift issue (#116)
+-   fix handlers for ArcGIS API endpoints, resolving tile shift issue (#116).
 
 ## O.7
 

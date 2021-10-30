@@ -492,6 +492,9 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
     <td align="center"><a href="https://github.com/cbenz"><img src="https://avatars.githubusercontent.com/u/12686?v=4" width="100px;" alt="Christophe Benz"/><br /><sub><b>Christophe Benz</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/issues?q=author%3Acbenz" title="Bug reports">🐛</a></td>
     <td align="center"><a href="https://github.com/reyemtm"><img src="https://avatars.githubusercontent.com/u/6398929?v=4" width="100px;" alt="Malcolm Meyer"/><br /><sub><b>Malcolm Meyer</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/issues?q=author%3Areyemtm" title="Bug reports">🐛</a></td>
   </tr>
+  <tr>
+    <td align="center"><a href="https://github.com/jleedev"><img src="https://avatars.githubusercontent.com/u/23022?v=4" width="100px;" alt="Josh Lee"/><br /><sub><b>Josh Lee</b></sub></a><br /><a href="https://github.com/consbio/mbtileserver/commits?author=jleedev" title="Code">💻</a></td>
+  </tr>
 </table>
 
 <!-- markdownlint-enable -->
