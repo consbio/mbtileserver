@@ -6,6 +6,10 @@
 
 -   display attribution in preview maps if present in tileset metadata.
 
+### Command-line interface
+
+-   added support for watching filesystem for changes to tilesets using `--enable-fs-watch` option
+
 ### Breaking changes
 
 -   removes ArcGIS API layer info at the service root and layers endpoint (#116);

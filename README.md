@@ -67,6 +67,7 @@ Flags:
       --domain string          Domain name of this server.  NOTE: only used for AutoTLS.
       --dsn string             Sentry DSN
       --enable-arcgis          Enable ArcGIS Mapserver endpoints
+      --enable-fs-watch        Enable reloading of tilesets by watching filesystem
       --enable-reload-signal   Enable graceful reload using HUP signal to the server process
       --generate-ids           Automatically generate tileset IDs instead of using relative path
   -h, --help                   help for mbtileserver
@@ -499,6 +500,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
 
 <!-- markdownlint-enable -->
 <!-- prettier-ignore-end -->
+
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!

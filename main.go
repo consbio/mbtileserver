@@ -61,24 +61,25 @@ var rootCmd = &cobra.Command{
 }
 
 var (
-	port               int
-	tilePath           string
-	certificate        string
-	privateKey         string
-	rootURLStr         string
-	domain             string
-	secretKey          string
-	sentryDSN          string
-	verbose            bool
-	autotls            bool
-	redirect           bool
-	enableReloadSignal bool
-	generateIDs        bool
-	enableArcGIS       bool
-	disablePreview     bool
-	disableTileJSON    bool
-	disableServiceList bool
-	tilesOnly          bool
+	port                int
+	tilePath            string
+	certificate         string
+	privateKey          string
+	rootURLStr          string
+	domain              string
+	secretKey           string
+	sentryDSN           string
+	verbose             bool
+	autotls             bool
+	redirect            bool
+	enableReloadSignal  bool
+	enableReloadFSWatch bool
+	generateIDs         bool
+	enableArcGIS        bool
+	disablePreview      bool
+	disableTileJSON     bool
+	disableServiceList  bool
+	tilesOnly           bool
 )
 
 func init() {
@@ -95,6 +96,7 @@ func init() {
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 
 	flags.BoolVarP(&enableArcGIS, "enable-arcgis", "", false, "Enable ArcGIS Mapserver endpoints")
+	flags.BoolVarP(&enableReloadFSWatch, "enable-fs-watch", "", false, "Enable reloading of tilesets by watching filesystem")
 	flags.BoolVarP(&enableReloadSignal, "enable-reload-signal", "", false, "Enable graceful reload using HUP signal to the server process")
 
 	flags.BoolVarP(&disablePreview, "disable-preview", "", false, "Disable map preview for each tileset (enabled by default)")
@@ -170,6 +172,22 @@ func init() {
 			log.Fatalln("ENABLE_ARCGIS must be a bool(true/false)")
 		}
 		enableArcGIS = p
+	}
+
+	if env := os.Getenv("ENABLE_FS_WATCH"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("ENABLE_FS_WATCH must be a bool(true/false)")
+		}
+		enableReloadFSWatch = p
+	}
+
+	if env := os.Getenv("ENABLE_RELOAD_SIGNAL"); env != "" {
+		p, err := strconv.ParseBool(env)
+		if err != nil {
+			log.Fatalln("ENABLE_RELOAD_SIGNAL must be a bool(true/false)")
+		}
+		enableReloadSignal = p
 	}
 
 	if env := os.Getenv("VERBOSE"); env != "" {
@@ -249,6 +267,14 @@ func serve() {
 		log.Infoln("An HMAC request authorization key was set.  All incoming must be signed.")
 	}
 
+	generateID := func(filename string, baseDir string) (string, error) {
+		if generateIDs {
+			return handlers.SHA1ID(filename), nil
+		} else {
+			return handlers.RelativePathID(filename, baseDir)
+		}
+	}
+
 	svcSet, err := handlers.New(&handlers.ServiceSetConfig{
 		RootURL:           rootURL,
 		ErrorWriter:       &errorLogger{log: log.New()},
@@ -274,16 +300,10 @@ func serve() {
 
 		// Register all tilesets
 		for _, filename := range filenames {
-			var id string
-			var err error
-			if generateIDs {
-				id = handlers.SHA1ID(filename)
-			} else {
-				id, err = handlers.RelativePathID(filename, path)
-				if err != nil {
-					log.Errorf("Could not generate ID for tileset: %q", filename)
-					continue
-				}
+			id, err := generateID(filename, path)
+			if err != nil {
+				log.Errorf("Could not generate ID for tileset: %q", filename)
+				continue
 			}
 
 			err = svcSet.AddTileset(filename, id)
@@ -295,6 +315,25 @@ func serve() {
 
 	// print number of services
 	log.Infof("Published %v services", svcSet.Size())
+
+	// watch filesystem for changes to tilesets
+	if enableReloadFSWatch {
+		watcher, err := NewFSWatcher(svcSet, generateID)
+		if err != nil {
+			log.Fatalln("Could not construct filesystem watcher")
+		}
+		defer watcher.Close()
+
+		for _, path := range strings.Split(tilePath, ",") {
+			log.Infof("Enabling filesystem watcher in %v\n", path)
+			err = watcher.WatchDir((path))
+			if err != nil {
+				// If we cannot enable file watching, then this should be a fatal
+				// error during server startup
+				log.Fatalln("Could not enable filesystem watcher in", path, err)
+			}
+		}
+	}
 
 	e := echo.New()
 	e.HideBanner = true
