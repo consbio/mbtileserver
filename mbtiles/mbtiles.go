@@ -168,6 +168,30 @@ func NewDB(filename string) (*DB, error) {
 
 }
 
+// VerifyDB checks that an mbtiles file exists and is not malformed
+func VerifyDB(filename string) bool {
+	_, err := os.Stat(filename)
+	if err != nil {
+		// cannot state file
+		return false
+	}
+
+	db, err := sql.Open("sqlite3", filename)
+	if err != nil {
+		// cannot open file
+		return false
+	}
+
+	defer db.Close()
+
+	err = db.Ping()
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
 // ReadTile reads a tile with tile identifiers z, x, y into provided *[]byte.
 // data will be nil if the tile does not exist in the database
 func (tileset *DB) ReadTile(z uint8, x uint64, y uint64, data *[]byte) error {

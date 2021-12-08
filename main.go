@@ -289,7 +289,7 @@ func serve() {
 
 	for _, path := range strings.Split(tilePath, ",") {
 		// Discover all tilesets
-		log.Infof("Searching for tilesets in %v\n", path)
+		log.Infof("Searching for tilesets under %v\n", path)
 		filenames, err := mbtiles.ListDBs(path)
 		if err != nil {
 			log.Errorf("Unable to list mbtiles in '%v': %v\n", path, err)
@@ -325,7 +325,7 @@ func serve() {
 		defer watcher.Close()
 
 		for _, path := range strings.Split(tilePath, ",") {
-			log.Infof("Enabling filesystem watcher in %v\n", path)
+			log.Infof("Watching %v\n", path)
 			err = watcher.WatchDir((path))
 			if err != nil {
 				// If we cannot enable file watching, then this should be a fatal

@@ -91,7 +91,7 @@ You can have multiple directories in your `tilesets` directory; these will be co
 If `--generate-ids` is provided, tileset IDs are automatically generated using a SHA1 hash of the path to each tileset.
 By default, tileset IDs are based on the relative path of each tileset to the base directory provided using `--dir`.
 
-When you want to remove, modify, or add new tilesets, simply restart the server process or use the reloading process below.
+When you want to remove, modify, or add new tilesets, simply restart the server process or use one of the reloading processes below.
 
 If a valid Sentry DSN is provided, warnings, errors, fatal errors, and panics will be reported to Sentry.
 
@@ -137,7 +137,9 @@ mbtileserver:
   ...
 ```
 
-### Reload
+### Reloading
+
+#### Reload using a signal
 
 mbtileserver optionally supports graceful reload (without interrupting any in-progress requests). This functionality
 must be enabled with the `--enable-reload-signal` flag. When enabled, the server can be reloaded by sending it a `HUP` signal:
@@ -148,6 +150,21 @@ $  kill -HUP <pid>
 
 Reloading the server will cause it to pick up changes to the tiles directory, adding new tilesets and removing any that
 are no longer present.
+
+#### Reload using a filesystem watcher
+
+mbtileserver optionally supports reload of individual tilesets by watching for filesystem changes. This functionality
+must be enabled with the `--enable-fs-watch` flag.
+
+All directories specified by `-d` / `--dir` and any subdirectories that exist at the time the server is started
+will be watched for changes to the tilesets.
+
+WARNING: Do not remove the top-level watched directories while the server is running.
+
+WARNING: Do not create or delete subdirectories within the watched directories while the server is running.
+
+WARNING: do not generate tiles directly in the watched directories. Instead, create them in separate directories and
+copy them into the watched directories when complete.
 
 ### Using with a reverse proxy
 
