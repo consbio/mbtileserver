@@ -60,7 +60,6 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 // AddTileset adds a single tileset identified by idGenerator using the filename.
 // If a service already exists with that ID, an error is returned.
 func (s *ServiceSet) AddTileset(filename, id string) error {
-
 	if _, ok := s.tilesets[id]; ok {
 		return fmt.Errorf("Tileset already exists for ID: %q", id)
 	}
@@ -112,6 +111,29 @@ func (s *ServiceSet) RemoveTileset(id string) error {
 	delete(s.tilesets, id)
 
 	return nil
+}
+
+// LockTileset sets a write mutex on the tileset to block reads while this
+// tileset is being updated.
+// This is ignored if the tileset does not exist.
+func (s *ServiceSet) LockTileset(id string) {
+	ts, ok := s.tilesets[id]
+	if !ok || ts == nil {
+		return
+	}
+
+	ts.locked = true
+}
+
+// UnlockTileset removes the write mutex on the tileset.
+// This is ignored if the tileset does not exist.
+func (s *ServiceSet) UnlockTileset(id string) {
+	ts, ok := s.tilesets[id]
+	if !ok || ts == nil {
+		return
+	}
+
+	ts.locked = false
 }
 
 // HasTileset returns true if the tileset identified by id exists within this

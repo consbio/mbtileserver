@@ -18,7 +18,7 @@ import (
 //
 // Unique values sent to the channel are stored in an internal map and all
 // are processed once the the interval is up.
-func debounce(interval time.Duration, input chan string, callback func(arg string)) {
+func debounce(interval time.Duration, input chan string, firstCallback func(arg string), callback func(arg string)) {
 	// keep a log of unique paths
 	var items = make(map[string]bool)
 	var item string
@@ -26,6 +26,11 @@ func debounce(interval time.Duration, input chan string, callback func(arg strin
 	for {
 		select {
 		case item = <-input:
+			if _, ok := items[item]; !ok {
+				// first time we see a given path, we need to call lockHandler
+				// to lock it (unlocked by callback)
+				firstCallback(item)
+			}
 			items[item] = true
 			timer.Reset(interval)
 		case <-timer.C:
@@ -74,7 +79,17 @@ func (w *FSWatcher) Close() {
 func (w *FSWatcher) WatchDir(baseDir string) error {
 	c := make(chan string)
 
+	// debounced call to create / update tileset
 	go debounce(500*time.Millisecond, c, func(path string) {
+		// determine file ID for tileset
+		id, err := w.generateID(path, baseDir)
+		if err != nil {
+			log.Errorf("Could not create ID for tileset %q\n%v", path, err)
+			return
+		}
+		// lock tileset for writing, if it exists
+		w.svcSet.LockTileset(id)
+	}, func(path string) {
 		// Verify that file can be opened with sqlite.
 		// If file cannot be opened, assume it is still being written / copied.
 		if !mbtiles.VerifyDB(path) {
@@ -96,7 +111,7 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 			} else {
 				log.Infof("Updated tileset %q with ID %q\n", path, id)
 			}
-
+			w.svcSet.UnlockTileset(id)
 			return
 		}
 

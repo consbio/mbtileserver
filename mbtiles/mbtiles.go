@@ -178,12 +178,12 @@ func VerifyDB(filename string) bool {
 
 	db, err := sql.Open("sqlite3", filename)
 	if err != nil {
-		// cannot open file
 		return false
 	}
 
 	defer db.Close()
 
+	// if ping fails, file is not valid sqlite database
 	err = db.Ping()
 	if err != nil {
 		return false

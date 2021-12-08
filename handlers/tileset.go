@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/consbio/mbtileserver/mbtiles"
 )
@@ -19,6 +22,7 @@ type Tileset struct {
 	name       string
 	tileformat mbtiles.TileFormat
 	published  bool
+	locked     bool
 	router     *http.ServeMux
 }
 
@@ -101,7 +105,7 @@ func (ts *Tileset) reload() error {
 	return nil
 }
 
-// Delete closes and deletes the mbtiles file for this tileset
+// Delete closes and deletes the mbtiles file connection for this tileset
 func (ts *Tileset) delete() error {
 	if ts.db != nil {
 		err := ts.db.Close()
@@ -175,6 +179,12 @@ func (ts *Tileset) tileJSONHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// wait up to 30 seconds to see if tileset is ready and return it if possible
+	if ts.isLockedWithTimeout(30 * time.Second) {
+		tilesetLockedHandler(w, r)
+		return
+	}
+
 	query := ""
 	if r.URL.RawQuery != "" {
 		query = "?" + r.URL.RawQuery
@@ -209,6 +219,12 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 		// In order to not break any requests from when this tileset was published
 		// return the appropriate not found handler for the original tile format.
 		tileNotFoundHandler(w, r, ts.tileformat)
+		return
+	}
+
+	// wait up to 30 seconds to see if tileset is ready and return it if possible
+	if ts.isLockedWithTimeout(30 * time.Second) {
+		tilesetLockedHandler(w, r)
 		return
 	}
 
@@ -269,8 +285,9 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = w.Write(data)
 
-	if err != nil {
+	if err != nil && !errors.Is(err, syscall.EPIPE) {
 		ts.svc.logError("Could not write tile data for %v: %v", r.URL.Path, err)
+
 	}
 }
 
@@ -280,6 +297,12 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
 	if ts == nil || !ts.published {
 		http.NotFound(w, r)
+		return
+	}
+
+	// wait up to 30 seconds to see if tileset is ready and return it if possible
+	if ts.isLockedWithTimeout(30 * time.Second) {
+		tilesetLockedHandler(w, r)
 		return
 	}
 
@@ -332,5 +355,34 @@ func tileNotFoundHandler(w http.ResponseWriter, r *http.Request, f mbtiles.TileF
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(w, `{"message": "Tile does not exist"}`)
+	}
+}
+
+// tilesetLockedHandler returns a 503 Service Unavailable response when
+// requests are made to a tileset that is beging updated
+func tilesetLockedHandler(w http.ResponseWriter, r *http.Request) {
+	// send back service unavailable response with header to retry in 10 seconds
+	w.Header().Set("Retry-After", "10")
+	http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+}
+
+func (ts *Tileset) isLockedWithTimeout(timeout time.Duration) bool {
+	if ts == nil || !ts.locked {
+		return false
+	}
+
+	timeoutReached := time.After(timeout)
+	// poll locked status every 500 ms
+	ticker := time.Tick(500 * time.Millisecond)
+	for {
+		select {
+		case <-timeoutReached:
+			return ts.locked
+		case <-ticker:
+			if !ts.locked {
+				return false
+			}
+			// otherwise, still locked
+		}
 	}
 }
