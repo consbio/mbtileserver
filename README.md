@@ -159,6 +159,17 @@ must be enabled with the `--enable-fs-watch` flag.
 All directories specified by `-d` / `--dir` and any subdirectories that exist at the time the server is started
 will be watched for changes to the tilesets.
 
+An existing tileset that is being updated will be locked while the file on disk
+is being updated. This will cause incoming requests to that tileset to stall
+for up to 30 seconds and will return as soon as the tileset is completely updated
+and unlocked. If it takes longer than 30 seconds for the tileset to be updated,
+HTTP 503 errors will be returned for that tileset until the tileset is completely
+updated and unlocked.
+
+Under very high request volumes, requests that come in between when the file is
+first modified and when that modification is first detected (and tileset locked)
+may encounter errors.
+
 WARNING: Do not remove the top-level watched directories while the server is running.
 
 WARNING: Do not create or delete subdirectories within the watched directories while the server is running.

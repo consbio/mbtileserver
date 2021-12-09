@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -69,7 +68,6 @@ func NewFSWatcher(svcSet *handlers.ServiceSet, generateID handlers.IDGenerator) 
 
 // Close closes the FSWatcher and stops watching the filesystem.
 func (w *FSWatcher) Close() {
-	fmt.Println("Close called")
 	if w.watcher != nil {
 		w.watcher.Close()
 	}
@@ -81,7 +79,7 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 
 	// debounced call to create / update tileset
 	go debounce(500*time.Millisecond, c, func(path string) {
-		// determine file ID for tileset
+		// callback for first time path is debounced
 		id, err := w.generateID(path, baseDir)
 		if err != nil {
 			log.Errorf("Could not create ID for tileset %q\n%v", path, err)
@@ -90,6 +88,8 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 		// lock tileset for writing, if it exists
 		w.svcSet.LockTileset(id)
 	}, func(path string) {
+		// callback after debouncing incoming requests
+
 		// Verify that file can be opened with sqlite.
 		// If file cannot be opened, assume it is still being written / copied.
 		if !mbtiles.VerifyDB(path) {
@@ -109,9 +109,10 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 			if err != nil {
 				log.Errorf("Could not update tileset %q with ID %q\n%v", path, id, err)
 			} else {
+				// only unlock if successfully updated
+				w.svcSet.UnlockTileset(id)
 				log.Infof("Updated tileset %q with ID %q\n", path, id)
 			}
-			w.svcSet.UnlockTileset(id)
 			return
 		}
 
