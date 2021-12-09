@@ -5,6 +5,8 @@
 ### General changes
 
 -   display attribution in preview maps if present in tileset metadata.
+-   upgraded Docker containers to Go 1.17
+-   upgraded Go version used for release to Go 1.17
 
 ### Breaking changes
 
