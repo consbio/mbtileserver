@@ -144,29 +144,6 @@
                 }
             }
 
-            if (tileJSON.grids && tileJSON.grids.length > 0) {
-                var gridURL = tileJSON.grids[0];
-                var utfgrid = L.utfGrid(gridURL, {
-                    resolution: 4,
-                    pointerCursor: true,
-                    mouseInterval: 66 // Delay for mousemove events
-                });
-                utfgrid.addTo(map);
-
-                var infoContainer = L.DomUtil.create(
-                    "div",
-                    "info",
-                    L.DomUtil.get("Map")
-                );
-                var textNode = L.DomUtil.create("h3", "", infoContainer);
-                textNode.innerHTML =
-                    "This service has UTF-8 Grids; see console for grid data.";
-
-                utfgrid.on("mouseover", function(e) {
-                    console.log("UTF grid data:", e.data);
-                });
-            }
-
             map.zoomControl.setPosition("topleft");
             map.addControl(
                 L.control.zoomBox({ modal: true, position: "topleft" })

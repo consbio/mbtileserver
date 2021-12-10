@@ -1,12 +1,12 @@
 module github.com/consbio/mbtileserver
 
 require (
+	github.com/brendan-ward/mbtiles-go v0.0.0-20211210015813-553bc514bbdf
 	github.com/certifi/gocertifi v0.0.0-20210507211836-431795d63e8d // indirect
 	github.com/evalphobia/logrus_sentry v0.8.2
 	github.com/getsentry/raven-go v0.2.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/labstack/echo/v4 v4.3.0
-	github.com/mattn/go-sqlite3 v1.14.7
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749
 	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546

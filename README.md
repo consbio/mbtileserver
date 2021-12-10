@@ -8,10 +8,10 @@ format.
 [![GoDoc](https://godoc.org/github.com/consbio/mbtileserver?status.svg)](http://godoc.org/github.com/consbio/mbtileserver)
 [![Go Report Card](https://goreportcard.com/badge/github.com/consbio/mbtileserver)](https://goreportcard.com/report/github.com/consbio/mbtileserver)
 
-It currently provides support for `png`, `jpg`, and `pbf` (vector tile)
+It currently provides support for `png`, `jpg`, `webp`, and `pbf` (vector tile)
 tilesets according to version 1.0 of the mbtiles specification. Tiles
 are served following the XYZ tile scheme, based on the Web Mercator
-coordinate reference system. UTF8 Grids are also supported.
+coordinate reference system. UTF8 Grids are no longer supported.
 
 In addition to tile-level access, it provides:
 
@@ -273,15 +273,7 @@ The primary use of `mbtileserver` is as a host for XYZ tiles.
 These are provided at:
 `/services/<tileset_id>/tiles/{z}/{x}/{y}.<format>`
 
-where `<format>` is one of `png`, `jpg`, `pbf` depending on the type of data in the tileset.
-
-If UTF-8 Grid data are present in the mbtiles file, they will be served up over the
-grid endpoint:
-`http://localhost/services/states_outline/tiles/{z}/{x}/{y}.json`
-
-Grids are assumed to be gzip or zlib compressed in the mbtiles file. These grids
-are automatically spliced with any grid key/value data if such exists in the mbtiles
-file.
+where `<format>` is one of `png`, `jpg`, `webp`, `pbf` depending on the type of data in the tileset.
 
 ## TileJSON API
 
@@ -499,6 +491,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
 
 <!-- markdownlint-enable -->
 <!-- prettier-ignore-end -->
+
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!

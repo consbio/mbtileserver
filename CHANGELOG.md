@@ -7,11 +7,14 @@
 -   display attribution in preview maps if present in tileset metadata.
 -   upgraded Docker containers to Go 1.17
 -   upgraded Go version used for release to Go 1.17
+-   dropped internal mbtiles package in favor of github.com/brendan-ward/mbtiles-go,
+    which wraps the SQlite-specific go package `crawshaw.io/sqlite`
 
 ### Breaking changes
 
 -   removes ArcGIS API layer info at the service root and layers endpoint (#116);
     this was not providing useful information for image tilesets.
+-   removed support for UTF Grids
 
 ### Bug Fixes
 

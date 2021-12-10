@@ -28,7 +28,6 @@ gulp.task("concat-js", function () {
             "node_modules/leaflet-basemaps/L.Control.Basemaps-min.js",
             "node_modules/leaflet-range/L.Control.Range-min.js",
             "node_modules/leaflet-base64-legend/L.Control.Base64Legend-min.js",
-            "node_modules/leaflet-utfgrid/L.UTFGrid-min.js",
             "node_modules/mapbox-gl/dist/mapbox-gl.js",
         ])
         .pipe(strip())
