@@ -5,6 +5,7 @@ WORKDIR /
 RUN apk add git build-base
 COPY . .
 
+RUN cd handlers; go run -tags=dev assets_generate.go
 RUN GOOS=linux go build -o /mbtileserver
 
 

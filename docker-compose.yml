@@ -3,6 +3,7 @@ version: "3"
 services:
     mbtileserver:
         image: consbio/mbtileserver:latest
+        build: .
         container_name: mbtileserver
         entrypoint: /mbtileserver --enable-reload-signal
         restart: always
