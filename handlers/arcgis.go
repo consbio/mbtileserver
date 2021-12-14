@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type arcGISLOD struct {
@@ -212,6 +213,12 @@ func (ts *Tileset) arcgisServiceJSON() ([]byte, error) {
 // arcgisServiceHandler is an http.HandlerFunc that returns standard ArcGIS
 // JSON for a given ArcGIS tile service
 func (ts *Tileset) arcgisServiceHandler(w http.ResponseWriter, r *http.Request) {
+	// wait up to 30 seconds to see if tileset is ready and return it if possible
+	if ts.isLockedWithTimeout(30 * time.Second) {
+		tilesetLockedHandler(w, r)
+		return
+	}
+
 	svcJSON, err := ts.arcgisServiceJSON()
 
 	if err != nil {
@@ -291,6 +298,12 @@ func (ts *Tileset) arcgisLayersJSON() ([]byte, error) {
 // arcgisLayersHandler is an http.HandlerFunc that returns standard ArcGIS
 // Layers JSON for a given ArcGIS tile service
 func (ts *Tileset) arcgisLayersHandler(w http.ResponseWriter, r *http.Request) {
+	// wait up to 30 seconds to see if tileset is ready and return it if possible
+	if ts.isLockedWithTimeout(30 * time.Second) {
+		tilesetLockedHandler(w, r)
+		return
+	}
+
 	layersJSON, err := ts.arcgisLayersJSON()
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -343,6 +356,12 @@ func (ts *Tileset) arcgisLegendJSON() ([]byte, error) {
 // arcgisLegendHandler is an http.HandlerFunc that returns minimal ArcGIS
 // legend JSON for a given ArcGIS tile service
 func (ts *Tileset) arcgisLegendHandler(w http.ResponseWriter, r *http.Request) {
+	// wait up to 30 seconds to see if tileset is ready and return it if possible
+	if ts.isLockedWithTimeout(30 * time.Second) {
+		tilesetLockedHandler(w, r)
+		return
+	}
+
 	legendJSON, err := ts.arcgisLegendJSON()
 
 	if err != nil {
@@ -362,6 +381,13 @@ func (ts *Tileset) arcgisLegendHandler(w http.ResponseWriter, r *http.Request) {
 // arcgisTileHandler returns an image tile or blank image for a given
 // tile request within a given ArcGIS tile service
 func (ts *Tileset) arcgisTileHandler(w http.ResponseWriter, r *http.Request) {
+
+	// wait up to 30 seconds to see if tileset is ready and return it if possible
+	if ts.isLockedWithTimeout(30 * time.Second) {
+		tilesetLockedHandler(w, r)
+		return
+	}
+
 	db := ts.db
 
 	// split path components to extract tile coordinates x, y and z

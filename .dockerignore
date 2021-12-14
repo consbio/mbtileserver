@@ -1,4 +1,4 @@
 **/.git
 **/node_modules
-mbtiles/testdata/*
-mbtiles/testdata-bad/*
+testdata/*
+testdata-bad/*

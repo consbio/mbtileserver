@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 )
 
+type IDGenerator func(filename, baseDir string) (string, error)
+
 // SHA1ID generates a URL safe base64 encoded SHA1 hash of the filename.
 func SHA1ID(filename string) string {
 	// generate IDs from hash of full file path
