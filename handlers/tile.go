@@ -37,7 +37,7 @@ func tileCoordFromString(z, x, y string) (tc tileCoord, ext string, err error) {
 		errMsgOOB   = "%s coordinate (%d) is out of bounds for zoom level %d"
 	)
 	if tc.x, err = strconv.ParseInt(x, 10, 64); err != nil {
-		err = fmt.Errorf(errMsgParse, "first", err)
+		err = fmt.Errorf(errMsgParse, "x", err)
 		return
 	}
 	if tc.x >= (1 << tc.z) {
