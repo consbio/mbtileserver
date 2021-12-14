@@ -19,13 +19,13 @@ func init() {
 	// load templates
 	templatesFS, err := fs.Sub(templateAssets, "templates")
 	if err != nil {
-		fmt.Errorf("Error getting embedded path for templates", err)
+		fmt.Errorf("Error getting embedded path for templates: %w", err)
 		panic(err)
 	}
 
 	t, err := template.ParseFS(templatesFS, "map.html", "map_gl.html")
 	if err != nil {
-		fmt.Errorf("Could not resolve template", err)
+		fmt.Errorf("Could not resolve template: %w", err)
 		panic(err)
 	}
 	templates = t
