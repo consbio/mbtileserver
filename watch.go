@@ -7,8 +7,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	mbtiles "github.com/brendan-ward/mbtiles-go"
 	"github.com/consbio/mbtileserver/handlers"
-	"github.com/consbio/mbtileserver/mbtiles"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -90,11 +90,14 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 	}, func(path string) {
 		// callback after debouncing incoming requests
 
-		// Verify that file can be opened with sqlite.
+		// Verify that file can be opened with mbtiles-go, which runs
+		// validation on open.
 		// If file cannot be opened, assume it is still being written / copied.
-		if !mbtiles.VerifyDB(path) {
+		db, err := mbtiles.Open(path)
+		if err != nil {
 			return
 		}
+		db.Close()
 
 		// determine file ID for tileset
 		id, err := w.generateID(path, baseDir)
