@@ -9,6 +9,8 @@
 -   upgraded Go version used for release to Go 1.17
 -   now requires Go 1.16+
 -   switched to go:embed for embedding templates and static assets
+-   dropped internal mbtiles package in favor of github.com/brendan-ward/mbtiles-go,
+    which wraps the SQlite-specific go package `crawshaw.io/sqlite`
 
 ### Breaking changes
 
@@ -16,6 +18,7 @@
     this was not providing useful information for image tilesets.
 -   removed `handlers.Assets`; static assets are intended only for use in template
     or static file handlers.
+-   removed support for UTF Grids
 
 ### Bug Fixes
 

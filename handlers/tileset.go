@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/consbio/mbtileserver/mbtiles"
+	mbtiles "github.com/brendan-ward/mbtiles-go"
 )
 
 // Tileset provides a tileset constructed from an mbtiles file
 type Tileset struct {
 	svc        *ServiceSet
-	db         *mbtiles.DB
+	db         *mbtiles.MBtiles
 	id         string
 	name       string
 	tileformat mbtiles.TileFormat
@@ -26,7 +26,7 @@ type Tileset struct {
 // Tileset is registered at the passed in path.
 // Any errors encountered opening the tileset are returned.
 func newTileset(svc *ServiceSet, filename, id, path string) (*Tileset, error) {
-	db, err := mbtiles.NewDB(filename)
+	db, err := mbtiles.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid mbtiles file %q: %v", filename, err)
 	}
@@ -46,7 +46,7 @@ func newTileset(svc *ServiceSet, filename, id, path string) (*Tileset, error) {
 		db:         db,
 		id:         id,
 		name:       name,
-		tileformat: db.TileFormat(),
+		tileformat: db.GetTileFormat(),
 		published:  true,
 	}
 
@@ -85,14 +85,10 @@ func (ts *Tileset) reload() error {
 		return nil
 	}
 
-	filename := ts.db.Filename()
+	filename := ts.db.GetFilename()
+	ts.db.Close()
 
-	err := ts.db.Close()
-	if err != nil {
-		return err
-	}
-
-	db, err := mbtiles.NewDB(filename)
+	db, err := mbtiles.Open(filename)
 	if err != nil {
 		return fmt.Errorf("Invalid mbtiles file %q: %v", filename, err)
 	}
@@ -104,10 +100,7 @@ func (ts *Tileset) reload() error {
 // Delete closes and deletes the mbtiles file for this tileset
 func (ts *Tileset) delete() error {
 	if ts.db != nil {
-		err := ts.db.Close()
-		if err != nil {
-			return err
-		}
+		ts.db.Close()
 	}
 	ts.db = nil
 	ts.published = false
@@ -130,7 +123,7 @@ func (ts *Tileset) TileJSON(svcURL string, query string) (map[string]interface{}
 
 	db := ts.db
 
-	imgFormat := db.TileFormatString()
+	imgFormat := db.GetTileFormat().String()
 	out := map[string]interface{}{
 		"tilejson": "2.1.0",
 		"scheme":   "xyz",
@@ -160,10 +153,6 @@ func (ts *Tileset) TileJSON(svcURL string, query string) (map[string]interface{}
 		default:
 			out[k] = v
 		}
-	}
-
-	if db.HasUTFGrid() {
-		out["grids"] = []string{fmt.Sprintf("%s/tiles/{z}/{x}/{y}.json%s", svcURL, query)}
 	}
 	return out, nil
 }
@@ -222,7 +211,7 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	z, x, y := pcs[l-3], pcs[l-2], pcs[l-1]
-	tc, ext, err := tileCoordFromString(z, x, y)
+	tc, _, err := tileCoordFromString(z, x, y)
 	if err != nil {
 		http.Error(w, "invalid tile coordinates", http.StatusBadRequest)
 		return
@@ -230,23 +219,11 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 	var data []byte
 	// flip y to match the spec
 	tc.y = (1 << uint64(tc.z)) - 1 - tc.y
-	isGrid := ext == ".json"
-	switch {
-	case !isGrid:
-		err = db.ReadTile(tc.z, tc.x, tc.y, &data)
-	case isGrid && db.HasUTFGrid():
-		err = db.ReadGrid(tc.z, tc.x, tc.y, &data)
-	default:
-		err = fmt.Errorf("no grid supplied by tile database")
-	}
+	err = db.ReadTile(tc.z, tc.x, tc.y, &data)
+
 	if err != nil {
-		// augment error info
-		t := "tile"
-		if isGrid {
-			t = "grid"
-		}
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		ts.svc.logError("cannot fetch %s from DB for z=%d, x=%d, y=%d at path %v: %v", t, tc.z, tc.x, tc.y, r.URL.Path, err)
+		ts.svc.logError("cannot fetch tile from DB for z=%d, x=%d, y=%d at path %v: %v", tc.z, tc.x, tc.y, r.URL.Path, err)
 		return
 	}
 	if data == nil || len(data) <= 1 {
@@ -254,19 +231,11 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isGrid {
-		w.Header().Set("Content-Type", "application/json")
-		if db.UTFGridCompression() == mbtiles.ZLIB {
-			w.Header().Set("Content-Encoding", "deflate")
-		} else {
-			w.Header().Set("Content-Encoding", "gzip")
-		}
-	} else {
-		w.Header().Set("Content-Type", db.ContentType())
-		if db.TileFormat() == mbtiles.PBF {
-			w.Header().Set("Content-Encoding", "gzip")
-		}
+	w.Header().Set("Content-Type", db.GetTileFormat().MimeType())
+	if db.GetTileFormat() == mbtiles.PBF {
+		w.Header().Set("Content-Encoding", "gzip")
 	}
+
 	_, err = w.Write(data)
 
 	if err != nil {
@@ -308,7 +277,7 @@ func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
 		template.JS(string(bytes)),
 	}
 
-	switch ts.db.TileFormat() {
+	switch ts.db.GetTileFormat() {
 	default:
 		executeTemplate(w, "map", p)
 	case mbtiles.PBF:

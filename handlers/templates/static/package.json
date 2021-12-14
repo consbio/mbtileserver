@@ -34,7 +34,6 @@
         "leaflet-base64-legend": "^0.1.1",
         "leaflet-basemaps": "^0.3.4",
         "leaflet-range": "^0.1.0",
-        "leaflet-utfgrid": "^0.3.0",
         "leaflet-zoombox": "^0.5.2",
         "mapbox-gl": "^1.13.1"
     }

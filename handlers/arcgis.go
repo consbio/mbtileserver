@@ -106,7 +106,7 @@ func (svc *ServiceSet) arcgisInfoHandler(w http.ResponseWriter, r *http.Request)
 // tile service.
 func (ts *Tileset) arcgisServiceJSON() ([]byte, error) {
 	db := ts.db
-	imgFormat := db.TileFormatString()
+	imgFormat := db.GetTileFormat().String()
 	metadata, err := db.ReadMetadata()
 	if err != nil {
 		return nil, err
@@ -402,7 +402,7 @@ func (ts *Tileset) arcgisTileHandler(w http.ResponseWriter, r *http.Request) {
 			ts.svc.logError("could not return blank image for %v: %v", r.URL.Path, err)
 		}
 	} else {
-		w.Header().Set("Content-Type", db.ContentType())
+		w.Header().Set("Content-Type", db.GetTileFormat().MimeType())
 		_, err = w.Write(data)
 
 		if err != nil {

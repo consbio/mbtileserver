@@ -26,12 +26,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	mbtiles "github.com/brendan-ward/mbtiles-go"
 	"github.com/consbio/mbtileserver/handlers"
-	"github.com/consbio/mbtileserver/mbtiles"
 )
 
 var (
-	tilesets    map[string]mbtiles.DB
+	tilesets    map[string]mbtiles.MBtiles
 	startuptime = time.Now()
 )
 
@@ -264,7 +264,7 @@ func serve() {
 	for _, path := range strings.Split(tilePath, ",") {
 		// Discover all tilesets
 		log.Infof("Searching for tilesets in %v\n", path)
-		filenames, err := mbtiles.ListDBs(path)
+		filenames, err := mbtiles.FindMBtiles(path)
 		if err != nil {
 			log.Errorf("Unable to list mbtiles in '%v': %v\n", path, err)
 		}
