@@ -448,19 +448,11 @@ Then to build the minified version, run:
 $  npm run build
 ```
 
-Modifying the `.go` files always requires re-running `go build .`.
+Built static assets are saved to `handlers/templates/static/dist` and included
+via `go:embed` into the final executable.
 
-In case you have modified the templates and static assets, you need to run
-`go generate ./handlers/templates.go` to ensure that your modifications
-are embedded into the executable. For this to work, you must have
-[github.com/shurcooL/vfsgen)[https://github.com/shurcooL/vfsgen) installed.
-
-```bash
-$  go generate ./handlers/templates.go
-```
-
-This will rewrite the `assets_vfsdata.go` which you must commit along with your
-modification. You should run `go build` after `go generate`.
+Modifying the `.go` files or anything under `handlers/templates` always requires
+re-running `go build .`.
 
 ## Changes
 
@@ -499,6 +491,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
 
 <!-- markdownlint-enable -->
 <!-- prettier-ignore-end -->
+
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!

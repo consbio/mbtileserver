@@ -1,23 +1,34 @@
 package handlers
 
-//go:generate go run -tags=dev assets_generate.go
-
 import (
 	"bytes"
+	"embed"
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"net/http"
-
-	"github.com/shurcooL/httpfs/html/vfstemplate"
 )
+
+//go:embed templates/*.html
+var templateAssets embed.FS
 
 var templates *template.Template
 
 func init() {
 	// load templates
-	templates = template.New("_base_")
-	vfstemplate.ParseFiles(Assets, templates, "map.html", "map_gl.html")
+	templatesFS, err := fs.Sub(templateAssets, "templates")
+	if err != nil {
+		fmt.Errorf("Error getting embedded path for templates", err)
+		panic(err)
+	}
+
+	t, err := template.ParseFS(templatesFS, "map.html", "map_gl.html")
+	if err != nil {
+		fmt.Errorf("Could not resolve template", err)
+		panic(err)
+	}
+	templates = t
 }
 
 // executeTemplates first tries to find the template with the given name for
