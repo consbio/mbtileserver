@@ -5,6 +5,12 @@
 ### General changes
 
 -   display attribution in preview maps if present in tileset metadata.
+-   upgraded Docker containers to Go 1.17
+-   upgraded Go version used for release to Go 1.17
+-   now requires Go 1.16+
+-   switched to go:embed for embedding templates and static assets
+-   dropped internal mbtiles package in favor of github.com/brendan-ward/mbtiles-go,
+    which wraps the SQlite-specific go package `crawshaw.io/sqlite`
 
 ### Command-line interface
 
@@ -14,10 +20,15 @@
 
 -   removes ArcGIS API layer info at the service root and layers endpoint (#116);
     this was not providing useful information for image tilesets.
+-   removed `handlers.Assets`; static assets are intended only for use in template
+    or static file handlers.
+-   removed support for UTF Grids
 
 ### Bug Fixes
 
 -   fix handlers for ArcGIS API endpoints, resolving tile shift issue (#116).
+-   obviated incorrect include of node_modules in compiled asset file; executable
+    is now smaller and faster to build.
 
 ## O.7
 

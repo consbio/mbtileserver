@@ -8,10 +8,10 @@ format.
 [![GoDoc](https://godoc.org/github.com/consbio/mbtileserver?status.svg)](http://godoc.org/github.com/consbio/mbtileserver)
 [![Go Report Card](https://goreportcard.com/badge/github.com/consbio/mbtileserver)](https://goreportcard.com/report/github.com/consbio/mbtileserver)
 
-It currently provides support for `png`, `jpg`, and `pbf` (vector tile)
+It currently provides support for `png`, `jpg`, `webp`, and `pbf` (vector tile)
 tilesets according to version 1.0 of the mbtiles specification. Tiles
 are served following the XYZ tile scheme, based on the Web Mercator
-coordinate reference system. UTF8 Grids are also supported.
+coordinate reference system. UTF8 Grids are no longer supported.
 
 In addition to tile-level access, it provides:
 
@@ -33,9 +33,9 @@ virtual machine without any issues.
 
 ## Supported Go versions
 
-_Requires Go 1.13+._
+_Requires Go 1.16+._
 
-`mbtileserver` uses go modules and follows standard practices as of Go 1.13.
+`mbtileserver` uses go modules and follows standard practices as of Go 1.16.
 
 ## Installation
 
@@ -302,15 +302,7 @@ The primary use of `mbtileserver` is as a host for XYZ tiles.
 These are provided at:
 `/services/<tileset_id>/tiles/{z}/{x}/{y}.<format>`
 
-where `<format>` is one of `png`, `jpg`, `pbf` depending on the type of data in the tileset.
-
-If UTF-8 Grid data are present in the mbtiles file, they will be served up over the
-grid endpoint:
-`http://localhost/services/states_outline/tiles/{z}/{x}/{y}.json`
-
-Grids are assumed to be gzip or zlib compressed in the mbtiles file. These grids
-are automatically spliced with any grid key/value data if such exists in the mbtiles
-file.
+where `<format>` is one of `png`, `jpg`, `webp`, `pbf` depending on the type of data in the tileset.
 
 ## TileJSON API
 
@@ -477,19 +469,11 @@ Then to build the minified version, run:
 $  npm run build
 ```
 
-Modifying the `.go` files always requires re-running `go build .`.
+Built static assets are saved to `handlers/templates/static/dist` and included
+via `go:embed` into the final executable.
 
-In case you have modified the templates and static assets, you need to run
-`go generate ./handlers/templates.go` to ensure that your modifications
-are embedded into the executable. For this to work, you must have
-[github.com/shurcooL/vfsgen)[https://github.com/shurcooL/vfsgen) installed.
-
-```bash
-$  go generate ./handlers/templates.go
-```
-
-This will rewrite the `assets_vfsdata.go` which you must commit along with your
-modification. You should run `go build` after `go generate`.
+Modifying the `.go` files or anything under `handlers/templates` always requires
+re-running `go build .`.
 
 ## Changes
 
