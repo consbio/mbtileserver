@@ -33,9 +33,9 @@ virtual machine without any issues.
 
 ## Supported Go versions
 
-_Requires Go 1.13+._
+_Requires Go 1.16+._
 
-`mbtileserver` uses go modules and follows standard practices as of Go 1.13.
+`mbtileserver` uses go modules and follows standard practices as of Go 1.16.
 
 ## Installation
 
@@ -440,19 +440,11 @@ Then to build the minified version, run:
 $  npm run build
 ```
 
-Modifying the `.go` files always requires re-running `go build .`.
+Built static assets are saved to `handlers/templates/static/dist` and included
+via `go:embed` into the final executable.
 
-In case you have modified the templates and static assets, you need to run
-`go generate ./handlers/templates.go` to ensure that your modifications
-are embedded into the executable. For this to work, you must have
-[github.com/shurcooL/vfsgen)[https://github.com/shurcooL/vfsgen) installed.
-
-```bash
-$  go generate ./handlers/templates.go
-```
-
-This will rewrite the `assets_vfsdata.go` which you must commit along with your
-modification. You should run `go build` after `go generate`.
+Modifying the `.go` files or anything under `handlers/templates` always requires
+re-running `go build .`.
 
 ## Changes
 
