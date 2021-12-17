@@ -14,15 +14,15 @@ import (
 
 // ServiceSetConfig provides configuration options for a ServiceSet
 type ServiceSetConfig struct {
-	EnableServiceList        bool
-	EnableTileJSON           bool
-	EnablePreview            bool
-	EnableArcGIS             bool
-	EnableReloadEndpoint     bool
-	ReloadToken              string
+	EnableServiceList    bool
+	EnableTileJSON       bool
+	EnablePreview        bool
+	EnableArcGIS         bool
+	EnableReloadEndpoint bool
+	ReloadToken          string
 
-	RootURL           *url.URL
-	ErrorWriter       io.Writer
+	RootURL     *url.URL
+	ErrorWriter io.Writer
 }
 
 // ServiceSet is a group of tilesets plus configuration options.
@@ -30,16 +30,16 @@ type ServiceSetConfig struct {
 type ServiceSet struct {
 	tilesets map[string]*Tileset
 
-	enableServiceList        bool
-	enableTileJSON           bool
-	enablePreview            bool
-	enableArcGIS             bool
-	enableReloadEndpoint     bool
-	reloadToken              string
+	enableServiceList    bool
+	enableTileJSON       bool
+	enablePreview        bool
+	enableArcGIS         bool
+	enableReloadEndpoint bool
+	reloadToken          string
 
-	domain            string
-	rootURL           *url.URL
-	errorWriter       io.Writer
+	domain      string
+	rootURL     *url.URL
+	errorWriter io.Writer
 }
 
 // New returns a new ServiceSet.
@@ -51,16 +51,16 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 	}
 
 	s := &ServiceSet{
-		tilesets:          make(map[string]*Tileset),
-		enableServiceList:        cfg.EnableServiceList,
-		enableTileJSON:           cfg.EnableTileJSON,
-		enablePreview:            cfg.EnablePreview,
-		enableArcGIS:             cfg.EnableArcGIS,
-		enableReloadEndpoint:     cfg.EnableReloadEndpoint,
-		reloadToken:              cfg.ReloadToken,
+		tilesets:             make(map[string]*Tileset),
+		enableServiceList:    cfg.EnableServiceList,
+		enableTileJSON:       cfg.EnableTileJSON,
+		enablePreview:        cfg.EnablePreview,
+		enableArcGIS:         cfg.EnableArcGIS,
+		enableReloadEndpoint: cfg.EnableReloadEndpoint,
+		reloadToken:          cfg.ReloadToken,
 
-		rootURL:           cfg.RootURL,
-		errorWriter:       cfg.ErrorWriter,
+		rootURL:     cfg.RootURL,
+		errorWriter: cfg.ErrorWriter,
 	}
 
 	return s, nil
@@ -178,7 +178,7 @@ func (s *ServiceSet) logError(format string, args ...interface{}) {
 
 // reloadEndpointHandler
 func (s *ServiceSet) reloadEndpointHandler(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Query().Get("token")
+	token, err := r.URL.Query().Get("token")
 	if s.enableReloadEndpoint && token == s.reloadToken {
 		_, err := w.Write([]byte("OK"))
 		if err != nil {

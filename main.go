@@ -61,27 +61,27 @@ var rootCmd = &cobra.Command{
 }
 
 var (
-	port                int
-	tilePath            string
-	certificate         string
-	privateKey          string
-	rootURLStr          string
-	domain              string
-	secretKey           string
-	sentryDSN           string
-	verbose             bool
-	autotls             bool
-	redirect            bool
-	enableReloadSignal  bool
-	enableReloadFSWatch bool
-	enableReloadEndpoint       bool
-	reloadToken        string
-	generateIDs         bool
-	enableArcGIS        bool
-	disablePreview      bool
-	disableTileJSON     bool
-	disableServiceList  bool
-	tilesOnly           bool
+	port                 int
+	tilePath             string
+	certificate          string
+	privateKey           string
+	rootURLStr           string
+	domain               string
+	secretKey            string
+	sentryDSN            string
+	verbose              bool
+	autotls              bool
+	redirect             bool
+	enableReloadSignal   bool
+	enableReloadFSWatch  bool
+	enableReloadEndpoint bool
+	reloadToken          string
+	generateIDs          bool
+	enableArcGIS         bool
+	disablePreview       bool
+	disableTileJSON      bool
+	disableServiceList   bool
+	tilesOnly            bool
 )
 
 func init() {
@@ -286,14 +286,14 @@ func serve() {
 	}
 
 	svcSet, err := handlers.New(&handlers.ServiceSetConfig{
-		RootURL:           rootURL,
-		ErrorWriter:       &errorLogger{log: log.New()},
-		EnableServiceList: !disableServiceList,
-		EnableTileJSON:    !disableTileJSON,
-		EnablePreview:     !disablePreview,
-		EnableArcGIS:      enableArcGIS,
-		EnableReloadEndpoint:     enableReloadEndpoint,
-		ReloadToken:      reloadToken,
+		RootURL:              rootURL,
+		ErrorWriter:          &errorLogger{log: log.New()},
+		EnableServiceList:    !disableServiceList,
+		EnableTileJSON:       !disableTileJSON,
+		EnablePreview:        !disablePreview,
+		EnableArcGIS:         enableArcGIS,
+		EnableReloadEndpoint: enableReloadEndpoint,
+		ReloadToken:          reloadToken,
 	})
 	if err != nil {
 		log.Fatalln("Could not construct ServiceSet")
