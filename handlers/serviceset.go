@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 // ServiceSetConfig provides configuration options for a ServiceSet
@@ -17,6 +18,8 @@ type ServiceSetConfig struct {
 	EnableTileJSON    bool
 	EnablePreview     bool
 	EnableArcGIS      bool
+	EnableRefresh     bool
+	RefreshToken      string
 	RootURL           *url.URL
 	ErrorWriter       io.Writer
 }
@@ -30,10 +33,11 @@ type ServiceSet struct {
 	enableTileJSON    bool
 	enablePreview     bool
 	enableArcGIS      bool
-
-	domain      string
-	rootURL     *url.URL
-	errorWriter io.Writer
+	enableRefresh     bool
+	refreshToken      string
+	domain            string
+	rootURL           *url.URL
+	errorWriter       io.Writer
 }
 
 // New returns a new ServiceSet.
@@ -50,6 +54,8 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 		enableTileJSON:    cfg.EnableTileJSON,
 		enablePreview:     cfg.EnablePreview,
 		enableArcGIS:      cfg.EnableArcGIS,
+		enableRefresh:     cfg.EnableRefresh,
+		refreshToken:      cfg.RefreshToken,
 		rootURL:           cfg.RootURL,
 		errorWriter:       cfg.ErrorWriter,
 	}
@@ -167,6 +173,22 @@ func (s *ServiceSet) logError(format string, args ...interface{}) {
 	}
 }
 
+// refreshHandler
+func (s *ServiceSet) refreshHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if s.enableRefresh && token == s.refreshToken {
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	} else {
+		http.NotFound(w, r)
+	}
+
+}
+
 // serviceListHandler is an http.HandlerFunc that provides a listing of all
 // published services in this ServiceSet
 func (s *ServiceSet) serviceListHandler(w http.ResponseWriter, r *http.Request) {
@@ -281,5 +303,6 @@ func (s *ServiceSet) Handler() http.Handler {
 		m.Handle(ArcGISRoot, http.NotFoundHandler())
 	}
 
+	m.HandleFunc("/refresh", s.refreshHandler)
 	return m
 }
