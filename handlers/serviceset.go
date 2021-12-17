@@ -14,12 +14,13 @@ import (
 
 // ServiceSetConfig provides configuration options for a ServiceSet
 type ServiceSetConfig struct {
-	EnableServiceList bool
-	EnableTileJSON    bool
-	EnablePreview     bool
-	EnableArcGIS      bool
-	EnableRefresh     bool
-	RefreshToken      string
+	EnableServiceList        bool
+	EnableTileJSON           bool
+	EnablePreview            bool
+	EnableArcGIS             bool
+	EnableReloadEndpoint     bool
+	ReloadToken              string
+
 	RootURL           *url.URL
 	ErrorWriter       io.Writer
 }
@@ -29,12 +30,13 @@ type ServiceSetConfig struct {
 type ServiceSet struct {
 	tilesets map[string]*Tileset
 
-	enableServiceList bool
-	enableTileJSON    bool
-	enablePreview     bool
-	enableArcGIS      bool
-	enableRefresh     bool
-	refreshToken      string
+	enableServiceList        bool
+	enableTileJSON           bool
+	enablePreview            bool
+	enableArcGIS             bool
+	enableReloadEndpoint     bool
+	reloadToken              string
+
 	domain            string
 	rootURL           *url.URL
 	errorWriter       io.Writer
@@ -50,12 +52,13 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 
 	s := &ServiceSet{
 		tilesets:          make(map[string]*Tileset),
-		enableServiceList: cfg.EnableServiceList,
-		enableTileJSON:    cfg.EnableTileJSON,
-		enablePreview:     cfg.EnablePreview,
-		enableArcGIS:      cfg.EnableArcGIS,
-		enableRefresh:     cfg.EnableRefresh,
-		refreshToken:      cfg.RefreshToken,
+		enableServiceList:        cfg.EnableServiceList,
+		enableTileJSON:           cfg.EnableTileJSON,
+		enablePreview:            cfg.EnablePreview,
+		enableArcGIS:             cfg.EnableArcGIS,
+		enableReloadEndpoint:     cfg.EnableReloadEndpoint,
+		reloadToken:              cfg.ReloadToken,
+
 		rootURL:           cfg.RootURL,
 		errorWriter:       cfg.ErrorWriter,
 	}
@@ -173,10 +176,10 @@ func (s *ServiceSet) logError(format string, args ...interface{}) {
 	}
 }
 
-// refreshHandler
-func (s *ServiceSet) refreshHandler(w http.ResponseWriter, r *http.Request) {
+// reloadEndpointHandler
+func (s *ServiceSet) reloadEndpointHandler(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
-	if s.enableRefresh && token == s.refreshToken {
+	if s.enableReloadEndpoint && token == s.reloadToken {
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
 			http.NotFound(w, r)
@@ -303,6 +306,6 @@ func (s *ServiceSet) Handler() http.Handler {
 		m.Handle(ArcGISRoot, http.NotFoundHandler())
 	}
 
-	m.HandleFunc("/refresh", s.refreshHandler)
+	m.HandleFunc("/reload", s.reloadEndpointHandler)
 	return m
 }

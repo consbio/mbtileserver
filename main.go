@@ -74,8 +74,8 @@ var (
 	redirect            bool
 	enableReloadSignal  bool
 	enableReloadFSWatch bool
-	enableRefresh       bool
-	refreshToken        string
+	enableReloadEndpoint       bool
+	reloadToken        string
 	generateIDs         bool
 	enableArcGIS        bool
 	disablePreview      bool
@@ -97,8 +97,8 @@ func init() {
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 
-	flags.BoolVar(&enableRefresh, "enable-refresh", false, "Enable refresh endpoints")
-	flags.StringVar(&refreshToken, "refresh-token", "", "Enable refresh endpoints")
+	flags.BoolVar(&enableReloadEndpoint, "enable-reload-endpoint", false, "Enable reload endpoint, depends on enable-reload-signal")
+	flags.StringVar(&reloadToken, "reload-endpoint-token", "", "Token for reload endpoint")
 	flags.BoolVarP(&enableArcGIS, "enable-arcgis", "", false, "Enable ArcGIS Mapserver endpoints")
 	flags.BoolVarP(&enableReloadFSWatch, "enable-fs-watch", "", false, "Enable reloading of tilesets by watching filesystem")
 	flags.BoolVarP(&enableReloadSignal, "enable-reload-signal", "", false, "Enable graceful reload using HUP signal to the server process")
@@ -234,8 +234,11 @@ func serve() {
 		disablePreview = true
 	}
 
-	if enableRefresh && refreshToken == "" {
-		log.Fatalln("Must specify a refresh-token")
+	if enableReloadEndpoint && !enableReloadSignal {
+		log.Fatalln("Must enable the reload signal for the endpoint")
+	}
+	if enableReloadEndpoint && reloadToken == "" {
+		log.Fatalln("Must specify a reload-token")
 	}
 
 	if !strings.HasPrefix(rootURLStr, "/") {
@@ -289,8 +292,8 @@ func serve() {
 		EnableTileJSON:    !disableTileJSON,
 		EnablePreview:     !disablePreview,
 		EnableArcGIS:      enableArcGIS,
-		EnableRefresh:     enableRefresh,
-		RefreshToken:      refreshToken,
+		EnableReloadEndpoint:     enableReloadEndpoint,
+		ReloadToken:      reloadToken,
 	})
 	if err != nil {
 		log.Fatalln("Could not construct ServiceSet")
