@@ -28,6 +28,7 @@ func debounce(interval time.Duration, input chan string, firstCallback func(arg 
 			if _, ok := items[item]; !ok {
 				// first time we see a given path, we need to call lockHandler
 				// to lock it (unlocked by callback)
+				log.Infof("debounced yoo")
 				firstCallback(item)
 			}
 			items[item] = true
@@ -80,6 +81,7 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 	// debounced call to create / update tileset
 	go debounce(500*time.Millisecond, c, func(path string) {
 		// callback for first time path is debounced
+		log.Infof("debounced here")
 		id, err := w.generateID(path, baseDir)
 		if err != nil {
 			log.Errorf("Could not create ID for tileset %q\n%v", path, err)
@@ -95,6 +97,7 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 		// If file cannot be opened, assume it is still being written / copied.
 		db, err := mbtiles.Open(path)
 		if err != nil {
+			log.Infof("exiting")
 			return
 		}
 		db.Close()
@@ -159,6 +162,8 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 				if event.Op&fsnotify.Write == fsnotify.Write {
 					// This event may get called multiple times while a file is being copied into a watched directory,
 					// so we debounce this instead.
+					log.Infof("debounced")
+
 					c <- path
 				}
 

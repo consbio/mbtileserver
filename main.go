@@ -74,6 +74,8 @@ var (
 	redirect            bool
 	enableReloadSignal  bool
 	enableReloadFSWatch bool
+	enableRefresh       bool
+	refreshToken        string
 	generateIDs         bool
 	enableArcGIS        bool
 	disablePreview      bool
@@ -95,6 +97,8 @@ func init() {
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 
+	flags.BoolVar(&enableRefresh, "enable-refresh", false, "Enable refresh endpoints")
+	flags.StringVar(&refreshToken, "refresh-token", "", "Enable refresh endpoints")
 	flags.BoolVarP(&enableArcGIS, "enable-arcgis", "", false, "Enable ArcGIS Mapserver endpoints")
 	flags.BoolVarP(&enableReloadFSWatch, "enable-fs-watch", "", false, "Enable reloading of tilesets by watching filesystem")
 	flags.BoolVarP(&enableReloadSignal, "enable-reload-signal", "", false, "Enable graceful reload using HUP signal to the server process")
@@ -209,7 +213,6 @@ func serve() {
 	if verbose {
 		log.SetLevel(log.DebugLevel)
 	}
-
 	if len(sentryDSN) > 0 {
 		hook, err := logrus_sentry.NewSentryHook(sentryDSN, []log.Level{
 			log.PanicLevel,
@@ -229,6 +232,10 @@ func serve() {
 		disableServiceList = true
 		disableTileJSON = true
 		disablePreview = true
+	}
+
+	if enableRefresh && refreshToken == "" {
+		log.Fatalln("Must specify a refresh-token")
 	}
 
 	if !strings.HasPrefix(rootURLStr, "/") {
@@ -282,6 +289,8 @@ func serve() {
 		EnableTileJSON:    !disableTileJSON,
 		EnablePreview:     !disablePreview,
 		EnableArcGIS:      enableArcGIS,
+		EnableRefresh:     enableRefresh,
+		RefreshToken:      refreshToken,
 	})
 	if err != nil {
 		log.Fatalln("Could not construct ServiceSet")
