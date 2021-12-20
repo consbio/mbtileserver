@@ -9,16 +9,20 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 // ServiceSetConfig provides configuration options for a ServiceSet
 type ServiceSetConfig struct {
-	EnableServiceList bool
-	EnableTileJSON    bool
-	EnablePreview     bool
-	EnableArcGIS      bool
-	RootURL           *url.URL
-	ErrorWriter       io.Writer
+	EnableServiceList  bool
+	EnableTileJSON     bool
+	EnablePreview      bool
+	EnableArcGIS       bool
+	EnableReloadSignal bool
+	ReloadToken        string
+
+	RootURL     *url.URL
+	ErrorWriter io.Writer
 }
 
 // ServiceSet is a group of tilesets plus configuration options.
@@ -26,10 +30,12 @@ type ServiceSetConfig struct {
 type ServiceSet struct {
 	tilesets map[string]*Tileset
 
-	enableServiceList bool
-	enableTileJSON    bool
-	enablePreview     bool
-	enableArcGIS      bool
+	enableServiceList  bool
+	enableTileJSON     bool
+	enablePreview      bool
+	enableArcGIS       bool
+	enableReloadSignal bool
+	reloadToken        string
 
 	domain      string
 	rootURL     *url.URL
@@ -45,13 +51,16 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 	}
 
 	s := &ServiceSet{
-		tilesets:          make(map[string]*Tileset),
-		enableServiceList: cfg.EnableServiceList,
-		enableTileJSON:    cfg.EnableTileJSON,
-		enablePreview:     cfg.EnablePreview,
-		enableArcGIS:      cfg.EnableArcGIS,
-		rootURL:           cfg.RootURL,
-		errorWriter:       cfg.ErrorWriter,
+		tilesets:           make(map[string]*Tileset),
+		enableServiceList:  cfg.EnableServiceList,
+		enableTileJSON:     cfg.EnableTileJSON,
+		enablePreview:      cfg.EnablePreview,
+		enableArcGIS:       cfg.EnableArcGIS,
+		enableReloadSignal: cfg.EnableReloadSignal,
+		reloadToken:        cfg.ReloadToken,
+
+		rootURL:     cfg.RootURL,
+		errorWriter: cfg.ErrorWriter,
 	}
 
 	return s, nil
@@ -165,6 +174,24 @@ func (s *ServiceSet) logError(format string, args ...interface{}) {
 	} else {
 		log.Printf(format, args...)
 	}
+}
+
+// reloadEndpointHandler
+func (s *ServiceSet) reloadEndpointHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if !s.enableReloadSignal || s.reloadToken == "" {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	} else if s.enableReloadSignal && token == s.reloadToken {
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			s.logError("Error rendering response during reload: %v", err)
+			return
+		}
+		syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+		return
+	}
+	http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 }
 
 // serviceListHandler is an http.HandlerFunc that provides a listing of all
@@ -281,5 +308,6 @@ func (s *ServiceSet) Handler() http.Handler {
 		m.Handle(ArcGISRoot, http.NotFoundHandler())
 	}
 
+	m.HandleFunc("/reload", s.reloadEndpointHandler)
 	return m
 }
