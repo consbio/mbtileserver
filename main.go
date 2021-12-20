@@ -61,26 +61,26 @@ var rootCmd = &cobra.Command{
 }
 
 var (
-	port                 int
-	tilePath             string
-	certificate          string
-	privateKey           string
-	rootURLStr           string
-	domain               string
-	secretKey            string
-	sentryDSN            string
-	verbose              bool
-	autotls              bool
-	redirect             bool
-	enableReloadSignal   bool
-	enableReloadFSWatch  bool
-	reloadToken          string
-	generateIDs          bool
-	enableArcGIS         bool
-	disablePreview       bool
-	disableTileJSON      bool
-	disableServiceList   bool
-	tilesOnly            bool
+	port                int
+	tilePath            string
+	certificate         string
+	privateKey          string
+	rootURLStr          string
+	domain              string
+	secretKey           string
+	sentryDSN           string
+	verbose             bool
+	autotls             bool
+	redirect            bool
+	enableReloadSignal  bool
+	enableReloadFSWatch bool
+	reloadToken         string
+	generateIDs         bool
+	enableArcGIS        bool
+	disablePreview      bool
+	disableTileJSON     bool
+	disableServiceList  bool
+	tilesOnly           bool
 )
 
 func init() {
@@ -96,7 +96,7 @@ func init() {
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 
-	flags.StringVar(&reloadToken, "reload-endpoint-token", "", "Token for reload endpoint")
+	flags.StringVar(&reloadToken, "reload-endpoint-token", "", "Sets a tokenized for reload endpoint")
 	flags.BoolVarP(&enableArcGIS, "enable-arcgis", "", false, "Enable ArcGIS Mapserver endpoints")
 	flags.BoolVarP(&enableReloadFSWatch, "enable-fs-watch", "", false, "Enable reloading of tilesets by watching filesystem")
 	flags.BoolVarP(&enableReloadSignal, "enable-reload-signal", "", false, "Enable graceful reload using HUP signal to the server process")
@@ -281,13 +281,14 @@ func serve() {
 	}
 
 	svcSet, err := handlers.New(&handlers.ServiceSetConfig{
-		RootURL:              rootURL,
-		ErrorWriter:          &errorLogger{log: log.New()},
-		EnableServiceList:    !disableServiceList,
-		EnableTileJSON:       !disableTileJSON,
-		EnablePreview:        !disablePreview,
-		EnableArcGIS:         enableArcGIS,
-		ReloadToken:          reloadToken,
+		RootURL:            rootURL,
+		ErrorWriter:        &errorLogger{log: log.New()},
+		EnableServiceList:  !disableServiceList,
+		EnableTileJSON:     !disableTileJSON,
+		EnablePreview:      !disablePreview,
+		EnableArcGIS:       enableArcGIS,
+		EnableReloadSignal: enableReloadSignal,
+		ReloadToken:        reloadToken,
 	})
 	if err != nil {
 		log.Fatalln("Could not construct ServiceSet")

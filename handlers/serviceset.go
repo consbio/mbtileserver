@@ -14,11 +14,12 @@ import (
 
 // ServiceSetConfig provides configuration options for a ServiceSet
 type ServiceSetConfig struct {
-	EnableServiceList    bool
-	EnableTileJSON       bool
-	EnablePreview        bool
-	EnableArcGIS         bool
-	ReloadToken          string
+	EnableServiceList  bool
+	EnableTileJSON     bool
+	EnablePreview      bool
+	EnableArcGIS       bool
+	EnableReloadSignal bool
+	ReloadToken        string
 
 	RootURL     *url.URL
 	ErrorWriter io.Writer
@@ -29,11 +30,12 @@ type ServiceSetConfig struct {
 type ServiceSet struct {
 	tilesets map[string]*Tileset
 
-	enableServiceList    bool
-	enableTileJSON       bool
-	enablePreview        bool
-	enableArcGIS         bool
-	reloadToken          string
+	enableServiceList  bool
+	enableTileJSON     bool
+	enablePreview      bool
+	enableArcGIS       bool
+	enableReloadSignal bool
+	reloadToken        string
 
 	domain      string
 	rootURL     *url.URL
@@ -49,12 +51,13 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 	}
 
 	s := &ServiceSet{
-		tilesets:             make(map[string]*Tileset),
-		enableServiceList:    cfg.EnableServiceList,
-		enableTileJSON:       cfg.EnableTileJSON,
-		enablePreview:        cfg.EnablePreview,
-		enableArcGIS:         cfg.EnableArcGIS,
-		reloadToken:          cfg.ReloadToken,
+		tilesets:           make(map[string]*Tileset),
+		enableServiceList:  cfg.EnableServiceList,
+		enableTileJSON:     cfg.EnableTileJSON,
+		enablePreview:      cfg.EnablePreview,
+		enableArcGIS:       cfg.EnableArcGIS,
+		enableReloadSignal: cfg.EnableReloadSignal,
+		reloadToken:        cfg.ReloadToken,
 
 		rootURL:     cfg.RootURL,
 		errorWriter: cfg.ErrorWriter,
@@ -176,17 +179,19 @@ func (s *ServiceSet) logError(format string, args ...interface{}) {
 // reloadEndpointHandler
 func (s *ServiceSet) reloadEndpointHandler(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
-	if token == s.reloadToken {
+	if !s.enableReloadSignal || s.reloadToken == "" {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	} else if s.enableReloadSignal && token == s.reloadToken {
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
 			s.logError("Error rendering response during reload: %v", err)
 			return
 		}
 		syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
-	} else {
-		http.NotFound(w, r)
+		return
 	}
-
+	http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 }
 
 // serviceListHandler is an http.HandlerFunc that provides a listing of all
