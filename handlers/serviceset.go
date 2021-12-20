@@ -18,7 +18,6 @@ type ServiceSetConfig struct {
 	EnableTileJSON       bool
 	EnablePreview        bool
 	EnableArcGIS         bool
-	EnableReloadEndpoint bool
 	ReloadToken          string
 
 	RootURL     *url.URL
@@ -34,7 +33,6 @@ type ServiceSet struct {
 	enableTileJSON       bool
 	enablePreview        bool
 	enableArcGIS         bool
-	enableReloadEndpoint bool
 	reloadToken          string
 
 	domain      string
@@ -56,7 +54,6 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 		enableTileJSON:       cfg.EnableTileJSON,
 		enablePreview:        cfg.EnablePreview,
 		enableArcGIS:         cfg.EnableArcGIS,
-		enableReloadEndpoint: cfg.EnableReloadEndpoint,
 		reloadToken:          cfg.ReloadToken,
 
 		rootURL:     cfg.RootURL,
@@ -178,11 +175,11 @@ func (s *ServiceSet) logError(format string, args ...interface{}) {
 
 // reloadEndpointHandler
 func (s *ServiceSet) reloadEndpointHandler(w http.ResponseWriter, r *http.Request) {
-	token, err := r.URL.Query().Get("token")
-	if s.enableReloadEndpoint && token == s.reloadToken {
+	token := r.URL.Query().Get("token")
+	if token == s.reloadToken {
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
-			http.NotFound(w, r)
+			s.logError("Error rendering response during reload: %v", err)
 			return
 		}
 		syscall.Kill(syscall.Getpid(), syscall.SIGHUP)

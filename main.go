@@ -74,7 +74,6 @@ var (
 	redirect             bool
 	enableReloadSignal   bool
 	enableReloadFSWatch  bool
-	enableReloadEndpoint bool
 	reloadToken          string
 	generateIDs          bool
 	enableArcGIS         bool
@@ -97,7 +96,6 @@ func init() {
 	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 
-	flags.BoolVar(&enableReloadEndpoint, "enable-reload-endpoint", false, "Enable reload endpoint, depends on enable-reload-signal")
 	flags.StringVar(&reloadToken, "reload-endpoint-token", "", "Token for reload endpoint")
 	flags.BoolVarP(&enableArcGIS, "enable-arcgis", "", false, "Enable ArcGIS Mapserver endpoints")
 	flags.BoolVarP(&enableReloadFSWatch, "enable-fs-watch", "", false, "Enable reloading of tilesets by watching filesystem")
@@ -234,11 +232,8 @@ func serve() {
 		disablePreview = true
 	}
 
-	if enableReloadEndpoint && !enableReloadSignal {
+	if !enableReloadSignal && reloadToken != "" {
 		log.Fatalln("Must enable the reload signal for the endpoint")
-	}
-	if enableReloadEndpoint && reloadToken == "" {
-		log.Fatalln("Must specify a reload-token")
 	}
 
 	if !strings.HasPrefix(rootURLStr, "/") {
@@ -292,7 +287,6 @@ func serve() {
 		EnableTileJSON:       !disableTileJSON,
 		EnablePreview:        !disablePreview,
 		EnableArcGIS:         enableArcGIS,
-		EnableReloadEndpoint: enableReloadEndpoint,
 		ReloadToken:          reloadToken,
 	})
 	if err != nil {
