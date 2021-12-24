@@ -50,7 +50,7 @@ jobs:
     steps:
       - name: Install GCC
         run: |
-          dpkg --add-architecture arm64
+          sudo dpkg --add-architecture arm64
           sudo apt update
           sudo apt install -y gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libsqlite3-dev:arm64
         shell: bash
