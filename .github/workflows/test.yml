@@ -48,12 +48,11 @@ jobs:
       GOARCH: arm64
       CC: /usr/bin/aarch64-linux-gnu-gcc
     steps:
-      - name: Install GCC
-        run: |
-          sudo dpkg --add-architecture arm64
-          sudo apt update
-          sudo apt install -y gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libsqlite3-dev:arm64
-        shell: bash
+      - name: Install GCC and SQLite for Arm64
+        uses: ryankurte/action-apt@v0.3.0
+        with:
+          arch: arm64
+          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libsqlite3-dev:arm64"
       - name: Install Go
         uses: actions/setup-go@v2
         with:
