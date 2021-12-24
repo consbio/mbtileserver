@@ -4,7 +4,7 @@ RUN \
     dpkg --add-architecture arm64 && \
     apt-get update && \
     apt-get install -y ca-certificates openssl zip curl jq \
-    gcc-8-aarch64-linux-gnu gcc-aarch64-linux-gnu libsqlite3-dev:arm64 && \
+    gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libsqlite3-dev:arm64 && \
     update-ca-certificates && \
     rm -rf /var/lib/apt
 
