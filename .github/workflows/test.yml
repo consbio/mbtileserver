@@ -44,9 +44,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 1
-      GOOS: linux
-      GOARCH: arm64
-      CC: /usr/bin/aarch64-linux-gnu-gcc
     steps:
       - name: Install GCC and SQLite for Arm64
         uses: ryankurte/action-apt@v0.3.0
@@ -59,6 +56,10 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: Checkout code
         uses: actions/checkout@v2
+      - name: Build
+        run: |
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC="/usr/bin/aarch64-linux-gnu-gcc" go build .
+        shell: bash
       - name: Test
         run: go test -v ./...
 
