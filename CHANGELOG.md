@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1
+
+### Bug fixes
+
+-   fixed handling of moved / renamed files within watched directories when
+    using the `--enable-fs-watch` option.
+
 ## 0.8
 
 ### General changes

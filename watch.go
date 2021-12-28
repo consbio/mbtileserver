@@ -138,7 +138,8 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 					return
 				}
 
-				if !((event.Op&fsnotify.Write == fsnotify.Write) ||
+				if !((event.Op&fsnotify.Create == fsnotify.Create) ||
+					(event.Op&fsnotify.Write == fsnotify.Write) ||
 					(event.Op&fsnotify.Remove == fsnotify.Remove) ||
 					(event.Op&fsnotify.Rename == fsnotify.Rename)) {
 					continue
@@ -156,13 +157,24 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 					continue
 				}
 
-				if event.Op&fsnotify.Write == fsnotify.Write {
+				if (event.Op&fsnotify.Create == fsnotify.Create) ||
+					(event.Op&fsnotify.Write == fsnotify.Write) {
 					// This event may get called multiple times while a file is being copied into a watched directory,
 					// so we debounce this instead.
 					c <- path
+					continue
 				}
 
 				if (event.Op&fsnotify.Remove == fsnotify.Remove) || (event.Op&fsnotify.Rename == fsnotify.Rename) {
+					// some file move events trigger remove / rename, so if the file still exists, assume it is
+					// one of these
+					_, err := os.Stat(path)
+					if err == nil {
+						// debounce to give it a little more time to update, if needed
+						c <- path
+						continue
+					}
+
 					// remove tileset immediately so that there are not other errors in request handlers
 					id, err := w.generateID(path, baseDir)
 					if err != nil {
@@ -201,4 +213,12 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 	}
 
 	return nil
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return true
 }
