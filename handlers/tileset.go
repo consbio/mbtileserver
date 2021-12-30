@@ -182,6 +182,12 @@ func (ts *Tileset) tileJSONHandler(w http.ResponseWriter, r *http.Request) {
 	tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, r.URL.Path)
 
 	tileJSON, err := ts.TileJSON(tilesetURL, query)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("could not create tileJSON content for %v: %v", r.URL.Path, err)
+		return
+	}
+
 	if ts.svc.enablePreview {
 		tileJSON["map"] = fmt.Sprintf("%s/map", tilesetURL)
 	}
@@ -283,6 +289,12 @@ func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
 	tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, strings.TrimSuffix(r.URL.Path, "/map"))
 
 	tileJSON, err := ts.TileJSON(tilesetURL, query)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		ts.svc.logError("could not create tileJSON content for %v: %v", r.URL.Path, err)
+		return
+	}
+
 	bytes, err := json.Marshal(tileJSON)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
