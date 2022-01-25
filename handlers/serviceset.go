@@ -170,11 +170,7 @@ func (s *ServiceSet) logError(format string, args ...interface{}) {
 // serviceListHandler is an http.HandlerFunc that provides a listing of all
 // published services in this ServiceSet
 func (s *ServiceSet) serviceListHandler(w http.ResponseWriter, r *http.Request) {
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Host
-	}
-	rootURL := fmt.Sprintf("%s://%s%s", scheme(r), host, r.URL)
+	rootURL := fmt.Sprintf("%s://%s%s", scheme(r), getRequestHost(r), r.URL)
 	services := []ServiceInfo{}
 
 	// sort ids alpabetically
@@ -286,4 +282,14 @@ func (s *ServiceSet) Handler() http.Handler {
 	}
 
 	return m
+}
+
+// getRequestHost returns the value of the X-Forwarded-Host header if set, otherwise
+// the request Host value
+func getRequestHost(r *http.Request) string {
+	host := r.Header.Get("X-Forwarded-Host")
+	if host != "" {
+		return host
+	}
+	return r.Host
 }

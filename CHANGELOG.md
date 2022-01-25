@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2 (in progress)
+
+### Bug fixes
+
+-   fixed handling of `X-Forwarded-Host` header (#135)
+
 ## 0.8.1
 
 ### Bug fixes

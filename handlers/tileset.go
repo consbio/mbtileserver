@@ -179,11 +179,7 @@ func (ts *Tileset) tileJSONHandler(w http.ResponseWriter, r *http.Request) {
 		query = "?" + r.URL.RawQuery
 	}
 
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Host
-	}
-	tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), host, r.URL.Path)
+	tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), getRequestHost(r), r.URL.Path)
 
 	tileJSON, err := ts.TileJSON(tilesetURL, query)
 	if err != nil {
@@ -290,11 +286,7 @@ func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
 		query = "?" + r.URL.RawQuery
 	}
 
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Host
-	}
-	tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), host, strings.TrimSuffix(r.URL.Path, "/map"))
+	tilesetURL := fmt.Sprintf("%s://%s%s", scheme(r), getRequestHost(r), strings.TrimSuffix(r.URL.Path, "/map"))
 
 	tileJSON, err := ts.TileJSON(tilesetURL, query)
 	if err != nil {
