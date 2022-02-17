@@ -109,7 +109,7 @@
                 },
                 maxZoom: basemapStyle.maxzoom,
                 zoom: tileJSON.bounds ? 0 : tileJSON.center[2],
-                center: tileJSON.center.slice(0, 2)
+                center: tileJSON.center ? tileJSON.center.slice(0, 2) : undefined
             });
 
             if (tileJSON.bounds) {
