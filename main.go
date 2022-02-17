@@ -39,6 +39,10 @@ var rootCmd = &cobra.Command{
 	Use:   "mbtileserver",
 	Short: "Serve tiles from mbtiles files",
 	Run: func(cmd *cobra.Command, args []string) {
+		// default to listening on all interfaces
+		if host == "" {
+			host = "0.0.0.0"
+		}
 		// if port is not provided by user (after parsing command line args), use defaults
 		if port == -1 {
 			if len(certificate) > 0 || autotls {
@@ -61,6 +65,7 @@ var rootCmd = &cobra.Command{
 }
 
 var (
+	host                string
 	port                int
 	tilePath            string
 	certificate         string
@@ -84,6 +89,7 @@ var (
 
 func init() {
 	flags := rootCmd.Flags()
+	flags.StringVar(&host, "host", "0.0.0.0", "IP address to listen on. Default is all interfaces.")
 	flags.IntVarP(&port, "port", "p", -1, "Server port. Default is 443 if --cert or --tls options are used, otherwise 8000.")
 	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.  Can be a comma-delimited list of directories.")
 	flags.BoolVarP(&generateIDs, "generate-ids", "", false, "Automatically generate tileset IDs instead of using relative path")
@@ -106,6 +112,10 @@ func init() {
 
 	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
+
+	if env := os.Getenv("HOST"); env != "" {
+		host = env
+	}
 
 	if env := os.Getenv("PORT"); env != "" {
 		p, err := strconv.Atoi(env)
@@ -365,8 +375,8 @@ func serve() {
 		e.Pre(middleware.HTTPSRedirect())
 		if port == 443 {
 			go func(c *echo.Echo) {
-				fmt.Println("HTTP server with redirect started on port 80")
-				log.Fatal(e.Start(":80"))
+				fmt.Printf("HTTP server with redirect started on %v:80\n", host)
+				log.Fatal(e.Start(fmt.Sprintf("%v:%v", host, 80)))
 			}(e)
 		}
 	}
@@ -377,7 +387,7 @@ func serve() {
 		f := os.NewFile(3, "")
 		listener, err = net.FileListener(f)
 	} else {
-		listener, err = net.Listen("tcp", fmt.Sprintf(":%v", port))
+		listener, err = net.Listen("tcp", fmt.Sprintf("%v:%v", host, port))
 	}
 
 	if err != nil {
@@ -415,7 +425,7 @@ func serve() {
 				log.Fatalf("Could not find private key file: %s\n", privateKey)
 			}
 
-			fmt.Printf("HTTPS server started on port %v\n", port)
+			fmt.Printf("HTTPS server started on %v:%v\n", host, port)
 			log.Fatal(server.ServeTLS(listener, certificate, privateKey))
 		}
 	case autotls:
@@ -435,12 +445,12 @@ func serve() {
 
 			tlsListener := tls.NewListener(listener, server.TLSConfig)
 
-			fmt.Printf("HTTPS server started on port %v\n", port)
+			fmt.Printf("HTTPS server started on %v:%v\n", host, port)
 			log.Fatal(server.Serve(tlsListener))
 		}
 	default:
 		{
-			fmt.Printf("HTTP server started on port %v\n", port)
+			fmt.Printf("HTTP server started on %v:%v\n", host, port)
 			log.Fatal(server.Serve(listener))
 		}
 	}
@@ -449,7 +459,7 @@ func serve() {
 // The main process forks and manages a sub-process for graceful reloading
 func supervise() {
 
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%v", port))
+	listener, err := net.Listen("tcp", fmt.Sprintf("%v:%v", host, port))
 	if err != nil {
 		log.Fatal(err)
 	}
