@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0 (in progress)
+
+### Command-line interface
+
+-   added support for specifying host IP address to listen on using the `--host`
+    option (#138).
+
 ## 0.8.2
 
 ### Bug fixes
