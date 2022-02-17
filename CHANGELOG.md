@@ -5,6 +5,9 @@
 ### Bug fixes
 
 -   fixed handling of `X-Forwarded-Host` header (#135)
+-   fixed incorrect closing of sqlite connections during initial validation
+    of tilesets (#136) in `mbtiles-go`
+-   handle missing `center` in `metadata` table in map preview for vector tiles (#137)
 
 ## 0.8.1
 
