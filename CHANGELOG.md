@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.2 (in progress)
+## 0.8.2
 
 ### Bug fixes
 
