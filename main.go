@@ -89,7 +89,7 @@ var (
 
 func init() {
 	flags := rootCmd.Flags()
-	flags.StringVarP(&host, "host", "", "0.0.0.0", "IP address to listen on. Default is all interfaces.")
+	flags.StringVar(&host, "host", "0.0.0.0", "IP address to listen on. Default is all interfaces.")
 	flags.IntVarP(&port, "port", "p", -1, "Server port. Default is 443 if --cert or --tls options are used, otherwise 8000.")
 	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.  Can be a comma-delimited list of directories.")
 	flags.BoolVarP(&generateIDs, "generate-ids", "", false, "Automatically generate tileset IDs instead of using relative path")
@@ -113,7 +113,7 @@ func init() {
 	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 
-	if env := os.Getenv("INTERFACE"); env != "" {
+	if env := os.Getenv("HOST"); env != "" {
 		host = env
 	}
 
@@ -450,7 +450,7 @@ func serve() {
 		}
 	default:
 		{
-			fmt.Printf("HTTPS server started on %v:%v\n", host, port)
+			fmt.Printf("HTTP server started on %v:%v\n", host, port)
 			log.Fatal(server.Serve(listener))
 		}
 	}
