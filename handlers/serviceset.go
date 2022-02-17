@@ -197,7 +197,7 @@ func (s *ServiceSet) reloadEndpointHandler(w http.ResponseWriter, r *http.Reques
 // serviceListHandler is an http.HandlerFunc that provides a listing of all
 // published services in this ServiceSet
 func (s *ServiceSet) serviceListHandler(w http.ResponseWriter, r *http.Request) {
-	rootURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, r.URL)
+	rootURL := fmt.Sprintf("%s://%s%s", scheme(r), getRequestHost(r), r.URL)
 	services := []ServiceInfo{}
 
 	// sort ids alpabetically
@@ -310,4 +310,14 @@ func (s *ServiceSet) Handler() http.Handler {
 
 	m.HandleFunc("/reload", s.reloadEndpointHandler)
 	return m
+}
+
+// getRequestHost returns the value of the X-Forwarded-Host header if set, otherwise
+// the request Host value
+func getRequestHost(r *http.Request) string {
+	host := r.Header.Get("X-Forwarded-Host")
+	if host != "" {
+		return host
+	}
+	return r.Host
 }

@@ -68,8 +68,8 @@ github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/bgentry/speakeasy v0.1.0/go.mod h1:+zsyZBPWlz7T6j88CTgSN5bM796AkVf0kBD4zp0CCIs=
-github.com/brendan-ward/mbtiles-go v0.0.0-20211210015813-553bc514bbdf h1:RT/qOIiM0yuaELiwbyli7g6bHFARWlU8B27Ff1r8K6g=
-github.com/brendan-ward/mbtiles-go v0.0.0-20211210015813-553bc514bbdf/go.mod h1:rlKkU0/sjOysMB+dvVI+b90UyzmD5alQK7KlhJplVrg=
+github.com/brendan-ward/mbtiles-go v0.1.1-0.20220129145719-67a7dabdbaab h1:KC2TqbUmfkIrTwVpkH1ysJiZicPoSyb6chH3JxKHqBM=
+github.com/brendan-ward/mbtiles-go v0.1.1-0.20220129145719-67a7dabdbaab/go.mod h1:rlKkU0/sjOysMB+dvVI+b90UyzmD5alQK7KlhJplVrg=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/census-instrumentation/opencensus-proto v0.3.0/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/certifi/gocertifi v0.0.0-20210507211836-431795d63e8d h1:S2NE3iHSwP0XV47EEXL8mWmRdEfGscSJ+7EgePNgt0s=

@@ -100,7 +100,7 @@ func Test_CalcScaleResolution(t *testing.T) {
 		{zoom: 2, dpi: 100, scale: 100 * 39.37 * zoom2resolution, resolution: zoom2resolution},
 	}
 
-	tolerance := 1e-9
+	tolerance := 1e-7
 
 	for _, tc := range tests {
 		scale, resolution := calcScaleResolution(tc.zoom, tc.dpi)

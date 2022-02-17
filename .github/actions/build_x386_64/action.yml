@@ -1,4 +1,4 @@
-name: "build"
+name: "build_x386_64"
 runs:
     using: "docker"
     image: "Dockerfile"

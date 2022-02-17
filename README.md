@@ -193,7 +193,7 @@ OR
 `X-Forwarded-Ssl` to automatically set the scheme to HTTPS.
 
 Host:
-Set `Host` and `X-Forwarded-Host`.
+Set `X-Forwarded-Host` to the correct host for the request.
 
 #### Caddy v2 Example:
 
