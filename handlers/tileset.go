@@ -340,7 +340,7 @@ func tileNotFoundHandler(w http.ResponseWriter, r *http.Request, f mbtiles.TileF
 }
 
 // tilesetLockedHandler returns a 503 Service Unavailable response when
-// requests are made to a tileset that is beging updated
+// requests are made to a tileset that is being updated
 func tilesetLockedHandler(w http.ResponseWriter, r *http.Request) {
 	// send back service unavailable response with header to retry in 10 seconds
 	w.Header().Set("Retry-After", "10")
