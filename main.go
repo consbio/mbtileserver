@@ -74,7 +74,7 @@ var (
 	redirect            bool
 	enableReloadSignal  bool
 	enableReloadFSWatch bool
-	authToken         string
+	authToken         	string
 	generateIDs         bool
 	enableArcGIS        bool
 	disablePreview      bool
@@ -288,7 +288,7 @@ func serve() {
 		EnablePreview:      !disablePreview,
 		EnableArcGIS:       enableArcGIS,
 		EnableReloadSignal: enableReloadSignal,
-		AuthToken:        authToken,
+		AuthToken:        	authToken,
 		GenerateID:			generateID,
 		BaseDir:			tilePath,
 	})

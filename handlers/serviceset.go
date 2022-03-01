@@ -18,7 +18,7 @@ type ServiceSetConfig struct {
 	EnablePreview      bool
 	EnableArcGIS       bool
 	EnableReloadSignal bool
-	AuthToken        string
+	AuthToken          string
 
 	RootURL     *url.URL
 	ErrorWriter io.Writer
@@ -36,7 +36,7 @@ type ServiceSet struct {
 	enablePreview      bool
 	enableArcGIS       bool
 	enableReloadSignal bool
-	authToken        string
+	authToken          string
 
 	domain      string
 	rootURL     *url.URL
@@ -60,7 +60,7 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 		enablePreview:      cfg.EnablePreview,
 		enableArcGIS:       cfg.EnableArcGIS,
 		enableReloadSignal: cfg.EnableReloadSignal,
-		authToken:        cfg.AuthToken,
+		authToken:        	cfg.AuthToken,
 
 		rootURL:     cfg.RootURL,
 		errorWriter: cfg.ErrorWriter,
