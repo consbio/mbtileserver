@@ -23,7 +23,7 @@ type ServiceSetConfig struct {
 	RootURL     *url.URL
 	ErrorWriter io.Writer
 	GenerateID  func(string, string) (string, error)
-	BaseDir		string
+	BaseDir     string
 }
 
 // ServiceSet is a group of tilesets plus configuration options.
@@ -42,7 +42,7 @@ type ServiceSet struct {
 	rootURL     *url.URL
 	errorWriter io.Writer
 	generateID  func(string, string) (string, error)
-	baseDir		string
+	baseDir     string
 }
 
 // New returns a new ServiceSet.
@@ -60,12 +60,12 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 		enablePreview:      cfg.EnablePreview,
 		enableArcGIS:       cfg.EnableArcGIS,
 		enableReloadSignal: cfg.EnableReloadSignal,
-		authToken:        	cfg.AuthToken,
+		authToken:          cfg.AuthToken,
 
 		rootURL:     cfg.RootURL,
 		errorWriter: cfg.ErrorWriter,
 		generateID:  cfg.GenerateID,
-		baseDir:	 cfg.BaseDir,
+		baseDir:     cfg.BaseDir,
 	}
 
 	return s, nil

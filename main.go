@@ -74,7 +74,7 @@ var (
 	redirect            bool
 	enableReloadSignal  bool
 	enableReloadFSWatch bool
-	authToken         	string
+	authToken           string
 	generateIDs         bool
 	enableArcGIS        bool
 	disablePreview      bool
@@ -290,7 +290,7 @@ func serve() {
 		EnableReloadSignal: enableReloadSignal,
 		AuthToken:        	authToken,
 		GenerateID:			generateID,
-		BaseDir:			tilePath,
+		BaseDir:            tilePath,
 	})
 	if err != nil {
 		log.Fatalln("Could not construct ServiceSet")
