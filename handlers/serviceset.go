@@ -193,7 +193,6 @@ func (s *ServiceSet) loadEndpointHandler(w http.ResponseWriter, r *http.Request)
 			s.logError("Error rendering response during reload: %v", err)
 			return
 		}
-		// syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 		id, err := s.generateID(path, s.baseDir)
 		if err != nil {
 			s.logError("Could not create ID for tileset %q\n%v", path, err)
@@ -222,7 +221,6 @@ func (s *ServiceSet) unloadEndpointHandler(w http.ResponseWriter, r *http.Reques
 			s.logError("Error rendering response during reload: %v", err)
 			return
 		}
-		// syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 		id, err := s.generateID(path, s.baseDir)
 		if err != nil {
 			s.logError("Could not create ID for tileset %q\n%v", path, err)
