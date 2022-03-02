@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"sort"
 	"strings"
-	"syscall"
 )
 
 // ServiceSetConfig provides configuration options for a ServiceSet
@@ -19,10 +18,12 @@ type ServiceSetConfig struct {
 	EnablePreview      bool
 	EnableArcGIS       bool
 	EnableReloadSignal bool
-	ReloadToken        string
+	AuthToken          string
 
 	RootURL     *url.URL
 	ErrorWriter io.Writer
+	GenerateID  func(string, string) (string, error)
+	BaseDir     string
 }
 
 // ServiceSet is a group of tilesets plus configuration options.
@@ -35,11 +36,13 @@ type ServiceSet struct {
 	enablePreview      bool
 	enableArcGIS       bool
 	enableReloadSignal bool
-	reloadToken        string
+	authToken          string
 
 	domain      string
 	rootURL     *url.URL
 	errorWriter io.Writer
+	generateID  func(string, string) (string, error)
+	baseDir     string
 }
 
 // New returns a new ServiceSet.
@@ -57,10 +60,12 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 		enablePreview:      cfg.EnablePreview,
 		enableArcGIS:       cfg.EnableArcGIS,
 		enableReloadSignal: cfg.EnableReloadSignal,
-		reloadToken:        cfg.ReloadToken,
+		authToken:          cfg.AuthToken,
 
 		rootURL:     cfg.RootURL,
 		errorWriter: cfg.ErrorWriter,
+		generateID:  cfg.GenerateID,
+		baseDir:     cfg.BaseDir,
 	}
 
 	return s, nil
@@ -176,19 +181,57 @@ func (s *ServiceSet) logError(format string, args ...interface{}) {
 	}
 }
 
-// reloadEndpointHandler
-func (s *ServiceSet) reloadEndpointHandler(w http.ResponseWriter, r *http.Request) {
+func (s *ServiceSet) loadEndpointHandler(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
-	if !s.enableReloadSignal || s.reloadToken == "" {
+	path := r.URL.Query().Get("path")
+	if s.authToken == "" || path == "" {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
-	} else if s.enableReloadSignal && token == s.reloadToken {
+	} else if token == s.authToken {
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
 			s.logError("Error rendering response during reload: %v", err)
 			return
 		}
-		syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+		id, err := s.generateID(path, s.baseDir)
+		if err != nil {
+			s.logError("Could not create ID for tileset %q\n%v", path, err)
+			return
+		}
+		err = s.AddTileset(path, id)
+		if err != nil {
+			s.logError("Could not add tileset for %q with ID %q\n%v", path, id, err)
+		} else {
+			log.Printf("Updated tileset %q with ID %q\n", path, id)
+		}
+		return
+	}
+	http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+}
+
+func (s *ServiceSet) unloadEndpointHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	path := r.URL.Query().Get("path")
+	if s.authToken == "" || path == "" {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	} else if token == s.authToken {
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			s.logError("Error rendering response during reload: %v", err)
+			return
+		}
+		id, err := s.generateID(path, s.baseDir)
+		if err != nil {
+			s.logError("Could not create ID for tileset %q\n%v", path, err)
+			return
+		}
+		err = s.RemoveTileset(id)
+		if err != nil {
+			s.logError("Could not remove tileset for %q with ID %q\n%v", path, id, err)
+		} else {
+			log.Printf("Removed tileset %q with ID %q\n", path, id)
+		}
 		return
 	}
 	http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
@@ -308,7 +351,8 @@ func (s *ServiceSet) Handler() http.Handler {
 		m.Handle(ArcGISRoot, http.NotFoundHandler())
 	}
 
-	m.HandleFunc("/reload", s.reloadEndpointHandler)
+	m.HandleFunc("/load", s.loadEndpointHandler)
+	m.HandleFunc("/unload", s.unloadEndpointHandler)
 	return m
 }
 
