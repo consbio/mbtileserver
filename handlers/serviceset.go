@@ -198,6 +198,17 @@ func (s *ServiceSet) loadEndpointHandler(w http.ResponseWriter, r *http.Request)
 			s.logError("Could not create ID for tileset %q\n%v", path, err)
 			return
 		}
+		if s.HasTileset(id) {
+			err = s.UpdateTileset(id)
+			if err != nil {
+				s.logError("Could not update tileset %q with ID %q\n%v", path, id, err)
+			} else {
+				// only unlock if successfully updated
+				log.Printf("Updated tileset %q with ID %q\n", path, id)
+			}
+			return
+		}
+
 		err = s.AddTileset(path, id)
 		if err != nil {
 			s.logError("Could not add tileset for %q with ID %q\n%v", path, id, err)
