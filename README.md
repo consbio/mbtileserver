@@ -42,7 +42,7 @@ _Requires Go 1.16+._
 You can install this project with
 
 ```sh
-$  go get github.com/consbio/mbtileserver
+$  go install github.com/consbio/mbtileserver@latest
 ```
 
 This will create and install an executable called `mbtileserver`.
