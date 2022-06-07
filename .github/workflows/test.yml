@@ -52,7 +52,7 @@ jobs:
         uses: ryankurte/action-apt@v0.3.0
         with:
           arch: arm64
-          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libc6-dev:arm64 linux-libc-dev:arm64 libsqlite3-dev:arm64 gcc-multilib-arm-linux-gnueabihf:arm64"
+          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libc6-dev:arm64 linux-libc-dev:arm64 libsqlite3-dev:arm64 gcc-multilib-arm-linux-gnueabihf:arm64 file"
       - name: Install Go
         uses: actions/setup-go@v2
         with:
@@ -63,7 +63,13 @@ jobs:
         run: go build .
         shell: bash
       - name: Verify build
-        run: ls -lh mbtileserver
+        run: file mbtileserver
+        shell: bash
+      - name: Debug test files
+        run: ls handlers/*_test.go
+        shell: bash
+      - name: Test handlers
+        run: go test -v ./handlers
         shell: bash
       - name: Test
         run: go test -v ./...
