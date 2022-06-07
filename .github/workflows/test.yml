@@ -65,15 +65,6 @@ jobs:
       - name: Verify build
         run: file mbtileserver
         shell: bash
-      - name: Debug test files
-        run: ls handlers/*_test.go
-        shell: bash
-      - name: Test handlers
-        run: go test -v ./handlers
-        shell: bash
-      - name: Test
-        run: go test -v ./...
-        shell: bash
 
   coverage:
     runs-on: ubuntu-latest
