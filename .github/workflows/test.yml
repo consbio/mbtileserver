@@ -49,7 +49,7 @@ jobs:
         uses: ryankurte/action-apt@v0.3.0
         with:
           arch: arm64
-          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libsqlite3-dev:arm64"
+          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libc6-dev:arm64 libsqlite3-dev:arm64"
       - name: Install Go
         uses: actions/setup-go@v2
         with:
