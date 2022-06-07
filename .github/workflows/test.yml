@@ -44,12 +44,15 @@ jobs:
     runs-on: ubuntu-20.04
     env:
       CGO_ENABLED: 1
+      GOOS: linux
+      GOARCH: arm64
+      CC: "/usr/bin/aarch64-linux-gnu-gcc"
     steps:
       - name: Install GCC and SQLite for Arm64
         uses: ryankurte/action-apt@v0.3.0
         with:
           arch: arm64
-          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libc6-dev:arm64 linux-libc-dev:arm64 libsqlite3-dev:arm64 gcc-multilib-arm-linux-gnueabihf"
+          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libc6-dev:arm64 linux-libc-dev:arm64 libsqlite3-dev:arm64 gcc-multilib-arm-linux-gnueabihf:arm64"
       - name: Install Go
         uses: actions/setup-go@v2
         with:
@@ -57,8 +60,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Build
-        run: |
-          GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC="/usr/bin/aarch64-linux-gnu-gcc" go build .
+        run: go build .
         shell: bash
       - name: Test
         run: go test -v ./...
