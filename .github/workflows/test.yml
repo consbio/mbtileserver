@@ -10,8 +10,8 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [1.16.x, 1.17.x]
-        os: [ubuntu-latest, macos-latest]
+        go: [1.16.x, 1.17.x, 1.18.x]
+        os: [ubuntu-20.04, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
       CGO_ENABLED: 1
@@ -39,17 +39,20 @@ jobs:
   test-arm64:
     strategy:
       matrix:
-        go: [1.16.x, 1.17.x]
+        go: [1.16.x, 1.17.x, 1.18.x]
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       CGO_ENABLED: 1
+      GOOS: linux
+      GOARCH: arm64
+      CC: "/usr/bin/aarch64-linux-gnu-gcc"
     steps:
       - name: Install GCC and SQLite for Arm64
         uses: ryankurte/action-apt@v0.3.0
         with:
           arch: arm64
-          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libsqlite3-dev:arm64"
+          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libc6-dev:arm64 linux-libc-dev:arm64 libsqlite3-dev:arm64 gcc-multilib-arm-linux-gnueabihf:arm64 file"
       - name: Install Go
         uses: actions/setup-go@v2
         with:
@@ -57,11 +60,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Build
-        run: |
-          GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC="/usr/bin/aarch64-linux-gnu-gcc" go build .
+        run: go build .
         shell: bash
-      - name: Test
-        run: go test -v ./...
+      - name: Verify build
+        run: file mbtileserver
+        shell: bash
 
   coverage:
     runs-on: ubuntu-latest
