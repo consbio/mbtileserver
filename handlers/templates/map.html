@@ -54,42 +54,32 @@
 
             var basemaps = [
                 L.tileLayer(
-                    "//{s}.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+                    "https://stamen-tiles.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png",
                     {
                         attribution:
-                            "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community",
+                            'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.',
                         subdomains: ["server", "services"],
-                        label: "ESRI Topo"
+                        label: "Stamen Toner Lite"
                     }
                 ),
                 L.tileLayer(
-                    "//server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                    "https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png",
                     {
                         attribution:
-                            "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
-                        label: "ESRI Imagery"
+                            'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.',
+                        subdomains: ["server", "services"],
+                        label: "Stamen Toner Lite"
                     }
                 ),
                 L.tileLayer(
-                    "//{s}.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+                    "https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png",
                     {
                         attribution:
-                            "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ",
-                        maxZoom: 16,
+                            'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.',
                         subdomains: ["server", "services"],
-                        label: "ESRI Gray"
+                        label: "Stamen Toner Lite"
                     }
                 ),
-                L.tileLayer(
-                    "//{s}.arcgisonline.com/arcgis/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}",
-                    {
-                        attribution:
-                            "Esri, USGS, NGA, NASA, CGIAR, N Robinson, NCEAS, NLS, OS, NMA, Geodatastyrelsen, Rijkswaterstaat, GSA, Geoland, FEMA, Intermap and the GIS user community",
-                        maxZoom: 23,
-                        subdomains: ["server", "services"],
-                        label: "ESRI Elevation"
-                    }
-                )
             ];
 
             var map = L.map("Map", {});
