@@ -62,8 +62,11 @@ jobs:
       - name: Build
         run: go build .
         shell: bash
+      - name: Verify build
+        run: ./mbtileserver --help
       - name: Test
         run: go test -v ./...
+        shell: bash
 
   coverage:
     runs-on: ubuntu-latest
