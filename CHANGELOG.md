@@ -6,7 +6,7 @@
 
 -   added support for specifying host IP address to listen on using the `--host`
     option (#138).
--   switched basemaps to Stamen Toner Lite
+-   switched basemaps to [Stamen map tiles](http://maps.stamen.com/) (#148)
 
 ## 0.8.2
 
