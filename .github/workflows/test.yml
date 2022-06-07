@@ -63,7 +63,8 @@ jobs:
         run: go build .
         shell: bash
       - name: Verify build
-        run: ./mbtileserver --help
+        run: ls -lh mbtileserver
+        shell: bash
       - name: Test
         run: go test -v ./...
         shell: bash
