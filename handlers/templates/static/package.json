@@ -1,10 +1,10 @@
 {
     "name": "mbtileserver",
-    "version": "0.7.0",
+    "version": "0.8.2",
     "description": "Go powered mbtiles tile map server",
     "main": "index.js",
     "scripts": {
-        "build": "gulp build"
+        "build": "node_modules/.bin/esbuild --bundle --minify --loader:.png=base64 --outdir=dist index.js"
     },
     "repository": {
         "type": "git",
@@ -21,20 +21,15 @@
         "url": "https://github.com/consbio/mbtileserver/issues"
     },
     "homepage": "https://github.com/consbio/mbtileserver",
-    "devDependencies": {
-        "gulp": "^4.0.2",
-        "gulp-clean-css": "^4.3.0",
-        "gulp-concat": "^2.6.0",
-        "gulp-strip-comments": "^2.4.3"
-    },
     "dependencies": {
-        "d3-collection": "^1.0.4",
-        "d3-fetch": "^3.0.1",
         "leaflet": "^1.7.1",
-        "leaflet-base64-legend": "^0.1.1",
+        "leaflet-base64-legend": "^0.1.2",
         "leaflet-basemaps": "^0.3.4",
         "leaflet-range": "^0.1.0",
         "leaflet-zoombox": "^0.5.2",
         "mapbox-gl": "^1.13.1"
+    },
+    "devDependencies": {
+        "esbuild": "^0.14.42"
     }
 }

@@ -10,8 +10,8 @@ func Test_StaticAssets(t *testing.T) {
 	assetsFS, _ := fs.Sub(staticAssets, root)
 
 	expected := []string{
-		"core.min.js",
-		"core.min.css",
+		"index.js",
+		"index.css",
 	}
 
 	// verify that expected files are present in the embedded filesystem
