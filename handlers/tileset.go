@@ -21,6 +21,7 @@ type Tileset struct {
 	id         string
 	name       string
 	tileformat mbtiles.TileFormat
+	tilesize   uint32
 	published  bool
 	locked     bool
 	router     *http.ServeMux
@@ -51,6 +52,7 @@ func newTileset(svc *ServiceSet, filename, id, path string) (*Tileset, error) {
 		id:         id,
 		name:       name,
 		tileformat: db.GetTileFormat(),
+		tilesize:   db.GetTileSize(),
 		published:  true,
 	}
 
@@ -136,6 +138,10 @@ func (ts *Tileset) TileJSON(svcURL string, query string) (map[string]interface{}
 		"name":     ts.name,
 	}
 
+	if ts.tilesize > 0 {
+		out["tilesize"] = ts.tilesize
+	}
+
 	metadata, err := db.ReadMetadata()
 	if err != nil {
 		return nil, err
@@ -213,7 +219,7 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 	if ts == nil || !ts.published {
 		// In order to not break any requests from when this tileset was published
 		// return the appropriate not found handler for the original tile format.
-		tileNotFoundHandler(w, r, ts.tileformat)
+		tileNotFoundHandler(w, r, ts.tileformat, ts.tilesize)
 		return
 	}
 
@@ -249,7 +255,7 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data == nil || len(data) <= 1 {
-		tileNotFoundHandler(w, r, ts.tileformat)
+		tileNotFoundHandler(w, r, ts.tileformat, ts.tilesize)
 		return
 	}
 
@@ -322,13 +328,13 @@ func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
 
 // tileNotFoundHandler is an http.HandlerFunc that writes the default response
 // for a non-existing tile of type f to w
-func tileNotFoundHandler(w http.ResponseWriter, r *http.Request, f mbtiles.TileFormat) {
+func tileNotFoundHandler(w http.ResponseWriter, r *http.Request, f mbtiles.TileFormat, tilesize uint32) {
 	switch f {
 	case mbtiles.PNG, mbtiles.JPG, mbtiles.WEBP:
 		// Return blank PNG for all image types
 		w.Header().Set("Content-Type", "image/png")
 		w.WriteHeader(http.StatusOK)
-		w.Write(BlankPNG())
+		w.Write(BlankPNG(tilesize))
 	case mbtiles.PBF:
 		// Return 204
 		w.WriteHeader(http.StatusNoContent)

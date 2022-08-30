@@ -7,6 +7,8 @@
 -   added support for specifying host IP address to listen on using the `--host`
     option (#138).
 -   switched basemaps to [Stamen map tiles](http://maps.stamen.com/) (#148)
+-   added auto-detection of tile size and return blank tile of same size
+    (if available) for image tilesets when tile is not found.
 
 ## 0.8.2
 
