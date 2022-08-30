@@ -421,7 +421,7 @@ func (ts *Tileset) arcgisTileHandler(w http.ResponseWriter, r *http.Request) {
 	if data == nil || len(data) <= 1 {
 		// Return blank PNG for all image types
 		w.Header().Set("Content-Type", "image/png")
-		_, err = w.Write(BlankPNG())
+		_, err = w.Write(BlankPNG(ts.tilesize))
 
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
