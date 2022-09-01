@@ -17,7 +17,7 @@ import (
 //
 // Unique values sent to the channel are stored in an internal map and all
 // are processed once the the interval is up.
-func debounce(interval time.Duration, input chan string, firstCallback func(arg string), callback func(arg string)) {
+func debounce(interval time.Duration, input chan string, exit chan struct{}, firstCallback func(arg string), callback func(arg string)) {
 	// keep a log of unique paths
 	var items = make(map[string]bool)
 	var item string
@@ -37,6 +37,9 @@ func debounce(interval time.Duration, input chan string, firstCallback func(arg 
 				callback(path)
 				delete(items, path)
 			}
+		case <-exit:
+			log.Info("debounce return")
+			return
 		}
 	}
 }
@@ -76,9 +79,9 @@ func (w *FSWatcher) Close() {
 // WatchDir sets up the filesystem watcher for baseDir and all existing subdirectories
 func (w *FSWatcher) WatchDir(baseDir string) error {
 	c := make(chan string)
-
+	exit := make(chan struct{})
 	// debounced call to create / update tileset
-	go debounce(500*time.Millisecond, c, func(path string) {
+	go debounce(500*time.Millisecond, c, exit, func(path string) {
 		// callback for first time path is debounced
 		id, err := w.generateID(path, baseDir)
 		if err != nil {
@@ -128,7 +131,6 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 		}
 		return
 	})
-
 	go func() {
 		for {
 			select {
@@ -146,9 +148,14 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 				}
 
 				path := event.Name
-
 				if ext := filepath.Ext(path); ext != ".mbtiles" {
-					continue
+					exit <- struct{}{}
+					err := w.WatchDir(baseDir)
+					if err != nil {
+						return
+					}
+					log.Info("reload watch dir")
+					return
 				}
 
 				if _, err := os.Stat(path + "-journal"); err == nil {
