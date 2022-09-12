@@ -38,7 +38,7 @@ func debounce(interval time.Duration, input chan string, exit chan struct{}, fir
 				delete(items, path)
 			}
 		case <-exit:
-			log.Info("debounce return")
+			//log.Info("debounce return")
 			return
 		}
 	}
@@ -149,13 +149,19 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 
 				path := event.Name
 				if ext := filepath.Ext(path); ext != ".mbtiles" {
-					exit <- struct{}{}
-					err := w.WatchDir(baseDir)
-					if err != nil {
+					if event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Write == fsnotify.Write ||
+						event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
+						exit <- struct{}{}
+						err := w.WatchDir(baseDir)
+						if err != nil {
+							return
+						}
+						log.Info("reload watch dir")
 						return
+					} else {
+						continue
 					}
-					log.Info("reload watch dir")
-					return
+
 				}
 
 				if _, err := os.Stat(path + "-journal"); err == nil {
