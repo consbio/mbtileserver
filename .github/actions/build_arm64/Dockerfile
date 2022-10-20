@@ -1,4 +1,4 @@
-FROM golang:1.17-bullseye
+FROM golang:1.19-bullseye
 
 RUN \
     dpkg --add-architecture arm64 && \

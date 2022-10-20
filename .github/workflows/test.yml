@@ -9,8 +9,9 @@ on:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
-        go: [1.16.x, 1.17.x, 1.18.x]
+        go: [1.17.x, 1.18.x, 1.19.x]
         os: [ubuntu-20.04, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
@@ -39,7 +40,7 @@ jobs:
   test-arm64:
     strategy:
       matrix:
-        go: [1.16.x, 1.17.x, 1.18.x]
+        go: [1.17.x, 1.18.x, 1.19.x]
 
     runs-on: ubuntu-20.04
     env:

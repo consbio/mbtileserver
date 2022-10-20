@@ -33,9 +33,9 @@ virtual machine without any issues.
 
 ## Supported Go versions
 
-_Requires Go 1.16+._
+_Requires Go 1.17+._
 
-`mbtileserver` uses go modules and follows standard practices as of Go 1.16.
+`mbtileserver` uses go modules and follows standard practices as of Go 1.17.
 
 ## Installation
 

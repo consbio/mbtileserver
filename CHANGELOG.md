@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.9.0 (in progress)
+## 0.9.0
+
+### Breaking changes
+
+-   now requires Go 1.17+.
+
+### General changes
+
+-   upgraded Docker containers to Go 1.19
+-   upgraded Go version used for release to Go 1.19
 
 ### Command-line interface
 

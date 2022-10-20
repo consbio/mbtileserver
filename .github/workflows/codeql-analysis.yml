@@ -2,11 +2,11 @@ name: "CodeQL"
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   schedule:
-    - cron: '43 1 * * 6'
+    - cron: "43 1 * * 6"
 
 jobs:
   analyze:
@@ -20,30 +20,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: [1.17.x]
+        go: [1.19.x]
 
     steps:
-    - name: Install GCC (Ubuntu)
-      run: |
-        sudo apt update
-        sudo apt install -y gcc-multilib g++-multilib
-      shell: bash
+      - name: Install GCC (Ubuntu)
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-multilib g++-multilib
+        shell: bash
 
-    - name: Install Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: ${{ matrix.go }}
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
 
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v1
-      with:
-        languages: go
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v1
+        with:
+          languages: go
 
-    - name: Build
-      run: go build .
+      - name: Build
+        run: go build .
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v1
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v1
