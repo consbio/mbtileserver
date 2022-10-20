@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v2.5
       - name: Make binaries
         uses: ./.github/actions/build_x386_64
         env:
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v2.5
       - name: Make binaries
         uses: ./.github/actions/build_arm64
         env:

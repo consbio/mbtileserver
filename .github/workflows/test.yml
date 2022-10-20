@@ -29,11 +29,11 @@ jobs:
           sudo apt install -y gcc-multilib g++-multilib
         shell: bash
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v2.5
       - name: Test
         run: go test -v ./...
 
@@ -55,11 +55,11 @@ jobs:
           arch: arm64
           packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libc6-dev:arm64 linux-libc-dev:arm64 libsqlite3-dev:arm64 gcc-multilib-arm-linux-gnueabihf:arm64 file"
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v2.5
       - name: Build
         run: go build .
         shell: bash
@@ -77,11 +77,11 @@ jobs:
         shell: bash
       - name: Install Go
         if: success()
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: 1.17.x
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v2.5
       - name: Calc coverage
         run: |
           go test -v -covermode=count -coverprofile=coverage.out ./...
