@@ -35,7 +35,7 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - name: Checkout repository
-        uses: actions/checkout@v2.5
+        uses: actions/checkout@v2.5.0
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v2
