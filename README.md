@@ -42,7 +42,7 @@ _Requires Go 1.17+._
 You can install this project with
 
 ```sh
-$  go install github.com/consbio/mbtileserver@latest
+go install github.com/consbio/mbtileserver@latest
 ```
 
 This will create and install an executable called `mbtileserver`.
@@ -119,7 +119,7 @@ You can also use environment variables instead of flags, which may be more helpf
 Example:
 
 ```
-$  PORT=7777 TILE_DIR=./path/to/your/tiles VERBOSE=true mbtileserver
+PORT=7777 TILE_DIR=./path/to/your/tiles VERBOSE=true mbtileserver
 ```
 
 In a docker-compose.yml file it will look like:
@@ -145,7 +145,7 @@ mbtileserver optionally supports graceful reload (without interrupting any in-pr
 must be enabled with the `--enable-reload-signal` flag. When enabled, the server can be reloaded by sending it a `HUP` signal:
 
 ```
-$  kill -HUP <pid>
+kill -HUP <pid>
 ```
 
 Reloading the server will cause it to pick up changes to the tiles directory, adding new tilesets and removing any that
@@ -240,20 +240,20 @@ server {
 Pull the latest image from [Docker Hub](https://hub.docker.com/r/consbio/mbtileserver):
 
 ```
-$  docker pull consbio/mbtileserver:latest
+docker pull consbio/mbtileserver:latest
 ```
 
 To build the Docker image locally (named `mbtileserver`):
 
 ```
-$  docker build -t mbtileserver -f Dockerfile .
+docker build -t mbtileserver -f Dockerfile .
 ```
 
 To run the Docker container on port 8080 with your tilesets in `<host tile dir>`.
 Note that by default, `mbtileserver` runs on port 8000 in the container.
 
 ```
-$  docker run --rm -p 8080:8000 -v <host tile dir>:/tilesets  consbio/mbtileserver
+docker run --rm -p 8080:8000 -v <host tile dir>:/tilesets  consbio/mbtileserver
 ```
 
 You can pass in additional command-line arguments to `mbtileserver`, for example, to use
@@ -261,13 +261,13 @@ certificates and files in `<host cert dir>` so that you can access the server vi
 [`mkcert`](https://github.com/FiloSottile/mkcert). This example uses automatic redirects, which causes `mbtileserver` to also listen on port 80 and automatically redirect to 443.
 
 ```
-$  docker run  --rm -p 80:80 443:443 -v <host tile dir>:/tilesets -v <host cert dir>:/certs/ consbio/mbtileserver -c /certs/localhost.pem -k /certs/localhost-key.pem -p 443 --redirect
+docker run  --rm -p 80:80 443:443 -v <host tile dir>:/tilesets -v <host cert dir>:/certs/ consbio/mbtileserver -c /certs/localhost.pem -k /certs/localhost-key.pem -p 443 --redirect
 ```
 
 Alternately, use `docker-compose` to run:
 
 ```
-$  docker-compose up -d
+docker-compose up -d
 ```
 
 The default `docker-compose.yml` configures `mbtileserver` to connect to port 8080 on the host, and uses the `./mbtiles/testdata` folder for tilesets. You can use your own `docker-compose.override.yml` or [environment specific files](https://docs.docker.com/compose/extends/) to set these how you like.
@@ -275,7 +275,7 @@ The default `docker-compose.yml` configures `mbtileserver` to connect to port 80
 To reload the server:
 
 ```
-$  docker exec -it mbtileserver sh -c "kill -HUP 1"
+docker exec -it mbtileserver sh -c "kill -HUP 1"
 ```
 
 ## Specifications
@@ -446,7 +446,7 @@ MinGW or [TDM-GCC](https://sourceforge.net/projects/tdm-gcc/) should work fine.
 If you experience very slow builds each time, it may be that you need to first run
 
 ```
-$  go build -a .
+go build -a .
 ```
 
 to make subsequent builds much faster.
@@ -457,7 +457,7 @@ Development of the templates and static assets likely requires using
 From the `handlers/templates/static` folder, run
 
 ```bash
-$  npm install
+npm install
 ```
 
 to pull in the static dependencies. These are referenced in the
@@ -466,7 +466,7 @@ to pull in the static dependencies. These are referenced in the
 Then to build the minified version, run:
 
 ```bash
-$  npm run build
+npm run build
 ```
 
 Built static assets are saved to `handlers/templates/static/dist` and included
