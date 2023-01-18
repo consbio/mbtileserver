@@ -422,7 +422,7 @@ fmt.Println(b64hash) // Should output: 2y8vHb9xK6RSxN8EXMeAEUiYtZk
 
 ### Making request
 
-Authenticated requests must include the ISO-fromatted date, and a salt-signature combination in the form of:
+Authenticated requests must include the ISO-formatted date, and a salt-signature combination in the form of:
 `<salt>:<signature>`. These can be provided as query parameters:
 
 ```text
