@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0 (in development)
+
+-   now requires Go 1.18+.
+-   supports GCC11 on Ubuntu 22.04 (#166)
+
 ## 0.9.0
 
 ### Breaking changes
