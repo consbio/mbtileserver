@@ -42,7 +42,7 @@ jobs:
       matrix:
         go: [1.18.x, 1.19.x, 1.20.x]
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     env:
       CGO_ENABLED: 1
       GOOS: linux
@@ -53,7 +53,7 @@ jobs:
         uses: ryankurte/action-apt@v0.3.0
         with:
           arch: arm64
-          packages: "libc6-dev-armhf-cross:arm64 libsqlite3-dev:arm64 libgcc-11-dev-armel-cross gcc:arm64 gcc-11-arm-linux-gnueabihf:arm64 file"
+          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libc6-dev:arm64 linux-libc-dev:arm64 libsqlite3-dev:arm64 gcc-multilib-arm-linux-gnueabihf:arm64 file"
       - name: Install Go
         uses: actions/setup-go@v3
         with:
