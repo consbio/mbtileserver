@@ -53,7 +53,7 @@ jobs:
         uses: ryankurte/action-apt@v0.3.0
         with:
           arch: arm64
-          packages: "libsqlite3-dev:arm64 gcc:arm64  gcc-11-arm-linux-gnueabi:arm64 file"
+          packages: "libc6-dev-armel-cross:arm64 libsqlite3-dev:arm64 libgcc-11-dev-armel-cross:arm64 gcc:arm64 gcc-11-arm-linux-gnueabi:arm64 file"
       - name: Install Go
         uses: actions/setup-go@v3
         with:
