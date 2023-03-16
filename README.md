@@ -237,10 +237,11 @@ server {
 
 ## Docker
 
-Pull the latest image from [Docker Hub](https://hub.docker.com/r/consbio/mbtileserver):
+Pull the latest image from
+[Github Container Registry](https://github.com/consbio/mbtileserver/pkgs/container/mbtileserver):
 
 ```
-docker pull consbio/mbtileserver:latest
+docker pull ghcr.io/consbio/mbtileserver:latest
 ```
 
 To build the Docker image locally (named `mbtileserver`):
