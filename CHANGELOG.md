@@ -4,6 +4,7 @@
 
 -   now requires Go 1.18+.
 -   supports GCC11 on Ubuntu 22.04 (#166)
+-   switch from Docker Hub to Github Container Registry (#168)
 
 ## 0.9.0
 
