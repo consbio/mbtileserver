@@ -60,7 +60,12 @@ jobs:
             - name: Update sources for arm64
               shell: bash
               run: |
-                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe" | sudo tee /etc/apt/sources.list
+                  echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse" | sudo tee /etc/apt/sources.list
+                  echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-backports main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=amd64] http://archive.canonical.com/ubuntu/ jammy partner" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe "| sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe" | sudo tee -a /etc/apt/sources.list
