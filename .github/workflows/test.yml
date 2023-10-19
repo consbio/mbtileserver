@@ -52,9 +52,6 @@ jobs:
             GOARCH: arm64
             CC: "/usr/bin/aarch64-linux-gnu-gcc"
         steps:
-            - name: Show current sources list
-              shell: bash
-              run: cat /etc/apt/sources.list
             - name: Set Arm64
               shell: bash
               run: sudo dpkg --add-architecture arm64
@@ -70,7 +67,7 @@ jobs:
                   echo "deb [arch=amd64] http://archive.canonical.com/ubuntu/ jammy partner" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe" | sudo tee -a /etc/apt/sources.list
-                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe "| sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe"| sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe" | sudo tee -a /etc/apt/sources.list
                   cat /etc/apt/sources.list
 
@@ -78,7 +75,12 @@ jobs:
               shell: bash
               run: |
                   sudo apt-get update
-                  DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libsqlite3-dev:arm64 gcc:arm64 gcc-11-arm-linux-gnueabihf:arm64 libgcc-11-dev-armhf-cross:arm64 libc6-dev-armhf-cross file
+                  DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
+                    libsqlite3-dev:arm64 \
+                    gcc:arm64 \
+                    libgcc-11-dev-armhf-cross \
+                    gcc-11-arm-linux-gnueabihf \
+                    file:arm64
             - name: Install Go
               uses: actions/setup-go@v3
               with:
