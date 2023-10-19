@@ -7,43 +7,40 @@ on:
     pull_request:
 
 jobs:
-    # FIXME: re-enable
-    # test:
-    #     strategy:
-    #         fail-fast: false
-    #         matrix:
-    #             go: [1.18.x, 1.19.x, 1.20.x, 1.21.x]
-    #             os: [ubuntu-22.04, ubuntu-20.04, macos-latest]
-    #     runs-on: ${{ matrix.os }}
-    #     env:
-    #         CGO_ENABLED: 1
-    #     steps:
-    #         - name: Install GCC (MacOS)
-    #           if: startsWith(matrix.os, 'macos')
-    #           run: |
-    #               brew update
-    #               brew install gcc
-    #         - name: Install GCC (Ubuntu)
-    #           if: startsWith(matrix.os, 'ubuntu')
-    #           run: |
-    #               sudo apt update
-    #               sudo apt install -y gcc-multilib g++-multilib
-    #           shell: bash
-    #         - name: Install Go
-    #           uses: actions/setup-go@v4
-    #           with:
-    #               go-version: ${{ matrix.go }}
-    #         - name: Checkout code
-    #           uses: actions/checkout@v4
-    #         - name: Test
-    #           run: go test -v ./...
+    test:
+        strategy:
+            fail-fast: false
+            matrix:
+                go: [1.18.x, 1.19.x, 1.20.x, 1.21.x]
+                os: [ubuntu-22.04, ubuntu-20.04, macos-latest]
+        runs-on: ${{ matrix.os }}
+        env:
+            CGO_ENABLED: 1
+        steps:
+            - name: Install GCC (MacOS)
+              if: startsWith(matrix.os, 'macos')
+              run: |
+                  brew update
+                  brew install gcc
+            - name: Install GCC (Ubuntu)
+              if: startsWith(matrix.os, 'ubuntu')
+              run: |
+                  sudo apt update
+                  sudo apt install -y gcc-multilib g++-multilib
+              shell: bash
+            - name: Install Go
+              uses: actions/setup-go@v4
+              with:
+                  go-version: ${{ matrix.go }}
+            - name: Checkout code
+              uses: actions/checkout@v4
+            - name: Test
+              run: go test -v ./...
 
     test-arm64:
         strategy:
             matrix:
-                go: [1.21.x]
-                # FIXME: re-enable
-                # go: [1.18.x, 1.19.x, 1.20.x, 1.21.x]
+                go: [1.18.x, 1.19.x, 1.20.x, 1.21.x]
 
         runs-on: ubuntu-22.04
         env:
@@ -52,14 +49,12 @@ jobs:
             GOARCH: arm64
             CC: "/usr/bin/aarch64-linux-gnu-gcc-11"
         steps:
-            - name: Set Arm64
-              shell: bash
-              run: sudo dpkg --add-architecture arm64
             # Patch azure archives for [amd64, i386] use only and add
             # arm64 ports (derived from ryankurte/action-apt)
             - name: Update sources for arm64
               shell: bash
               run: |
+                  sudo dpkg --add-architecture arm64
                   echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse" | sudo tee /etc/apt/sources.list
                   echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
@@ -68,7 +63,6 @@ jobs:
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe"| sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe" | sudo tee -a /etc/apt/sources.list
-                  cat /etc/apt/sources.list
 
             - name: Install GCC and SQLite for Arm64
               shell: bash
@@ -90,32 +84,30 @@ jobs:
             - name: Verify build
               run: file mbtileserver
               shell: bash
-            - name: Test
-              run: go test -v ./...
+            # NOTE: we can't test an arm64 binary on amd64 host
 
-    # FIXME: re-enable
-    # coverage:
-    #     runs-on: ubuntu-latest
-    #     steps:
-    #         - name: Install GCC (Ubuntu)
-    #           run: |
-    #               sudo apt update
-    #               sudo apt install -y gcc-multilib g++-multilib
-    #           shell: bash
-    #         - name: Install Go
-    #           if: success()
-    #           uses: actions/setup-go@v4
-    #           with:
-    #               go-version: 1.21.x
-    #         - name: Checkout code
-    #           uses: actions/checkout@v4
-    #         - name: Calc coverage
-    #           run: |
-    #               go test -v -covermode=count -coverprofile=coverage.out ./...
-    #         - name: Convert coverage.out to coverage.lcov
-    #           uses: jandelgado/gcov2lcov-action@v1.0.9
-    #         - name: Coveralls
-    #           uses: coverallsapp/github-action@v2.2.3
-    #           with:
-    #               github-token: ${{ secrets.github_token }}
-    #               path-to-lcov: coverage.lcov
+    coverage:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Install GCC (Ubuntu)
+              run: |
+                  sudo apt update
+                  sudo apt install -y gcc-multilib g++-multilib
+              shell: bash
+            - name: Install Go
+              if: success()
+              uses: actions/setup-go@v4
+              with:
+                  go-version: 1.21.x
+            - name: Checkout code
+              uses: actions/checkout@v4
+            - name: Calc coverage
+              run: |
+                  go test -v -covermode=count -coverprofile=coverage.out ./...
+            - name: Convert coverage.out to coverage.lcov
+              uses: jandelgado/gcov2lcov-action@v1.0.9
+            - name: Coveralls
+              uses: coverallsapp/github-action@v2.2.3
+              with:
+                  github-token: ${{ secrets.github_token }}
+                  path-to-lcov: coverage.lcov
