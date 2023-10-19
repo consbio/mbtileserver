@@ -50,7 +50,7 @@ jobs:
             CGO_ENABLED: 1
             GOOS: linux
             GOARCH: arm64
-            CC: "/usr/bin/aarch64-linux-gnu-gcc"
+            CC: "/usr/bin/aarch64-linux-gnu-gcc-11"
         steps:
             - name: Set Arm64
               shell: bash
@@ -64,7 +64,6 @@ jobs:
                   echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-backports main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
-                  echo "deb [arch=amd64] http://archive.canonical.com/ubuntu/ jammy partner" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe" | sudo tee -a /etc/apt/sources.list
                   echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe"| sudo tee -a /etc/apt/sources.list
@@ -76,11 +75,9 @@ jobs:
               run: |
                   sudo apt-get update
                   DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
+                    gcc-11-aarch64-linux-gnu \
                     libsqlite3-dev:arm64 \
-                    gcc:arm64 \
-                    libgcc-11-dev-armhf-cross \
-                    gcc-11-arm-linux-gnueabihf \
-                    file:arm64
+                    file
             - name: Install Go
               uses: actions/setup-go@v3
               with:
@@ -88,11 +85,13 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
             - name: Build
-              run: go build .
+              run: go build -v .
               shell: bash
             - name: Verify build
               run: file mbtileserver
               shell: bash
+            - name: Test
+              run: go test -v ./...
 
     # FIXME: re-enable
     # coverage:
