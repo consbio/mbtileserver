@@ -78,7 +78,7 @@ jobs:
               shell: bash
               run: |
                   sudo apt-get update
-                  DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libsqlite3-dev:arm64 gcc:arm64 gcc-11-arm-linux-gnueabihf:arm64 libgcc-11-dev-armhf-cross libc6-dev-armhf-cross file
+                  DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libsqlite3-dev:arm64 gcc:arm64 gcc-11-arm-linux-gnueabihf:arm64 libgcc-11-dev-armhf-cross:arm64 libc6-dev-armhf-cross file
             - name: Install Go
               uses: actions/setup-go@v3
               with:
