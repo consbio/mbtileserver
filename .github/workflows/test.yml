@@ -1,94 +1,113 @@
 name: Test
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+    push:
+        branches:
+            - main
+    pull_request:
 
 jobs:
-  test:
-    strategy:
-      fail-fast: false
-      matrix:
-        go: [1.18.x, 1.19.x, 1.20.x]
-        os: [ubuntu-22.04, ubuntu-20.04, macos-latest]
-    runs-on: ${{ matrix.os }}
-    env:
-      CGO_ENABLED: 1
-    steps:
-      - name: Install GCC (MacOS)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          brew update
-          brew install gcc
-      - name: Install GCC (Ubuntu)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt update
-          sudo apt install -y gcc-multilib g++-multilib
-        shell: bash
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ matrix.go }}
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Test
-        run: go test -v ./...
+    test:
+        strategy:
+            fail-fast: false
+            matrix:
+                go: [1.18.x, 1.19.x, 1.20.x, 1.21.x]
+                os: [ubuntu-22.04, ubuntu-20.04, macos-latest]
+        runs-on: ${{ matrix.os }}
+        env:
+            CGO_ENABLED: 1
+        steps:
+            - name: Install GCC (MacOS)
+              if: startsWith(matrix.os, 'macos')
+              run: |
+                  brew update
+                  brew install gcc
+            - name: Install GCC (Ubuntu)
+              if: startsWith(matrix.os, 'ubuntu')
+              run: |
+                  sudo apt update
+                  sudo apt install -y gcc-multilib g++-multilib
+              shell: bash
+            - name: Install Go
+              uses: actions/setup-go@v4
+              with:
+                  go-version: ${{ matrix.go }}
+            - name: Checkout code
+              uses: actions/checkout@v4
+            - name: Test
+              run: go test -v ./...
 
-  test-arm64:
-    strategy:
-      matrix:
-        go: [1.18.x, 1.19.x, 1.20.x]
+    test-arm64:
+        strategy:
+            matrix:
+                go: [1.18.x, 1.19.x, 1.20.x, 1.21.x]
 
-    runs-on: ubuntu-20.04
-    env:
-      CGO_ENABLED: 1
-      GOOS: linux
-      GOARCH: arm64
-      CC: "/usr/bin/aarch64-linux-gnu-gcc"
-    steps:
-      - name: Install GCC and SQLite for Arm64
-        uses: ryankurte/action-apt@v0.3.0
-        with:
-          arch: arm64
-          packages: "gcc-10-aarch64-linux-gnu gcc-aarch64-linux-gnu libc6-dev:arm64 linux-libc-dev:arm64 libsqlite3-dev:arm64 gcc-multilib-arm-linux-gnueabihf:arm64 file"
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ matrix.go }}
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Build
-        run: go build .
-        shell: bash
-      - name: Verify build
-        run: file mbtileserver
-        shell: bash
+        runs-on: ubuntu-22.04
+        env:
+            CGO_ENABLED: 1
+            GOOS: linux
+            GOARCH: arm64
+            CC: "/usr/bin/aarch64-linux-gnu-gcc-11"
+        steps:
+            # Patch azure archives for [amd64, i386] use only and add
+            # arm64 ports (derived from ryankurte/action-apt)
+            - name: Update sources for arm64
+              shell: bash
+              run: |
+                  sudo dpkg --add-architecture arm64
+                  echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse" | sudo tee /etc/apt/sources.list
+                  echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-backports main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe"| sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe" | sudo tee -a /etc/apt/sources.list
 
-  coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install GCC (Ubuntu)
-        run: |
-          sudo apt update
-          sudo apt install -y gcc-multilib g++-multilib
-        shell: bash
-      - name: Install Go
-        if: success()
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.20.x
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Calc coverage
-        run: |
-          go test -v -covermode=count -coverprofile=coverage.out ./...
-      - name: Convert coverage.out to coverage.lcov
-        uses: jandelgado/gcov2lcov-action@v1.0.9
-      - name: Coveralls
-        uses: coverallsapp/github-action@v1.2.4
-        with:
-          github-token: ${{ secrets.github_token }}
-          path-to-lcov: coverage.lcov
+            - name: Install GCC and SQLite for Arm64
+              shell: bash
+              run: |
+                  sudo apt-get update
+                  DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
+                    gcc-11-aarch64-linux-gnu \
+                    libsqlite3-dev:arm64 \
+                    file
+            - name: Install Go
+              uses: actions/setup-go@v3
+              with:
+                  go-version: ${{ matrix.go }}
+            - name: Checkout code
+              uses: actions/checkout@v4
+            - name: Build
+              run: go build -v .
+              shell: bash
+            - name: Verify build
+              run: file mbtileserver
+              shell: bash
+            # NOTE: we can't test an arm64 binary on amd64 host
+
+    coverage:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Install GCC (Ubuntu)
+              run: |
+                  sudo apt update
+                  sudo apt install -y gcc-multilib g++-multilib
+              shell: bash
+            - name: Install Go
+              if: success()
+              uses: actions/setup-go@v4
+              with:
+                  go-version: 1.21.x
+            - name: Checkout code
+              uses: actions/checkout@v4
+            - name: Calc coverage
+              run: |
+                  go test -v -covermode=count -coverprofile=coverage.out ./...
+            - name: Convert coverage.out to coverage.lcov
+              uses: jandelgado/gcov2lcov-action@v1.0.9
+            - name: Coveralls
+              uses: coverallsapp/github-action@v2.2.3
+              with:
+                  github-token: ${{ secrets.github_token }}
+                  path-to-lcov: coverage.lcov

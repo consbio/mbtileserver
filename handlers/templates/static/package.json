@@ -1,6 +1,6 @@
 {
     "name": "mbtileserver",
-    "version": "0.8.2",
+    "version": "0.10.0",
     "description": "Go powered mbtiles tile map server",
     "main": "index.js",
     "scripts": {
@@ -22,14 +22,14 @@
     },
     "homepage": "https://github.com/consbio/mbtileserver",
     "dependencies": {
-        "leaflet": "^1.7.1",
+        "leaflet": "^1.9.4",
         "leaflet-base64-legend": "^0.1.2",
         "leaflet-basemaps": "^0.3.4",
         "leaflet-range": "^0.1.0",
         "leaflet-zoombox": "^0.5.2",
-        "mapbox-gl": "^1.13.1"
+        "mapbox-gl": "1.13"
     },
     "devDependencies": {
-        "esbuild": "^0.14.42"
+        "esbuild": "^0.19.5"
     }
 }
