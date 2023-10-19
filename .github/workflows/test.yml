@@ -49,11 +49,22 @@ jobs:
             GOARCH: arm64
             CC: "/usr/bin/aarch64-linux-gnu-gcc"
         steps:
+            # Patch azure archives for [amd64, i386] use only and add
+            # arm64 ports (derived from ryankurte/action-apt)
+            - name: Update sources for arm64
+              shell: bash
+              run: |
+                  sudo sed -i'' -E 's/^(deb|deb-src) http:\/\/(archive|azure.archive|security).ubuntu.com/\1 [arch=amd64,i386] http:\/\/\2.ubuntu.com/' /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe "| sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe" | sudo tee -a /etc/apt/sources.list
+                  sudo dpkg --add-architecture arm64
             - name: Install GCC and SQLite for Arm64
-              uses: ryankurte/action-apt@v0.4.0
-              with:
-                  arch: arm64
-                  packages: "libc6-dev-armhf-cross:arm64 libsqlite3-dev:arm64 libgcc-11-dev-armel-cross gcc:arm64 gcc-11-arm-linux-gnueabihf:arm64 file"
+              shell: bash
+              run: |
+                  sudo apt-get update
+                  DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libc6-dev-armhf-cross:arm64 libsqlite3-dev:arm64 libgcc-11-dev-armel-cross gcc:arm64 gcc-11-arm-linux-gnueabihf:arm64 file
             - name: Install Go
               uses: actions/setup-go@v3
               with:
