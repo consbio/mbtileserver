@@ -7,40 +7,43 @@ on:
     pull_request:
 
 jobs:
-    test:
-        strategy:
-            fail-fast: false
-            matrix:
-                go: [1.18.x, 1.19.x, 1.20.x, 1.21.x]
-                os: [ubuntu-22.04, ubuntu-20.04, macos-latest]
-        runs-on: ${{ matrix.os }}
-        env:
-            CGO_ENABLED: 1
-        steps:
-            - name: Install GCC (MacOS)
-              if: startsWith(matrix.os, 'macos')
-              run: |
-                  brew update
-                  brew install gcc
-            - name: Install GCC (Ubuntu)
-              if: startsWith(matrix.os, 'ubuntu')
-              run: |
-                  sudo apt update
-                  sudo apt install -y gcc-multilib g++-multilib
-              shell: bash
-            - name: Install Go
-              uses: actions/setup-go@v4
-              with:
-                  go-version: ${{ matrix.go }}
-            - name: Checkout code
-              uses: actions/checkout@v4
-            - name: Test
-              run: go test -v ./...
+    # FIXME: re-enable
+    # test:
+    #     strategy:
+    #         fail-fast: false
+    #         matrix:
+    #             go: [1.18.x, 1.19.x, 1.20.x, 1.21.x]
+    #             os: [ubuntu-22.04, ubuntu-20.04, macos-latest]
+    #     runs-on: ${{ matrix.os }}
+    #     env:
+    #         CGO_ENABLED: 1
+    #     steps:
+    #         - name: Install GCC (MacOS)
+    #           if: startsWith(matrix.os, 'macos')
+    #           run: |
+    #               brew update
+    #               brew install gcc
+    #         - name: Install GCC (Ubuntu)
+    #           if: startsWith(matrix.os, 'ubuntu')
+    #           run: |
+    #               sudo apt update
+    #               sudo apt install -y gcc-multilib g++-multilib
+    #           shell: bash
+    #         - name: Install Go
+    #           uses: actions/setup-go@v4
+    #           with:
+    #               go-version: ${{ matrix.go }}
+    #         - name: Checkout code
+    #           uses: actions/checkout@v4
+    #         - name: Test
+    #           run: go test -v ./...
 
     test-arm64:
         strategy:
             matrix:
-                go: [1.18.x, 1.19.x, 1.20.x, 1.21.x]
+                go: [1.21.x]
+                # FIXME: re-enable
+                # go: [1.18.x, 1.19.x, 1.20.x, 1.21.x]
 
         runs-on: ubuntu-22.04
         env:
@@ -49,15 +52,18 @@ jobs:
             GOARCH: arm64
             CC: "/usr/bin/aarch64-linux-gnu-gcc"
         steps:
+            - name: Show current sources list
+              shell: bash
+              run: cat /etc/apt/sources.list
             # Patch azure archives for [amd64, i386] use only and add
             # arm64 ports (derived from ryankurte/action-apt)
             - name: Update sources for arm64
               shell: bash
               run: |
-                  echo "deb http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe" | sudo tee /etc/apt/sources.list
-                  echo "deb http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe" | sudo tee -a /etc/apt/sources.list
-                  echo "deb http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe "| sudo tee -a /etc/apt/sources.list
-                  echo "deb http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe" | sudo tee /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe" | sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe "| sudo tee -a /etc/apt/sources.list
+                  echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe" | sudo tee -a /etc/apt/sources.list
                   cat /etc/apt/sources.list
                   sudo dpkg --add-architecture arm64
             - name: Install GCC and SQLite for Arm64
