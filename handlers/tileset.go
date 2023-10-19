@@ -318,12 +318,7 @@ func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
 		template.JS(string(bytes)),
 	}
 
-	switch ts.db.GetTileFormat() {
-	default:
-		executeTemplate(w, "map", p)
-	case mbtiles.PBF:
-		executeTemplate(w, "map_gl", p)
-	}
+	executeTemplate(w, "map", p)
 }
 
 // tileNotFoundHandler is an http.HandlerFunc that writes the default response

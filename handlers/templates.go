@@ -23,7 +23,7 @@ func init() {
 		panic(err)
 	}
 
-	t, err := template.ParseFS(templatesFS, "map.html", "map_gl.html")
+	t, err := template.ParseFS(templatesFS, "map.html")
 	if err != nil {
 		fmt.Errorf("Could not resolve template: %w", err)
 		panic(err)
