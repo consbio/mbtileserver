@@ -78,7 +78,7 @@ jobs:
               shell: bash
               run: |
                   sudo apt-get update
-                  DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libsqlite3-dev:arm64 gcc:arm64 gcc-11-arm-linux-gnueabihf:arm64 file
+                  DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libsqlite3-dev:arm64 gcc:arm64 gcc-11-arm-linux-gnueabihf:arm64 libgcc-11-dev-armhf-cross:arm64 libc6-dev-armhf-cross:arm64 file
             - name: Install Go
               uses: actions/setup-go@v3
               with:
@@ -92,28 +92,29 @@ jobs:
               run: file mbtileserver
               shell: bash
 
-    coverage:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Install GCC (Ubuntu)
-              run: |
-                  sudo apt update
-                  sudo apt install -y gcc-multilib g++-multilib
-              shell: bash
-            - name: Install Go
-              if: success()
-              uses: actions/setup-go@v4
-              with:
-                  go-version: 1.21.x
-            - name: Checkout code
-              uses: actions/checkout@v4
-            - name: Calc coverage
-              run: |
-                  go test -v -covermode=count -coverprofile=coverage.out ./...
-            - name: Convert coverage.out to coverage.lcov
-              uses: jandelgado/gcov2lcov-action@v1.0.9
-            - name: Coveralls
-              uses: coverallsapp/github-action@v2.2.3
-              with:
-                  github-token: ${{ secrets.github_token }}
-                  path-to-lcov: coverage.lcov
+    # FIXME: re-enable
+    # coverage:
+    #     runs-on: ubuntu-latest
+    #     steps:
+    #         - name: Install GCC (Ubuntu)
+    #           run: |
+    #               sudo apt update
+    #               sudo apt install -y gcc-multilib g++-multilib
+    #           shell: bash
+    #         - name: Install Go
+    #           if: success()
+    #           uses: actions/setup-go@v4
+    #           with:
+    #               go-version: 1.21.x
+    #         - name: Checkout code
+    #           uses: actions/checkout@v4
+    #         - name: Calc coverage
+    #           run: |
+    #               go test -v -covermode=count -coverprofile=coverage.out ./...
+    #         - name: Convert coverage.out to coverage.lcov
+    #           uses: jandelgado/gcov2lcov-action@v1.0.9
+    #         - name: Coveralls
+    #           uses: coverallsapp/github-action@v2.2.3
+    #           with:
+    #               github-token: ${{ secrets.github_token }}
+    #               path-to-lcov: coverage.lcov
