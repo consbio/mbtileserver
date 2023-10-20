@@ -30,9 +30,40 @@
     <script>
       // Load raw JSON directly from template
       const tileJSON = {{.TileJSON}};
+      const basemapStyleURL = {{.BasemapStyleURL}};
+      const basemapTilesURL = {{.BasemapTilesURL}};
+
+      let center = tileJSON.center;
+      let zoom = tileJSON.minzoom || 0;
+
+      if (tileJSON.bounds) {
+        const { offsetWidth: width, offsetHeight: height } = document.querySelector('#map');
+        const viewport = geoViewport.viewport(
+          tileJSON.bounds,
+          [width, height],
+          undefined,
+          undefined,
+          undefined,
+          true
+        );
+        center = viewport.center;
+        zoom = Math.max(viewport.zoom - 1, zoom);
+      }
 
       const sources = {};
       const layers = [];
+
+      if (basemapTilesURL) {
+        sources.basemap = {
+          type: "raster",
+          tiles: [basemapTilesURL]
+        }
+        layers.push({
+          id: "basemap",
+          source: "basemap",
+          type: "raster"
+        })
+      }
 
       if (tileJSON.vector_layers) {
         sources.overlay= {
@@ -99,29 +130,35 @@
         })
       }
 
-      var center = tileJSON.center || [0, 0, tileJSON.minzoom]
-
-      var map = new maplibregl.Map({
-        container: "map",
-        style: {
+      const style = basemapStyleURL || {
           version: 8,
           sources,
           layers
-        },
+        }
+
+      var map = new maplibregl.Map({
+        container: "map",
+        style,
         minZoom: tileJSON.minzoom,
         maxZoom: tileJSON.maxzoom,
-        zoom: tileJSON.bounds ? 0 : center[2],
-        center: center.slice(0, 2)
+        center,
+        zoom
       });
       map.addControl(new maplibregl.NavigationControl());
 
-      if (tileJSON.bounds) {
-        var bounds = [
-          tileJSON.bounds.slice(0, 2),
-          tileJSON.bounds.slice(2, tileJSON.bounds.length)
-        ];
-        map.fitBounds(bounds);
-      }
+      map.on('load', () => {
+        // add the sources and layers manually if using a basemap style
+        if (basemapStyleURL) {
+          Object.entries(sources).map(([id, source])=> {
+            map.addSource(id, source)
+          });
+
+          layers.forEach(layer => {
+            map.addLayer(layer)
+          });
+        }
+      });
+
     </script>
   </body>
 </html>

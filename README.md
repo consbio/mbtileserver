@@ -356,7 +356,42 @@ returns something like this:
 
 `mbtileserver` automatically creates a map preview page for each tileset at `/services/<tileset_id>/map`.
 
-This currently uses `Leaflet` for image tiles and `Mapbox GL JS` for vector tiles.
+It uses `MapLibre GL` to render vector and image tiles.
+
+No built-in basemap is included by default in the map preview.  You can use
+one of the following options to include a basemap.
+
+### Basemap style URL
+
+To include a [MapLibre GL style URL](https://maplibre.org/maplibre-style-spec/)
+use the `--basemap-style-url` option to provide a URL to that style:
+
+```
+--basemap-style-url "https://tiles.stadiamaps.com/styles/stamen_toner_lite.json?api_key=<your key>
+```
+
+The URL can include query parameters as required by the host, such as
+`?access_token=<something>`.
+
+
+### Basemap tiles URL
+
+To include a basemap based on image tile URLs, use the `--basemap-tiles-url`
+option to provide a raster tile URL pattern:
+
+```
+--basemap https://some.host/{z}/{x}/{y}.png
+```
+
+The template parameters `{z}` (zoom), `{x}`, `{y}` are required.
+
+The extension can be omitted or be any image format supported by MapLibre GL.
+
+The URL can include query parameters as required by the host, such as
+`?access_token=<something>`.
+
+IMPORTANT: this does not support vector tiles.
+
 
 ## ArcGIS API
 

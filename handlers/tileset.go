@@ -309,13 +309,17 @@ func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := struct {
-		URL      string
-		ID       string
-		TileJSON template.JS
+		URL             string
+		ID              string
+		TileJSON        template.JS
+		BasemapStyleURL string
+		BasemapTilesURL string
 	}{
 		tilesetURL,
 		ts.id,
 		template.JS(string(bytes)),
+		ts.svc.basemapStyleURL,
+		ts.svc.basemapTilesURL,
 	}
 
 	executeTemplate(w, "map", p)

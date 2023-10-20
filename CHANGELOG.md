@@ -2,9 +2,18 @@
 
 ## 0.10.0 (in development)
 
--   now requires Go 1.18+.
 -   supports GCC11 on Ubuntu 22.04 (#166)
 -   switch from Docker Hub to Github Container Registry (#168)
+
+### Breaking changes
+
+-   now requires Go 1.18+.
+-   replaced Leaflet and Mapbox GL JS maps used in preview endpoint with MapLibre GL.
+    This change drops the interactive map controls present in the Leaflet preview
+    (opacity slider, basemap changer, zoombox) (#176).
+-   removed built-in basemaps used in the preview endpoint (#176).  You can now
+    specify a basemap style using the `--basemap-style-url` option or basemap
+    image tiles using the `--basemap-tiles-url` option.
 
 ## 0.9.0
 
