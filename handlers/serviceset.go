@@ -17,6 +17,8 @@ type ServiceSetConfig struct {
 	EnableTileJSON    bool
 	EnablePreview     bool
 	EnableArcGIS      bool
+	BasemapStyleURL   string
+	BasemapTilesURL   string
 	RootURL           *url.URL
 	ErrorWriter       io.Writer
 }
@@ -30,8 +32,9 @@ type ServiceSet struct {
 	enableTileJSON    bool
 	enablePreview     bool
 	enableArcGIS      bool
+	basemapStyleURL   string
+	basemapTilesURL   string
 
-	domain      string
 	rootURL     *url.URL
 	errorWriter io.Writer
 }
@@ -50,6 +53,8 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 		enableTileJSON:    cfg.EnableTileJSON,
 		enablePreview:     cfg.EnablePreview,
 		enableArcGIS:      cfg.EnableArcGIS,
+		basemapStyleURL:   cfg.BasemapStyleURL,
+		basemapTilesURL:   cfg.BasemapTilesURL,
 		rootURL:           cfg.RootURL,
 		errorWriter:       cfg.ErrorWriter,
 	}

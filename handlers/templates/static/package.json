@@ -22,14 +22,8 @@
     },
     "homepage": "https://github.com/consbio/mbtileserver",
     "dependencies": {
-        "leaflet": "^1.9.4",
-        "leaflet-base64-legend": "^0.1.2",
-        "leaflet-basemaps": "^0.3.4",
-        "leaflet-range": "^0.1.0",
-        "leaflet-zoombox": "^0.5.2",
-        "mapbox-gl": "1.13"
-    },
-    "devDependencies": {
-        "esbuild": "^0.19.5"
+        "@mapbox/geo-viewport": "^0.5.0",
+        "esbuild": "^0.19.5",
+        "maplibre-gl": "^3.5.1"
     }
 }

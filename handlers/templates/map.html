@@ -1,160 +1,165 @@
 {{ define "map" }}
 <!DOCTYPE html>
 <html>
-    <head lang="en">
-        <meta charset="UTF-8" />
-        <title>{{.ID}} Preview</title>
-        <script src="{{.URL}}/map/static/index.js"></script>
-        <link href="{{.URL}}/map/static/index.css" rel="stylesheet" />
-        <style>
-            html {
-                height: 100%;
+  <head>
+    <meta charset="utf-8" />
+    <title>{{.ID}} Preview</title>
+    <meta
+      name="viewport"
+      content="initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <script src="{{.URL}}/map/static/index.js"></script>
+    <link href="{{.URL}}/map/static/index.css" rel="stylesheet" />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+    <script>
+      // Load raw JSON directly from template
+      const tileJSON = {{.TileJSON}};
+      const basemapStyleURL = {{.BasemapStyleURL}};
+      const basemapTilesURL = {{.BasemapTilesURL}};
+
+      let center = tileJSON.center;
+      let zoom = tileJSON.minzoom || 0;
+
+      if (tileJSON.bounds) {
+        const { offsetWidth: width, offsetHeight: height } = document.querySelector('#map');
+        const viewport = geoViewport.viewport(
+          tileJSON.bounds,
+          [width, height],
+          undefined,
+          undefined,
+          undefined,
+          true
+        );
+        center = viewport.center;
+        zoom = Math.max(viewport.zoom - 1, zoom);
+      }
+
+      const sources = {};
+      const layers = [];
+
+      if (basemapTilesURL) {
+        sources.basemap = {
+          type: "raster",
+          tiles: [basemapTilesURL]
+        }
+        layers.push({
+          id: "basemap",
+          source: "basemap",
+          type: "raster"
+        })
+      }
+
+      if (tileJSON.vector_layers) {
+        sources.overlay= {
+          type: "vector",
+          attribution: tileJSON.attribution || '',
+          tiles: tileJSON.tiles,
+          minzoom: tileJSON.minzoom,
+          maxzoom: tileJSON.maxzoom
+        }
+
+        tileJSON.vector_layers.forEach(function(srcLyr, i) {
+          layers.push({
+            id: "overlay-poly-" + i,
+            source: "overlay",
+            "source-layer": srcLyr.id,
+            filter: ["==", "$type", "Polygon"],
+            type: "fill",
+            paint: {
+              "fill-color": "orange",
+              "fill-opacity": 0.5,
+              "fill-outline-color": "red"
             }
-            body {
-                margin: 0;
-                padding: 0;
-                height: 100%;
+          });
+
+          layers.push({
+            id: "overlay-line-" + i,
+            source: "overlay",
+            "source-layer": srcLyr.id,
+            filter: ["==", "$type", "LineString"],
+            type: "line",
+            paint: {
+              "line-color": "red",
+              "line-opacity": 0.75,
+              "line-width": 2
             }
-            h4 {
-                margin: 0;
+          });
+
+          layers.push({
+            id: "overlay-point-" + i,
+            source: "overlay",
+            "source-layer": srcLyr.id,
+            filter: ["==", "$type", "Point"],
+            type: "circle",
+            paint: {
+              "circle-radius": 6,
+              "circle-color": "#F00",
+              "circle-opacity": 1
             }
-            #Map {
-                position: absolute;
-                top: 0;
-                left: 0;
-                bottom: 0;
-                right: 0;
-                border-top: 2px solid #aaa;
-            }
-            .basemap img {
-                width: 36px;
-            }
-            .info {
-                padding: 6px 8px;
-                font: 14px/16px Arial, Helvetica, sans-serif;
-                background: white;
-                background: rgba(255, 255, 255, 0.8);
-                box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
-                border-radius: 5px;
-                position: absolute;
-                z-index: 2000;
-                top: 10px;
-                right: 10px;
-            }
-            .info h3 {
-                margin: 0;
-            }
-        </style>
-    </head>
-    <body>
-        <div id="Map"></div>
-        <script>
-            // Load raw JSON directly from template
-            var tileJSON = {{.TileJSON}};
+          });
+        });
+      } else {
+        sources.overlay = {
+          type: "raster",
+          attribution: tileJSON.attribution || '',
+          tiles: tileJSON.tiles,
+          minzoom: tileJSON.minzoom,
+          maxzoom: tileJSON.maxzoom
+        }
 
-            var basemaps = [
-                L.tileLayer(
-                    "https://stamen-tiles.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png",
-                    {
-                        attribution:
-                            'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.',
-                        subdomains: ["server", "services"],
-                        label: "Stamen Toner Lite"
-                    }
-                ),
-                L.tileLayer(
-                    "https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png",
-                    {
-                        attribution:
-                            'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.',
-                        subdomains: ["server", "services"],
-                        label: "Stamen Toner Lite"
-                    }
-                ),
-                L.tileLayer(
-                    "https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png",
-                    {
-                        attribution:
-                            'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.',
-                        subdomains: ["server", "services"],
-                        label: "Stamen Toner Lite"
-                    }
-                ),
-            ];
+        layers.push({
+          id: "overlay-raster",
+          source: "overlay",
+          type: "raster"
+        })
+      }
 
-            var map = L.map("Map", {});
-            map.addControl(
-                L.control.basemaps({
-                    position: "bottomright",
-                    basemaps: basemaps,
-                    tileX: 0,
-                    tileY: 0,
-                    tileZ: 1
-                })
-            );
+      const style = basemapStyleURL || {
+          version: 8,
+          sources,
+          layers
+        }
 
+      var map = new maplibregl.Map({
+        container: "map",
+        style,
+        minZoom: tileJSON.minzoom,
+        maxZoom: tileJSON.maxzoom,
+        center,
+        zoom
+      });
+      map.addControl(new maplibregl.NavigationControl());
 
-            if (tileJSON.bounds) {
-                var b = tileJSON.bounds;
+      map.on('load', () => {
+        // add the sources and layers manually if using a basemap style
+        if (basemapStyleURL) {
+          Object.entries(sources).map(([id, source])=> {
+            map.addSource(id, source)
+          });
 
-                // TODO: optimize and prevent jitter
-                map.fitBounds([
-                    [b[1], b[0]],
-                    [b[3], b[2]]
-                ]);
-            } else {
-                map.fitWorld();
-            }
+          layers.forEach(layer => {
+            map.addLayer(layer)
+          });
+        }
+      });
 
-            if (tileJSON.maxzoom && tileJSON.maxzoom < map.getZoom()) {
-                map.setZoom(tileJSON.maxzoom);
-            }
-
-            var layer = L.tileLayer(tileJSON.tiles[0], {
-                minZoom: tileJSON.minzoom || 0,
-                maxZoom: tileJSON.maxzoom || 23,
-                attribution: tileJSON.attribution || ''
-            });
-
-            map.addLayer(layer);
-
-            var legendJSON = tileJSON.legend;
-            if (legendJSON && legendJSON.search(/\{/) === 0) {
-                legendJSON = JSON.parse(legendJSON);
-                // Make sure this is the legend JSON structure we expect
-                if (legendJSON.length && legendJSON[0].elements) {
-                    map.addControl(
-                        L.control.base64legend({
-                            position: "topright",
-                            legends: legendJSON,
-                            collapseSimple: true,
-                            detectStretched: true
-                        })
-                    );
-                }
-            }
-
-            map.zoomControl.setPosition("topleft");
-            map.addControl(
-                L.control.zoomBox({ modal: true, position: "topleft" })
-            );
-
-            var slider = L.control.range({
-                position: "topleft",
-                min: 0,
-                max: 1,
-                value: 1,
-                step: 0.01,
-                orient: "vertical",
-                iconClass: "leaflet-range-icon"
-            });
-
-            slider.on("input change", function(e) {
-                layer.setOpacity(e.value);
-            });
-
-            map.addControl(slider);
-        </script>
-    </body>
+    </script>
+  </body>
 </html>
 {{ end }}
