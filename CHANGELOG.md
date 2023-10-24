@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.10.0 (in development)
+## 0.11.0 (in development)
+
+## 0.10.0
 
 -   supports GCC11 on Ubuntu 22.04 (#166)
 -   switch from Docker Hub to Github Container Registry (#168)

@@ -367,7 +367,7 @@ To include a [MapLibre GL style URL](https://maplibre.org/maplibre-style-spec/)
 use the `--basemap-style-url` option to provide a URL to that style:
 
 ```
---basemap-style-url "https://tiles.stadiamaps.com/styles/stamen_toner_lite.json?api_key=<your key>
+--basemap-style-url "https://tiles.stadiamaps.com/styles/stamen_toner_lite.json?api_key=<your key>"
 ```
 
 The URL can include query parameters as required by the host, such as
