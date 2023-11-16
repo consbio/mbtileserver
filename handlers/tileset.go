@@ -309,21 +309,20 @@ func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := struct {
-		URL      string
-		ID       string
-		TileJSON template.JS
+		URL             string
+		ID              string
+		TileJSON        template.JS
+		BasemapStyleURL string
+		BasemapTilesURL string
 	}{
 		tilesetURL,
 		ts.id,
 		template.JS(string(bytes)),
+		ts.svc.basemapStyleURL,
+		ts.svc.basemapTilesURL,
 	}
 
-	switch ts.db.GetTileFormat() {
-	default:
-		executeTemplate(w, "map", p)
-	case mbtiles.PBF:
-		executeTemplate(w, "map_gl", p)
-	}
+	executeTemplate(w, "map", p)
 }
 
 // tileNotFoundHandler is an http.HandlerFunc that writes the default response

@@ -30,11 +30,6 @@ import (
 	"github.com/consbio/mbtileserver/handlers"
 )
 
-var (
-	tilesets    map[string]mbtiles.MBtiles
-	startuptime = time.Now()
-)
-
 var rootCmd = &cobra.Command{
 	Use:   "mbtileserver",
 	Short: "Serve tiles from mbtiles files",
@@ -85,6 +80,8 @@ var (
 	disableTileJSON     bool
 	disableServiceList  bool
 	tilesOnly           bool
+	basemapStyleURL     string
+	basemapTilesURL     string
 )
 
 func init() {
@@ -111,6 +108,10 @@ func init() {
 	flags.BoolVarP(&tilesOnly, "tiles-only", "", false, "Only enable tile endpoints (shortcut for --disable-svc-list --disable-tilejson --disable-preview)")
 
 	flags.StringVar(&sentryDSN, "dsn", "", "Sentry DSN")
+
+	flags.StringVar(&basemapStyleURL, "basemap-style-url", "", "Basemap style URL for preview endpoint (can include authorization token parameter if required by host)")
+	flags.StringVar(&basemapTilesURL, "basemap-tiles-url", "", "Basemap raster tiles URL pattern for preview endpoint (can include authorization token parameter if required by host): https://some.host/{z}/{x}/{y}.png")
+
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 
 	if env := os.Getenv("HOST"); env != "" {
@@ -241,6 +242,11 @@ func serve() {
 		disablePreview = true
 	}
 
+	if disablePreview {
+		basemapStyleURL = ""
+		basemapTilesURL = ""
+	}
+
 	if !strings.HasPrefix(rootURLStr, "/") {
 		log.Fatalln("Value for --root-url must start with \"/\"")
 	}
@@ -292,6 +298,8 @@ func serve() {
 		EnableTileJSON:    !disableTileJSON,
 		EnablePreview:     !disablePreview,
 		EnableArcGIS:      enableArcGIS,
+		BasemapStyleURL:   basemapStyleURL,
+		BasemapTilesURL:   basemapTilesURL,
 	})
 	if err != nil {
 		log.Fatalln("Could not construct ServiceSet")
