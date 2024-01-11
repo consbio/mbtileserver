@@ -3,7 +3,7 @@
 ## 0.11.0 (in development)
 
 -   support returning missing image tiles as HTTP 404 instead of blank tiles using
-    the `--missing-image-tile-404` option.
+    the `--missing-image-tile-404` option (#177).
 
 
 ## 0.10.0
