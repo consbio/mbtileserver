@@ -219,7 +219,7 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 	if ts == nil || !ts.published {
 		// In order to not break any requests from when this tileset was published
 		// return the appropriate not found handler for the original tile format.
-		tileNotFoundHandler(w, r, ts.tileformat, ts.tilesize)
+		tileNotFoundHandler(w, r, ts.tileformat, ts.tilesize, ts.svc.returnMissingImageTile404)
 		return
 	}
 
@@ -255,7 +255,7 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data == nil || len(data) <= 1 {
-		tileNotFoundHandler(w, r, ts.tileformat, ts.tilesize)
+		tileNotFoundHandler(w, r, ts.tileformat, ts.tilesize, ts.svc.returnMissingImageTile404)
 		return
 	}
 
@@ -327,13 +327,18 @@ func (ts *Tileset) previewHandler(w http.ResponseWriter, r *http.Request) {
 
 // tileNotFoundHandler is an http.HandlerFunc that writes the default response
 // for a non-existing tile of type f to w
-func tileNotFoundHandler(w http.ResponseWriter, r *http.Request, f mbtiles.TileFormat, tilesize uint32) {
+func tileNotFoundHandler(w http.ResponseWriter, r *http.Request, f mbtiles.TileFormat, tilesize uint32, returnMissingImageTile404 bool) {
 	switch f {
 	case mbtiles.PNG, mbtiles.JPG, mbtiles.WEBP:
-		// Return blank PNG for all image types
-		w.Header().Set("Content-Type", "image/png")
-		w.WriteHeader(http.StatusOK)
-		w.Write(BlankPNG(tilesize))
+		if returnMissingImageTile404 {
+			// Return 404
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			// Return blank PNG for all image types
+			w.Header().Set("Content-Type", "image/png")
+			w.WriteHeader(http.StatusOK)
+			w.Write(BlankPNG(tilesize))
+		}
 	case mbtiles.PBF:
 		// Return 204
 		w.WriteHeader(http.StatusNoContent)
