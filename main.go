@@ -82,6 +82,7 @@ var (
 	tilesOnly           bool
 	basemapStyleURL     string
 	basemapTilesURL     string
+	missingImageTile404 bool
 )
 
 func init() {
@@ -111,6 +112,8 @@ func init() {
 
 	flags.StringVar(&basemapStyleURL, "basemap-style-url", "", "Basemap style URL for preview endpoint (can include authorization token parameter if required by host)")
 	flags.StringVar(&basemapTilesURL, "basemap-tiles-url", "", "Basemap raster tiles URL pattern for preview endpoint (can include authorization token parameter if required by host): https://some.host/{z}/{x}/{y}.png")
+
+	flags.BoolVarP(&missingImageTile404, "missing-image-tile-404", "", false, "Return HTTP 404 error code when image tile is misssing instead of default behavior to return blank PNG")
 
 	flags.BoolVarP(&verbose, "verbose", "v", false, "Verbose logging")
 
@@ -292,14 +295,15 @@ func serve() {
 	}
 
 	svcSet, err := handlers.New(&handlers.ServiceSetConfig{
-		RootURL:           rootURL,
-		ErrorWriter:       &errorLogger{log: log.New()},
-		EnableServiceList: !disableServiceList,
-		EnableTileJSON:    !disableTileJSON,
-		EnablePreview:     !disablePreview,
-		EnableArcGIS:      enableArcGIS,
-		BasemapStyleURL:   basemapStyleURL,
-		BasemapTilesURL:   basemapTilesURL,
+		RootURL:                   rootURL,
+		ErrorWriter:               &errorLogger{log: log.New()},
+		EnableServiceList:         !disableServiceList,
+		EnableTileJSON:            !disableTileJSON,
+		EnablePreview:             !disablePreview,
+		EnableArcGIS:              enableArcGIS,
+		BasemapStyleURL:           basemapStyleURL,
+		BasemapTilesURL:           basemapTilesURL,
+		ReturnMissingImageTile404: missingImageTile404,
 	})
 	if err != nil {
 		log.Fatalln("Could not construct ServiceSet")

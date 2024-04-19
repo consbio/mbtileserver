@@ -13,14 +13,15 @@ import (
 
 // ServiceSetConfig provides configuration options for a ServiceSet
 type ServiceSetConfig struct {
-	EnableServiceList bool
-	EnableTileJSON    bool
-	EnablePreview     bool
-	EnableArcGIS      bool
-	BasemapStyleURL   string
-	BasemapTilesURL   string
-	RootURL           *url.URL
-	ErrorWriter       io.Writer
+	EnableServiceList         bool
+	EnableTileJSON            bool
+	EnablePreview             bool
+	EnableArcGIS              bool
+	BasemapStyleURL           string
+	BasemapTilesURL           string
+	ReturnMissingImageTile404 bool
+	RootURL                   *url.URL
+	ErrorWriter               io.Writer
 }
 
 // ServiceSet is a group of tilesets plus configuration options.
@@ -28,12 +29,13 @@ type ServiceSetConfig struct {
 type ServiceSet struct {
 	tilesets map[string]*Tileset
 
-	enableServiceList bool
-	enableTileJSON    bool
-	enablePreview     bool
-	enableArcGIS      bool
-	basemapStyleURL   string
-	basemapTilesURL   string
+	enableServiceList         bool
+	enableTileJSON            bool
+	enablePreview             bool
+	enableArcGIS              bool
+	basemapStyleURL           string
+	basemapTilesURL           string
+	returnMissingImageTile404 bool
 
 	rootURL     *url.URL
 	errorWriter io.Writer
@@ -48,15 +50,16 @@ func New(cfg *ServiceSetConfig) (*ServiceSet, error) {
 	}
 
 	s := &ServiceSet{
-		tilesets:          make(map[string]*Tileset),
-		enableServiceList: cfg.EnableServiceList,
-		enableTileJSON:    cfg.EnableTileJSON,
-		enablePreview:     cfg.EnablePreview,
-		enableArcGIS:      cfg.EnableArcGIS,
-		basemapStyleURL:   cfg.BasemapStyleURL,
-		basemapTilesURL:   cfg.BasemapTilesURL,
-		rootURL:           cfg.RootURL,
-		errorWriter:       cfg.ErrorWriter,
+		tilesets:                  make(map[string]*Tileset),
+		enableServiceList:         cfg.EnableServiceList,
+		enableTileJSON:            cfg.EnableTileJSON,
+		enablePreview:             cfg.EnablePreview,
+		enableArcGIS:              cfg.EnableArcGIS,
+		basemapStyleURL:           cfg.BasemapStyleURL,
+		basemapTilesURL:           cfg.BasemapTilesURL,
+		returnMissingImageTile404: cfg.ReturnMissingImageTile404,
+		rootURL:                   cfg.RootURL,
+		errorWriter:               cfg.ErrorWriter,
 	}
 
 	return s, nil

@@ -53,32 +53,36 @@ From within the repository root ($GOPATH/bin needs to be in your $PATH):
 
 ```
 $  mbtileserver --help
-Serve tiles from mbtiles files.
+Serve tiles from mbtiles files
 
 Usage:
   mbtileserver [flags]
 
 Flags:
-  -c, --cert string            X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
-  -d, --dir string             Directory containing mbtiles files. Directory containing mbtiles files.  Can be a comma-delimited list of directories. (default "./tilesets")
-      --disable-preview        Disable map preview for each tileset (enabled by default)
-      --disable-svc-list       Disable services list endpoint (enabled by default)
-      --disable-tilejson       Disable TileJSON endpoint for each tileset (enabled by default)
-      --domain string          Domain name of this server.  NOTE: only used for AutoTLS.
-      --dsn string             Sentry DSN
-      --enable-arcgis          Enable ArcGIS Mapserver endpoints
-      --enable-fs-watch        Enable reloading of tilesets by watching filesystem
-      --enable-reload-signal   Enable graceful reload using HUP signal to the server process
-      --generate-ids           Automatically generate tileset IDs instead of using relative path
-  -h, --help                   help for mbtileserver
-  -k, --key string             TLS private key
-  -p, --port int               Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
-  -r, --redirect               Redirect HTTP to HTTPS
-      --root-url string        Root URL of services endpoint (default "/services")
-  -s, --secret-key string      Shared secret key used for HMAC request authentication
-      --tiles-only             Only enable tile endpoints (shortcut for --disable-svc-list --disable-tilejson --disable-preview)
-  -t, --tls                    Auto TLS via Let's Encrypt
-  -v, --verbose                Verbose logging
+      --basemap-style-url string   Basemap style URL for preview endpoint (can include authorization token parameter if required by host)
+      --basemap-tiles-url string   Basemap raster tiles URL pattern for preview endpoint (can include authorization token parameter if required by host): https://some.host/{z}/{x}/{y}.png
+  -c, --cert string                X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.
+  -d, --dir string                 Directory containing mbtiles files.  Can be a comma-delimited list of directories. (default "./tilesets")
+      --disable-preview            Disable map preview for each tileset (enabled by default)
+      --disable-svc-list           Disable services list endpoint (enabled by default)
+      --disable-tilejson           Disable TileJSON endpoint for each tileset (enabled by default)
+      --domain string              Domain name of this server.  NOTE: only used for AutoTLS.
+      --dsn string                 Sentry DSN
+      --enable-arcgis              Enable ArcGIS Mapserver endpoints
+      --enable-fs-watch            Enable reloading of tilesets by watching filesystem
+      --enable-reload-signal       Enable graceful reload using HUP signal to the server process
+      --generate-ids               Automatically generate tileset IDs instead of using relative path
+  -h, --help                       help for mbtileserver
+      --host string                IP address to listen on. Default is all interfaces. (default "0.0.0.0")
+  -k, --key string                 TLS private key
+      --missing-image-tile-404     Return HTTP 404 error code when image tile is misssing instead of default behavior to return blank PNG
+  -p, --port int                   Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
+  -r, --redirect                   Redirect HTTP to HTTPS
+      --root-url string            Root URL of services endpoint (default "/services")
+  -s, --secret-key string          Shared secret key used for HMAC request authentication
+      --tiles-only                 Only enable tile endpoints (shortcut for --disable-svc-list --disable-tilejson --disable-preview)
+  -t, --tls                        Auto TLS via Let's Encrypt
+  -v, --verbose                    Verbose logging
 ```
 
 So hosting tiles is as easy as putting your mbtiles files in the `tilesets`
@@ -230,6 +234,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $server_name;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Ssl on;
         proxy_pass http://localhost:8000;
     }
 }
@@ -304,6 +309,18 @@ These are provided at:
 `/services/<tileset_id>/tiles/{z}/{x}/{y}.<format>`
 
 where `<format>` is one of `png`, `jpg`, `webp`, `pbf` depending on the type of data in the tileset.
+
+
+### Missing tiles
+
+Missing vector tiles are always returned as HTTP 204.
+
+Missing image tiles are returned as blank PNGs with the same dimensions as the tileset to give seamless display of
+these tiles in interactive maps.
+
+When serving image tiles that encode data (e.g., terrain) instead of purely for display, this can cause issues.  In
+this case, you can use the `--missing-image-tile-404` option.  This behavior will be applied to all image tilesets.
+
 
 ## TileJSON API
 
