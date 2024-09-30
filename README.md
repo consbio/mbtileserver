@@ -66,7 +66,7 @@ Flags:
       --disable-preview            Disable map preview for each tileset (enabled by default)
       --disable-svc-list           Disable services list endpoint (enabled by default)
       --disable-tilejson           Disable TileJSON endpoint for each tileset (enabled by default)
-      --domain string              Domain name of this server.  NOTE: only used for AutoTLS.
+      --domain string              Domain name of this server.  NOTE: only used for Auto TLS.
       --dsn string                 Sentry DSN
       --enable-arcgis              Enable ArcGIS Mapserver endpoints
       --enable-fs-watch            Enable reloading of tilesets by watching filesystem
@@ -76,12 +76,12 @@ Flags:
       --host string                IP address to listen on. Default is all interfaces. (default "0.0.0.0")
   -k, --key string                 TLS private key
       --missing-image-tile-404     Return HTTP 404 error code when image tile is misssing instead of default behavior to return blank PNG
-  -p, --port int                   Server port. Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
+  -p, --port int                   Server port.  Default is 443 if --cert or --tls options are used, otherwise 8000. (default -1)
   -r, --redirect                   Redirect HTTP to HTTPS
       --root-url string            Root URL of services endpoint (default "/services")
   -s, --secret-key string          Shared secret key used for HMAC request authentication
       --tiles-only                 Only enable tile endpoints (shortcut for --disable-svc-list --disable-tilejson --disable-preview)
-  -t, --tls                        Auto TLS via Let's Encrypt
+  -t, --tls                        Auto TLS via Let's Encrypt.  Requires domain to be set
   -v, --verbose                    Verbose logging
 ```
 
@@ -267,7 +267,7 @@ certificates and files in `<host cert dir>` so that you can access the server vi
 [`mkcert`](https://github.com/FiloSottile/mkcert). This example uses automatic redirects, which causes `mbtileserver` to also listen on port 80 and automatically redirect to 443.
 
 ```
-docker run  --rm -p 80:80 443:443 -v <host tile dir>:/tilesets -v <host cert dir>:/certs/ consbio/mbtileserver -c /certs/localhost.pem -k /certs/localhost-key.pem -p 443 --redirect
+docker run  --rm -p 80:80 -p 443:443 -v <host tile dir>:/tilesets -v <host cert dir>:/certs/ consbio/mbtileserver -c /certs/localhost.pem -k /certs/localhost-key.pem -p 443 --redirect
 ```
 
 Alternately, use `docker-compose` to run:
