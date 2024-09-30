@@ -88,15 +88,15 @@ var (
 func init() {
 	flags := rootCmd.Flags()
 	flags.StringVar(&host, "host", "0.0.0.0", "IP address to listen on. Default is all interfaces.")
-	flags.IntVarP(&port, "port", "p", -1, "Server port. Default is 443 if --cert or --tls options are used, otherwise 8000.")
+	flags.IntVarP(&port, "port", "p", -1, "Server port.  Default is 443 if --cert or --tls options are used, otherwise 8000.")
 	flags.StringVarP(&tilePath, "dir", "d", "./tilesets", "Directory containing mbtiles files.  Can be a comma-delimited list of directories.")
 	flags.BoolVarP(&generateIDs, "generate-ids", "", false, "Automatically generate tileset IDs instead of using relative path")
 	flags.StringVarP(&certificate, "cert", "c", "", "X.509 TLS certificate filename.  If present, will be used to enable SSL on the server.")
 	flags.StringVarP(&privateKey, "key", "k", "", "TLS private key")
 	flags.StringVar(&rootURLStr, "root-url", "/services", "Root URL of services endpoint")
-	flags.StringVar(&domain, "domain", "", "Domain name of this server.  NOTE: only used for AutoTLS.")
+	flags.StringVar(&domain, "domain", "", "Domain name of this server.  NOTE: only used for Auto TLS.")
 	flags.StringVarP(&secretKey, "secret-key", "s", "", "Shared secret key used for HMAC request authentication")
-	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt")
+	flags.BoolVarP(&autotls, "tls", "t", false, "Auto TLS via Let's Encrypt.  Requires domain to be set")
 	flags.BoolVarP(&redirect, "redirect", "r", false, "Redirect HTTP to HTTPS")
 
 	flags.BoolVarP(&enableArcGIS, "enable-arcgis", "", false, "Enable ArcGIS Mapserver endpoints")
