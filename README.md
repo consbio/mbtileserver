@@ -33,9 +33,9 @@ virtual machine without any issues.
 
 ## Supported Go versions
 
-_Requires Go >= 1.18+._
+_Requires Go >= 1.21+._
 
-`mbtileserver` uses go modules and follows standard practices as of Go 1.18.
+`mbtileserver` uses go modules and follows standard practices as of Go 1.21.
 
 ## Installation
 
@@ -504,8 +504,8 @@ go build -a .
 
 to make subsequent builds much faster.
 
-Development of the templates and static assets likely requires using
-`node` and `npm`. Install these tools in the normal way.
+Development of the templates and static assets requires using
+NodeJS 20 and `npm`. Install these tools in the normal way.
 
 From the `handlers/templates/static` folder, run
 

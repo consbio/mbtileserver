@@ -1,10 +1,12 @@
 # Changelog
 
-## 0.11.0 (in development)
+## 0.11.0
 
 -   support returning missing image tiles as HTTP 404 instead of blank tiles using
     the `--missing-image-tile-404` option (#177).
 
+### Breaking changes
+-   now requires Go 1.21+ (per Go version policy).
 
 ## 0.10.0
 

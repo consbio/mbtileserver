@@ -46,14 +46,14 @@ jobs:
               uses: docker/metadata-action@v5
               with:
                   images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-                  # add "type=ref,event=pr" if needed to test a PR
                   tags: |
                       type=raw,value=latest,enable={{is_default_branch}}
                       type=semver,pattern={{version}}
+                      type=ref,event=pr
 
             - name: Login to Github Container Registry
               if: github.event_name != 'pull_request'
-              uses: docker/login-action@v2
+              uses: docker/login-action@v3
               with:
                   registry: ${{ env.REGISTRY }}
                   username: ${{ github.actor }}
