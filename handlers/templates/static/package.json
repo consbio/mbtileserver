@@ -1,6 +1,6 @@
 {
     "name": "mbtileserver",
-    "version": "0.10.0",
+    "version": "0.11.0",
     "description": "Go powered mbtiles tile map server",
     "main": "index.js",
     "scripts": {
@@ -23,7 +23,7 @@
     "homepage": "https://github.com/consbio/mbtileserver",
     "dependencies": {
         "@mapbox/geo-viewport": "^0.5.0",
-        "esbuild": "^0.19.5",
-        "maplibre-gl": "^3.5.1"
+        "esbuild": "^0.24.0",
+        "maplibre-gl": "^4.7.1"
     }
 }
