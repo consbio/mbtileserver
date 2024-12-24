@@ -54,21 +54,27 @@ jobs:
             - name: Update sources for arm64
               shell: bash
               run: |
+                  echo "Existing sources"
                   cat /etc/apt/sources.list.d/ubuntu.sources
+
                   sudo dpkg --add-architecture arm64
-                  sudo echo "Types: deb" > /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "URIs: http://azure.archive.ubuntu.com/ubuntu/" >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "Suites: noble noble-updates noble-backports noble-security" >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "Components: main universe restricted multiverse" >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "Architectures: amd64" >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "# Arm64 packages" >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "Types: deb" >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "URIs: http://ports.ubuntu.com/ubuntu-ports/"  >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "Suites: noble noble-updates noble-backports noble-security" >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "Components: main universe restricted multiverse" >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" >> /etc/apt/sources.list.d/ubuntu.sources
-                  sudo echo "Architectures: arm64" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo rm /etc/apt/sources.list.d/ubuntu.sources
+                  echo "Types: deb" | sudo tee /etc/apt/sources.list.d/ubuntu.sources
+                  echo "URIs: mirror+file:/etc/apt/apt-mirrors.txt" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "Suites: noble noble-updates noble-backports noble-security" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "Components: main universe restricted multiverse" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "Architectures: amd64" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "# Arm64 packages" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "Types: deb" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "URIs: http://ports.ubuntu.com/ubuntu-ports/"  | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "Suites: noble noble-updates noble-backports noble-security" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "Components: main universe restricted multiverse" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  echo "Architectures: arm64" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+
+                  echo "Updated sources"
+                  cat /etc/apt/sources.list.d/ubuntu.sources
 
             - name: Install GCC and SQLite for Arm64
               shell: bash
