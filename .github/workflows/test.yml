@@ -47,7 +47,7 @@ jobs:
             CGO_ENABLED: 1
             GOOS: linux
             GOARCH: arm64
-            CC: "/usr/bin/aarch64-linux-gnu-gcc-11"
+            CC: "/usr/bin/aarch64-linux-gnu-gcc-14"
         steps:
             # Patch azure archives for [amd64, i386] use only and add
             # arm64 ports (derived from ryankurte/action-apt)
