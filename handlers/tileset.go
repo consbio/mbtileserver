@@ -264,11 +264,12 @@ func (ts *Tileset) tileHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Encoding", "gzip")
 	}
 
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+
 	_, err = w.Write(data)
 
 	if err != nil && !errors.Is(err, syscall.EPIPE) && !errors.Is(err, syscall.EPROTOTYPE) {
 		ts.svc.logError("Could not write tile data for %v: %v", r.URL.Path, err)
-
 	}
 }
 
