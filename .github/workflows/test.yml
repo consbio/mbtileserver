@@ -54,6 +54,7 @@ jobs:
             - name: Update sources for arm64
               shell: bash
               run: |
+                  cat /etc/apt/sources.list.d/ubuntu.sources
                   sudo dpkg --add-architecture arm64
                   sudo echo "Types: deb" > /etc/apt/sources.list.d/ubuntu.sources
                   sudo echo "URIs: http://azure.archive.ubuntu.com/ubuntu/" >> /etc/apt/sources.list.d/ubuntu.sources
