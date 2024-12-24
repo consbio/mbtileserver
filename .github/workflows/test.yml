@@ -47,41 +47,43 @@ jobs:
             CGO_ENABLED: 1
             GOOS: linux
             GOARCH: arm64
-            CC: "/usr/bin/aarch64-linux-gnu-gcc-14"
+            CC: "/usr/bin/aarch64-linux-gnu-gcc-13"
         steps:
-            # Patch azure archives for [amd64, i386] use only and add
-            # arm64 ports (derived from ryankurte/action-apt)
+            # Update sources to split out amd64 vs arm64 since arm64 is not supported on all mirrors
+            # adaped from https://github.com/shamil-mubarakshin/tests-repository/blob/main/.github/workflows/run-ubuntu-matrix.yml
             - name: Update sources for arm64
               shell: bash
               run: |
-                  echo "Existing sources"
-                  cat /etc/apt/sources.list.d/ubuntu.sources
-
                   sudo dpkg --add-architecture arm64
-                  sudo rm /etc/apt/sources.list.d/ubuntu.sources
-                  echo "Types: deb" | sudo tee /etc/apt/sources.list.d/ubuntu.sources
-                  echo "URIs: mirror+file:/etc/apt/apt-mirrors.txt" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "Suites: noble noble-updates noble-backports noble-security" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "Components: main universe restricted multiverse" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "Architectures: amd64" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "# Arm64 packages" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "Types: deb" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "URIs: http://ports.ubuntu.com/ubuntu-ports/"  | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "Suites: noble noble-updates noble-backports noble-security" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "Components: main universe restricted multiverse" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
-                  echo "Architectures: arm64" | sudo tee -a /etc/apt/sources.list.d/ubuntu.sources
+                  cat <<EOF > deb822sources
+                  Types: deb
+                  URIs: http://archive.ubuntu.com/ubuntu/
+                  Suites: noble noble-updates
+                  Components: main restricted universe
+                  Architectures: amd64
 
-                  echo "Updated sources"
-                  cat /etc/apt/sources.list.d/ubuntu.sources
+                  Types: deb
+                  URIs: http://security.ubuntu.com/ubuntu/
+                  Suites: noble-security
+                  Components: main restricted universe
+                  Architectures: amd64
+
+                  Types: deb
+                  URIs: http://azure.ports.ubuntu.com/ubuntu-ports/
+                  Suites: noble noble-updates
+                  Components: main restricted multiverse universe
+                  Architectures: arm64
+
+                  EOF
+
+                  sudo mv deb822sources /etc/apt/sources.list.d/ubuntu.sources
 
             - name: Install GCC and SQLite for Arm64
               shell: bash
               run: |
                   sudo apt-get update
                   DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
-                    gcc-14-aarch64-linux-gnu \
+                    gcc-13-aarch64-linux-gnu \
                     libsqlite3-dev:arm64 \
                     file
             - name: Install Go
