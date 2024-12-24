@@ -49,10 +49,29 @@ jobs:
             GOARCH: arm64
             CC: "/usr/bin/aarch64-linux-gnu-gcc-11"
         steps:
-            - name: Install GCC and SQLite for Arm64
+            # Patch azure archives for [amd64, i386] use only and add
+            # arm64 ports (derived from ryankurte/action-apt)
+            - name: Update sources for arm64
               shell: bash
               run: |
                   sudo dpkg --add-architecture arm64
+                  sudo echo "Types: deb" > /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "URIs: http://azure.archive.ubuntu.com/ubuntu/" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "Suites: noble noble-updates noble-backports noble-security" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "Components: main universe restricted multiverse" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "Architectures: amd64" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "# Arm64 packages" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "Types: deb" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "URIs: http://ports.ubuntu.com/ubuntu-ports/"  >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "Suites: noble noble-updates noble-backports noble-security" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "Components: main universe restricted multiverse" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" >> /etc/apt/sources.list.d/ubuntu.sources
+                  sudo echo "Architectures: arm64" >> /etc/apt/sources.list.d/ubuntu.sources
+
+            - name: Install GCC and SQLite for Arm64
+              shell: bash
+              run: |
                   sudo apt-get update
                   DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
                     gcc-14-aarch64-linux-gnu \
