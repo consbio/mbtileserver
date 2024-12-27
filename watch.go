@@ -38,7 +38,6 @@ func debounce(interval time.Duration, input chan string, exit chan struct{}, fir
 				delete(items, path)
 			}
 		case <-exit:
-			//log.Info("debounce return")
 			return
 		}
 	}
@@ -148,15 +147,20 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 				}
 
 				path := event.Name
-				if ext := filepath.Ext(path); ext != ".mbtiles" {
+				if ext := filepath.Ext(path); ext == "" {
 					if event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Write == fsnotify.Write ||
 						event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
+
+						// NOTE: we cannot distinguish which incoming event paths
+						// correspond to directory events or file events, so we
+						// trigger a reload in all cases
+
 						exit <- struct{}{}
 						err := w.WatchDir(baseDir)
 						if err != nil {
 							return
 						}
-						log.Info("reload watch dir")
+						log.Info("Reload watch dir on directory change")
 						return
 					} else {
 						continue
@@ -193,11 +197,13 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 					if err != nil {
 						log.Errorf("Could not create ID for tileset %q\n%v", path, err)
 					}
-					err = w.svcSet.RemoveTileset(id)
-					if err != nil {
-						log.Errorf("Could not remove tileset %q with ID %q\n%v", path, id, err)
-					} else {
-						log.Infof("Removed tileset %q with ID %q\n", path, id)
+					if w.svcSet.HasTileset(id) {
+						err = w.svcSet.RemoveTileset(id)
+						if err != nil {
+							log.Errorf("Could not remove tileset %q with ID %q\n%v", path, id, err)
+						} else {
+							log.Infof("Removed tileset %q with ID %q\n", path, id)
+						}
 					}
 				}
 
