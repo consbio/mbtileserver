@@ -4,6 +4,7 @@
 
 -   support returning missing image tiles as HTTP 404 instead of blank tiles using
     the `--missing-image-tile-404` option (#177).
+-   added ability to detect directory changes to `--enable-fs-watch` (#156).
 
 ### Breaking changes
 -   now requires Go 1.21+ (per Go version policy).
