@@ -17,7 +17,7 @@ import (
 //
 // Unique values sent to the channel are stored in an internal map and all
 // are processed once the the interval is up.
-func debounce(interval time.Duration, input chan string, firstCallback func(arg string), callback func(arg string)) {
+func debounce(interval time.Duration, input chan string, exit chan struct{}, firstCallback func(arg string), callback func(arg string)) {
 	// keep a log of unique paths
 	var items = make(map[string]bool)
 	var item string
@@ -37,6 +37,8 @@ func debounce(interval time.Duration, input chan string, firstCallback func(arg 
 				callback(path)
 				delete(items, path)
 			}
+		case <-exit:
+			return
 		}
 	}
 }
@@ -76,9 +78,9 @@ func (w *FSWatcher) Close() {
 // WatchDir sets up the filesystem watcher for baseDir and all existing subdirectories
 func (w *FSWatcher) WatchDir(baseDir string) error {
 	c := make(chan string)
-
+	exit := make(chan struct{})
 	// debounced call to create / update tileset
-	go debounce(500*time.Millisecond, c, func(path string) {
+	go debounce(500*time.Millisecond, c, exit, func(path string) {
 		// callback for first time path is debounced
 		id, err := w.generateID(path, baseDir)
 		if err != nil {
@@ -128,7 +130,6 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 		}
 		return
 	})
-
 	go func() {
 		for {
 			select {
@@ -146,9 +147,25 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 				}
 
 				path := event.Name
+				if ext := filepath.Ext(path); ext == "" {
+					if event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Write == fsnotify.Write ||
+						event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
 
-				if ext := filepath.Ext(path); ext != ".mbtiles" {
-					continue
+						// NOTE: we cannot distinguish which incoming event paths
+						// correspond to directory events or file events, so we
+						// trigger a reload in all cases
+
+						exit <- struct{}{}
+						err := w.WatchDir(baseDir)
+						if err != nil {
+							return
+						}
+						log.Info("Reload watch dir on directory change")
+						return
+					} else {
+						continue
+					}
+
 				}
 
 				if _, err := os.Stat(path + "-journal"); err == nil {
@@ -180,11 +197,13 @@ func (w *FSWatcher) WatchDir(baseDir string) error {
 					if err != nil {
 						log.Errorf("Could not create ID for tileset %q\n%v", path, err)
 					}
-					err = w.svcSet.RemoveTileset(id)
-					if err != nil {
-						log.Errorf("Could not remove tileset %q with ID %q\n%v", path, id, err)
-					} else {
-						log.Infof("Removed tileset %q with ID %q\n", path, id)
+					if w.svcSet.HasTileset(id) {
+						err = w.svcSet.RemoveTileset(id)
+						if err != nil {
+							log.Errorf("Could not remove tileset %q with ID %q\n%v", path, id, err)
+						} else {
+							log.Infof("Removed tileset %q with ID %q\n", path, id)
+						}
 					}
 				}
 
