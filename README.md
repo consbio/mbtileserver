@@ -260,7 +260,7 @@ To run the Docker container on port 8080 with your tilesets in `<host tile dir>`
 Note that by default, `mbtileserver` runs on port 8000 in the container.
 
 ```
-docker run --rm -p 8080:8000 -v <host tile dir>:/tilesets  consbio/mbtileserver
+docker run --rm -p 8080:8000 -v <host tile dir>:/tilesets  ghcr.io/consbio/mbtileserver:latest
 ```
 
 You can pass in additional command-line arguments to `mbtileserver`, for example, to use
@@ -268,7 +268,7 @@ certificates and files in `<host cert dir>` so that you can access the server vi
 [`mkcert`](https://github.com/FiloSottile/mkcert). This example uses automatic redirects, which causes `mbtileserver` to also listen on port 80 and automatically redirect to 443.
 
 ```
-docker run  --rm -p 80:80 -p 443:443 -v <host tile dir>:/tilesets -v <host cert dir>:/certs/ consbio/mbtileserver -c /certs/localhost.pem -k /certs/localhost-key.pem -p 443 --redirect
+docker run  --rm -p 80:80 -p 443:443 -v <host tile dir>:/tilesets -v <host cert dir>:/certs/ ghcr.io/consbio/mbtileserver:latest -c /certs/localhost.pem -k /certs/localhost-key.pem -p 443 --redirect
 ```
 
 Alternately, use `docker-compose` to run:
