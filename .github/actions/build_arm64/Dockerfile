@@ -1,4 +1,4 @@
-FROM golang:1.23-bookworm
+FROM golang:1.25.2-bookworm
 
 RUN \
     dpkg --add-architecture arm64 && \
