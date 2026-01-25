@@ -2,7 +2,7 @@ version: "3"
 
 services:
     mbtileserver:
-        image: consbio/mbtileserver:latest
+        image: ghcr.io/consbio/mbtileserver:latest
         container_name: mbtileserver
         entrypoint: /mbtileserver --enable-reload-signal
         restart: always
