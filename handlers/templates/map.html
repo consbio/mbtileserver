@@ -117,11 +117,8 @@
       } else {
         sources.overlay = {
           type: "raster",
-          attribution: tileJSON.attribution || '',
-          tiles: tileJSON.tiles,
-          minzoom: tileJSON.minzoom,
-          maxzoom: tileJSON.maxzoom,
-          tileSize: tileJSON.tilesize || 256
+          // pass through the query string for signed URLs
+          url: {{.URL}} + window.location.search
         }
 
         layers.push({

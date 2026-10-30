@@ -140,6 +140,7 @@ func (ts *Tileset) TileJSON(svcURL string, query string) (map[string]interface{}
 
 	if ts.tilesize > 0 {
 		out["tilesize"] = ts.tilesize
+		out["tileSize"] = ts.tilesize
 	}
 
 	metadata, err := db.ReadMetadata()
